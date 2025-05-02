@@ -11,4 +11,5 @@ CDESchoolDirectoryExport.xlsx
 # Generated data
 pipeline/data/
 public/assets/districts.json
+public/assets/schools_by_district.json
 public/assets/boundaries/ 

@@ -41,7 +41,9 @@ const SCHOOL_COLUMNS_TO_KEEP: string[] = [
     'High Grade',
     'Status',
     'Public Yes/No',
-    'Educational Program Type'
+    'Educational Program Type',
+    'Latitude',
+    'Longitude'
 ];
 
 // Define the expected CSV Headers based on the source structure
@@ -110,6 +112,22 @@ async function generateJsonData() {
                     SCHOOL_COLUMNS_TO_KEEP.forEach(col => {
                         schoolDetails[col] = record[col] !== undefined && record[col] !== null ? record[col] : 'No Data';
                     });
+
+                    // --- Correct SRVUSD Website URLs Here --- 
+                    let website = schoolDetails.Website as string;
+                    if (website && website !== 'No Data') {
+                        website = website.trim();
+                        const lowerWebsite = website.toLowerCase();
+                        if (lowerWebsite.includes('srvusd.net') && lowerWebsite.startsWith('www.')) {
+                            // Attempt to remove www. prefix carefully
+                            const noPrefix = website.substring(4);
+                            console.log(`[DataGen] Correcting SRVUSD URL: ${website} -> ${noPrefix}`);
+                            website = noPrefix; // Update the website variable
+                        }
+                        schoolDetails.Website = website; // Store potentially corrected URL
+                    }
+                    // --- End URL Correction --- 
+
                     const districtCdsCode = cdsCode.substring(0, 7);
                     if (districtCdsCode.length === 7) {
                         if (!schoolsByDistrictData[districtCdsCode]) { schoolsByDistrictData[districtCdsCode] = []; }
