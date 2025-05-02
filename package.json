@@ -6,7 +6,11 @@
   "scripts": {
     "preinstall": "npx only-allow pnpm && git config core.hooksPath .githooks",
     "test": "echo \"Error: no test specified\" && exit 1",
-    "convert:xlsx": "tsc pipeline/scripts/convertXlsxToCsv.ts --outDir dist/pipeline/scripts && node dist/pipeline/scripts/convertXlsxToCsv.js"
+    "convert:xlsx": "tsc pipeline/scripts/convertXlsxToCsv.ts --outDir dist/pipeline/scripts && node dist/pipeline/scripts/convertXlsxToCsv.js",
+    "prepare:districts": "tsc pipeline/scripts/generateDistrictJson.ts --outDir dist/pipeline/scripts && node dist/pipeline/scripts/generateDistrictJson.js",
+    "dev": "vite --force",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "engines": {
     "node": ">=20.11.0",
@@ -28,12 +32,17 @@
   "license": "AGPL-3.0-or-later",
   "packageManager": "pnpm@10.7.1",
   "dependencies": {
+    "csv-parse": "^5.6.0",
+    "leaflet": "^1.9.4",
+    "leaflet-geosearch": "^4.2.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@types/leaflet": "^1.9.17",
     "@types/node": "^22.15.3",
     "@types/xlsx": "^0.0.36",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vite": "^6.3.4"
   }
 }

@@ -88,21 +88,24 @@ This document outlines the step-by-step process for building the Multi-District 
 * **2.0. Convert Source XLSX to CSV (One-time or as needed):**
     * Ensure the `CDESchoolDirectoryExport.xlsx` file is present in the project root.
     * Run the conversion script: `pnpm run convert:xlsx`.
-    * This generates CSV files (one per sheet) in the `pipeline/data/` directory. These CSVs can then be used as input for subsequent pipeline steps.
-* **2.1. Refactor Scrapers (`pipeline/src/scrapers/`):**
+    * This generates CSV files (one per sheet) in the `pipeline/data/` directory.
+* **2.1. Prepare District List for Frontend (Run after CSV conversion):**
+    * Run the preparation script: `pnpm run prepare:districts`.
+    * This reads `pipeline/data/School and District Data.csv` (verify CSV name and required columns like 'DistrictName', 'DistrictCode'), extracts unique districts, and writes a simplified list to `public/assets/districts.json`.
+* **2.2. Refactor Scrapers (`pipeline/src/scrapers/`):**
     * Create separate scraper functions/classes in TypeScript for each `policy_source_type`.
     * The main pipeline script (`pipeline/src/main.ts`) will read `config.json` and call the appropriate scraper based on `policy_source_type` for each district. Use libraries like `axios` or `node-fetch` for HTTP requests and `cheerio` or `jsdom` for HTML parsing if needed.
     * Scrapers should output data tagged with the district `id` (e.g., save intermediate JSON files).
-* **2.2. Update Preprocessor (`pipeline/src/preprocess.ts`):**
+* **2.3. Update Preprocessor (`pipeline/src/preprocess.ts`):**
     * Modify to read multiple raw input files based on `config.json`.
     * Process data for each district separately using TypeScript logic.
     * Ensure output chunks retain the district `id`.
     * Save processed data per district.
-* **2.3. Update Synthesizer (`pipeline/src/synthesize.ts`):**
+* **2.4. Update Synthesizer (`pipeline/src/synthesize.ts`):**
     * Modify to process data for each district defined in `config.json`.
     * Call the external LLM API (using `node-fetch` or `axios`) to generate summaries based on the processed data for each district.
     * Save synthesized data per district.
-* **2.4. Update Graph Builder (`pipeline/src/buildGraph.ts`):**
+* **2.5. Update Graph Builder (`pipeline/src/buildGraph.ts`):**
     * Modify to iterate through each district in `config.json`.
     * For each district:
         * Define the output DB path using the district `id` (e.g., `dbOutputPath = \`./dist/pipeline/output_db/\${district.id}/policy_graph.db\``). Create the directory if needed.
@@ -117,23 +120,22 @@ This document outlines the step-by-step process for building the Multi-District 
 * **3.1. Modify Job Steps:**
     * Setup Node.js environment using `actions/setup-node` (specify version, enable pnpm caching).
     * Install dependencies: `pnpm install --frozen-lockfile`.
+    * **Prepare Data:** Run `pnpm run convert:xlsx` and `pnpm run prepare:districts`.
     * Run pipeline build: `pnpm run build:pipeline` (or equivalent script from `package.json`).
     * Execute the pipeline: `pnpm run start:pipeline` (or `node ./dist/pipeline/main.js`).
-    * **Copy Output:** Modify the copy step to move all generated district DB directories and the `manifest.json` file from the pipeline's output (e.g., `./dist/pipeline/output_db/*` and `./dist/pipeline/manifest.json`) to the `public/assets/db/` directory. Ensure the KuzuDB WASM files and WebLLM model files are also copied or fetched appropriately (e.g., place them in `public/assets/wasm`).
+    * **Copy Output:** Modify the copy step to move generated district DB directories and the `manifest.json` file from the pipeline's output to `public/assets/db/`. Copy necessary WASM/model files to `public/assets/wasm`. **Note:** `districts.json` is already in `public/assets` by the `prepare:districts` script.
         ```yaml
         - name: Copy Pipeline Output to Public Assets
           run: |
             mkdir -p public/assets/db
             cp -r ./dist/pipeline/output_db/* public/assets/db/
             cp ./dist/pipeline/manifest.json public/assets/db/
+            # Ensure districts.json is present from prepare step
             # Add steps to copy WASM/model files if needed
-            # mkdir -p public/assets/wasm
-            # cp ./path/to/kuzu.wasm public/assets/wasm/
-            # cp ./path/to/webllm_model.wasm public/assets/wasm/
         ```
-    * Configure the frontend build step (if separate): `pnpm run build:frontend`.
-    * Update artifact upload path to `./public`.
-    * Configure GitHub Pages action (`actions/deploy-pages`) to deploy from the `./public` directory/artifact.
+    * Configure the frontend build step (if separate): `pnpm run build:frontend`. **Note:** Vite build will automatically include files from `public/`.
+    * Update artifact upload path to `./dist/frontend` (Vite's build output).
+    * Configure GitHub Pages action (`actions/deploy-pages`) to deploy from the `./dist/frontend` artifact.
 
 **Phase 4: Frontend Static Website (TypeScript, HTML, CSS)**
 

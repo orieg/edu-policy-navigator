@@ -5,4 +5,5 @@ node_modules/
 dist/
 
 # Generated data
-pipeline/data/ 
+pipeline/data/
+public/assets/districts.json 
