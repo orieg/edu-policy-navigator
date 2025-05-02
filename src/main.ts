@@ -564,7 +564,6 @@ async function updateMapLayersAndContent(
                 const gradeSpan = (school['Low Grade'] && school['High Grade'] && school['Low Grade'] !== 'No Data' && school['High Grade'] !== 'No Data')
                     ? `(Grades: ${school['Low Grade']} - ${school['High Grade']})`
                     : '';
-                const publicPrivateText = (school['Public Yes/No'] === 'Y') ? '(Public)' : (school['Public Yes/No'] === 'N') ? '(Private)' : '';
                 let websiteLinkHtml = '';
                 const websiteUrl = school.Website as string;
                 if (websiteUrl && websiteUrl !== 'No Data') {
@@ -577,20 +576,28 @@ async function updateMapLayersAndContent(
 
                     // Final check if it looks like a usable URL
                     if (href.startsWith('http') || href.startsWith('//')) {
-                        websiteLinkHtml = ` <a href="${href}" target="_blank" rel="noopener noreferrer" title="Visit school website">(Website)</a>`;
+                        websiteLinkHtml = `<a href="${href}" target="_blank" rel="noopener noreferrer" title="Visit school website">Website</a>`;
                     }
                 }
-                const dashboardLinkHtml = ` <a href="https://www.caschooldashboard.org/reports/${schoolCdsCode}/2024" target="_blank" rel="noopener noreferrer" title="View CA School Dashboard report">(Report Card)</a>`;
+                const dashboardLinkHtml = `<a href="https://www.caschooldashboard.org/reports/${schoolCdsCode}/2024" target="_blank" rel="noopener noreferrer" title="View CA School Dashboard report">Report Card</a>`;
+                const cdeDirectoryUrl = `https://www.cde.ca.gov/schooldirectory/details?cdscode=${schoolCdsCode}`;
+                const cdeLinkHtml = `<a href="${cdeDirectoryUrl}" target="_blank" rel="noopener noreferrer" title="View CDE School Directory page">CDE Directory</a>`;
+
+                // Build links string with separators
+                const links = [websiteLinkHtml, dashboardLinkHtml, cdeLinkHtml].filter(Boolean); // Filter out empty strings
+                const linksHtml = links.join(' | ');
+
                 const listItemHtml = `<li>
                                       <div>
-                                        <strong>${schoolName}</strong> ${publicPrivateText} ${gradeSpan}
-                                        ${websiteLinkHtml}
-                                        ${dashboardLinkHtml}
+                                        <strong>${schoolName}</strong> ${gradeSpan}
+                                      </div>
+                                      <div>
+                                        ${linksHtml}
                                       </div>
                                       <small>${schoolAddress || 'Address not available'}</small>
                                    </li>`;
 
-                // --- Determine School Marker Coordinates --- 
+                // --- Determine School Marker Coordinates ---
                 let schoolMarkerCoords: L.LatLngTuple | null = null;
                 const schoolLatStr = school.Latitude as string;
                 const schoolLonStr = school.Longitude as string;
