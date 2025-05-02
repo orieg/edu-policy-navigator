@@ -4,7 +4,9 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "preinstall": "npx only-allow pnpm && git config core.hooksPath .githooks"
+    "preinstall": "npx only-allow pnpm && git config core.hooksPath .githooks",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "convert:xlsx": "tsc pipeline/scripts/convertXlsxToCsv.ts --outDir dist/pipeline/scripts && node dist/pipeline/scripts/convertXlsxToCsv.js"
   },
   "engines": {
     "node": ">=20.11.0",
@@ -12,8 +14,26 @@
     "npm": "Please use pnpm instead of npm to install dependencies",
     "yarn": "Please use pnpm instead of yarn to install dependencies"
   },
-  "keywords": [],
+  "keywords": [
+    "education",
+    "policy",
+    "navigator",
+    "kuzu",
+    "graph",
+    "database",
+    "llm",
+    "web-llm"
+  ],
   "author": "Nicolas Brousse <nicolas@brousse.info>",
   "license": "AGPL-3.0-or-later",
-  "packageManager": "pnpm@10.7.1"
+  "packageManager": "pnpm@10.7.1",
+  "dependencies": {
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "@types/xlsx": "^0.0.36",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  }
 }

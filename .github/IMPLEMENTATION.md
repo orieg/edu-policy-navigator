@@ -1,180 +1,182 @@
 # Implementation Guide: Multi-District Policy Navigator & Chatbot
 
-This document outlines the step-by-step process for building the Multi-District Policy Navigator website.
+This document outlines the step-by-step process for building the Multi-District Policy Navigator website, using a **TypeScript/JavaScript-only stack**.
 
 **Phase 1: Setup & Environment**
 
 * **1.1. Create GitHub Repository:** (Same as before)
-* **1.2. Setup Local Development Environment:** (Same as before)
+* **1.2. Setup Local Development Environment:**
+    * Install Node.js (check `.node-version` if present) and `pnpm`.
+    * Run `pnpm install` to install dependencies (defined in `package.json`).
 * **1.3. Initialize Project Structure:**
     ```
-    srvusd-policy-navigator/
+    edu-policy-navigator/ # Renamed from srvusd-policy-navigator
     ├── .github/
-    │   └── workflows/
-    │       └── data_pipeline.yml
-    ├── backend/
-    │   ├── __init__.py
-    │   ├── scrapers/             # Scraper modules per source type
-    │   │   ├── __init__.py
-    │   │   ├── simbli_scraper.py
-    │   │   └── leginfo_scraper.py
-    │   │   └── # Add more as needed
-    │   ├── preprocess.py
-    │   ├── synthesize.py
-    │   ├── build_graph.py
-    │   ├── schema.py
-    │   ├── requirements.txt
-    │   └── config.json         # Configuration for districts/schools
-    ├── frontend/
+    │   ├── workflows/
+    │   │   └── data_pipeline.yml
+    │   └── IMPLEMENTATION.md
+    ├── pipeline/                  # Data pipeline scripts (TypeScript)
+    │   ├── src/
+    │   │   ├── scrapers/          # Scraper modules per source type
+    │   │   │   ├── index.ts
+    │   │   │   ├── simbliScraper.ts
+    │   │   │   └── leginfoScraper.ts
+    │   │   │   └── # Add more as needed
+    │   │   ├── preprocess.ts
+    │   │   ├── synthesize.ts
+    │   │   ├── buildGraph.ts
+    │   │   ├── schema.ts          # Potentially KuzuDB schema definition
+    │   │   └── main.ts            # Main pipeline execution script
+    │   ├── tsconfig.json
+    │   └── config.json          # Configuration for districts/schools
+    ├── public/                    # Static assets served directly (replaces frontend/)
     │   ├── index.html
     │   ├── css/
     │   │   └── style.css
-    │   ├── js/
-    │   │   ├── main.js
-    │   │   ├── policy_browser.js
-    │   │   ├── chat_ui.js
-    │   │   ├── kuzudb_handler.js
-    │   │   ├── webllm_handler.js
-    │   │   └── rag_controller.js
+    │   ├── js/                    # Compiled JS output from src/
     │   ├── assets/
-    │   │   └── db/
-    │   │       └── manifest.json # Lists available districts and DB paths
-    │   │       └── srvusd/       # Example directory for one district
-    │   │       │   └── policy_graph.db
-    │   │       └── other_district/ # Example for another
-    │   │           └── policy_graph.db
-    │   │   └── wasm/             # KuzuDB/WebLLM files (or use CDN)
-    │   │   └── data/             # Optional: Pre-exported JSON for browser
+    │   │   ├── db/
+    │   │   │   └── manifest.json
+    │   │   │   └── srvusd/
+    │   │   │   │   └── policy_graph.db
+    │   │   │   └── other_district/
+    │   │   │       └── policy_graph.db
+    │   │   └── wasm/              # KuzuDB/WebLLM files (or use CDN)
+    │   │   └── data/              # Optional: Pre-exported JSON
     │   │       └── srvusd_policies.json
     │   │       └── other_district_policies.json
+    ├── src/                       # Frontend source code (TypeScript)
+    │   ├── main.ts                # Entry point for frontend logic
+    │   ├── policyBrowser.ts
+    │   ├── chatUi.ts
+    │   ├── kuzudbHandler.ts
+    │   ├── webllmHandler.ts
+    │   ├── ragController.ts
+    │   └── types.ts               # Shared types
     ├── .gitignore
     ├── LICENSE
     ├── README.md
     ├── PRD.md
-    └── IMPLEMENTATION.md
+    ├── package.json
+    ├── pnpm-lock.yaml
+    └── tsconfig.json              # Root TypeScript config (can extend)
     ```
-* **1.4. Create Configuration File (`backend/config.json`):**
+* **1.4. Create Configuration File (`pipeline/config.json`):** (Structure remains the same, just moved)
     ```json
     [
       {
         "id": "srvusd",
         "name": "San Ramon Valley Unified School District",
         "policy_source_type": "simbli",
-        "policy_url": "[https://simbli.eboardsolutions.com/Policy/PolicyListing.aspx?S=36030429](https://simbli.eboardsolutions.com/Policy/PolicyListing.aspx?S=36030429)",
+        "policy_url": "https://simbli.eboardsolutions.com/Policy/PolicyListing.aspx?S=36030429",
         "edcode_sections": ["48900-48927", "51000-51007"] // Example scope
       },
       {
         "id": "other_district",
         "name": "Another School District",
         "policy_source_type": "custom_website", // Requires a new scraper
-        "policy_url": "[http://example.com/policies](http://example.com/policies)",
+        "policy_url": "http://example.com/policies",
         "edcode_sections": ["48900-48927"]
       }
       // Add more districts here
     ]
     ```
+* **1.5. Setup Build Process:** Configure `tsconfig.json` for both `pipeline` and `src` (frontend) and potentially a build tool (like Vite, esbuild, or tsc directly) in `package.json` scripts to compile TypeScript to JavaScript (e.g., outputting to `public/js`).
 
-**Phase 2: Data Pipeline Backend (Python Scripts)**
+**Phase 2: Data Pipeline Backend (Node.js/TypeScript)**
 
-* **2.1. Refactor Scrapers (`backend/scrapers/`):**
-    * Create separate scraper functions/classes for each `policy_source_type` (e.g., `sibli_scraper.py`, `leginfo_scraper.py`).
-    * Main pipeline script will read `config.json` and call the appropriate scraper based on `policy_source_type` for each district, passing necessary URLs/parameters.
-    * Scrapers should output data tagged with the district `id` (e.g., save to `raw_data/raw_srvusd.json`, `raw_data/raw_other_district.json`).
-* **2.2. Update Preprocessor (`backend/preprocess.py`):**
+* **2.0. Convert Source XLSX to CSV (One-time or as needed):**
+    * Ensure the `CDESchoolDirectoryExport.xlsx` file is present in the project root.
+    * Run the conversion script: `pnpm run convert:xlsx`.
+    * This generates CSV files (one per sheet) in the `pipeline/data/` directory. These CSVs can then be used as input for subsequent pipeline steps.
+* **2.1. Refactor Scrapers (`pipeline/src/scrapers/`):**
+    * Create separate scraper functions/classes in TypeScript for each `policy_source_type`.
+    * The main pipeline script (`pipeline/src/main.ts`) will read `config.json` and call the appropriate scraper based on `policy_source_type` for each district. Use libraries like `axios` or `node-fetch` for HTTP requests and `cheerio` or `jsdom` for HTML parsing if needed.
+    * Scrapers should output data tagged with the district `id` (e.g., save intermediate JSON files).
+* **2.2. Update Preprocessor (`pipeline/src/preprocess.ts`):**
     * Modify to read multiple raw input files based on `config.json`.
-    * Process data for each district separately.
+    * Process data for each district separately using TypeScript logic.
     * Ensure output chunks retain the district `id`.
-    * Save processed data per district (e.g., `processed_data/processed_srvusd.json`).
-* **2.3. Update Synthesizer (`backend/synthesize.py`):**
+    * Save processed data per district.
+* **2.3. Update Synthesizer (`pipeline/src/synthesize.ts`):**
     * Modify to process data for each district defined in `config.json`.
-    * Generate summaries based on the processed data for each district.
-    * Save synthesized data per district (e.g., `synthesized_data/synthesized_srvusd.json`).
-* **2.4. Update Graph Builder (`backend/build_graph.py`):**
+    * Call the external LLM API (using `node-fetch` or `axios`) to generate summaries based on the processed data for each district.
+    * Save synthesized data per district.
+* **2.4. Update Graph Builder (`pipeline/src/buildGraph.ts`):**
     * Modify to iterate through each district in `config.json`.
     * For each district:
-        * Define the output DB path using the district `id` (e.g., `db_output_path = f'./output_db/{district["id"]}/policy_graph.db'`). Create the directory if needed.
-        * Initialize a *new* KuzuDB instance at that path: `db = kuzu.Database(db_output_path)`.
-        * Connect and create the schema (schema is likely the same across districts).
-        * Load *only the data* corresponding to the current district `id` from the synthesized data files into this specific KuzuDB instance.
-    * After processing all districts, generate `manifest.json` listing districts and their relative DB paths (e.g., `{"srvusd": {"name": "San Ramon...", "dbPath": "assets/db/srvusd/policy_graph.db"}, ...}`).
+        * Define the output DB path using the district `id` (e.g., `dbOutputPath = \`./dist/pipeline/output_db/\${district.id}/policy_graph.db\``). Create the directory if needed.
+        * Use the KuzuDB Node.js client (`kuzu` npm package): `const db = new kuzu.Database(dbOutputPath);`.
+        * Connect: `const conn = new kuzu.Connection(db);`.
+        * Create the schema using Cypher queries via `conn.query()`.
+        * Load *only the data* corresponding to the current district `id` from the **generated CSV files (e.g., `pipeline/data/SheetName.csv`)** or synthesized data files into this specific KuzuDB instance using `conn.query()` with appropriate Cypher `LOAD CSV` or parameter binding.
+    * After processing all districts, generate `manifest.json` listing districts and their relative DB paths (for the frontend, e.g., `assets/db/srvusd/policy_graph.db`). Save this manifest to a location accessible by the frontend build process (e.g., `./dist/pipeline/manifest.json`).
 
 **Phase 3: GitHub Action Workflow (`.github/workflows/data_pipeline.yml`)**
 
 * **3.1. Modify Job Steps:**
-    * Add step to read `backend/config.json`.
-    * Modify scraping, preprocessing, synthesis, and graph building steps to iterate based on the config (e.g., using Python script logic or potentially matrix strategy if applicable).
-    * Ensure Python scripts correctly handle input/output paths based on district IDs.
-    * **Copy Output:** Modify the copy step to move all generated district DB directories and the `manifest.json` file to the `frontend/assets/db/` directory.
-        ```bash
-        # Example - adjust based on actual output location of build_graph.py
-        mkdir -p frontend/assets/db
-        cp -r ./output_db/* frontend/assets/db/
-        cp ./manifest.json frontend/assets/db/
-        # Optional: Copy pre-exported JSON for browser
-        # mkdir -p frontend/assets/data
-        # cp ./browser_data/* frontend/assets/data/
+    * Setup Node.js environment using `actions/setup-node` (specify version, enable pnpm caching).
+    * Install dependencies: `pnpm install --frozen-lockfile`.
+    * Run pipeline build: `pnpm run build:pipeline` (or equivalent script from `package.json`).
+    * Execute the pipeline: `pnpm run start:pipeline` (or `node ./dist/pipeline/main.js`).
+    * **Copy Output:** Modify the copy step to move all generated district DB directories and the `manifest.json` file from the pipeline's output (e.g., `./dist/pipeline/output_db/*` and `./dist/pipeline/manifest.json`) to the `public/assets/db/` directory. Ensure the KuzuDB WASM files and WebLLM model files are also copied or fetched appropriately (e.g., place them in `public/assets/wasm`).
+        ```yaml
+        - name: Copy Pipeline Output to Public Assets
+          run: |
+            mkdir -p public/assets/db
+            cp -r ./dist/pipeline/output_db/* public/assets/db/
+            cp ./dist/pipeline/manifest.json public/assets/db/
+            # Add steps to copy WASM/model files if needed
+            # mkdir -p public/assets/wasm
+            # cp ./path/to/kuzu.wasm public/assets/wasm/
+            # cp ./path/to/webllm_model.wasm public/assets/wasm/
         ```
-    * Update artifact upload path if needed (still likely `./frontend`).
+    * Configure the frontend build step (if separate): `pnpm run build:frontend`.
+    * Update artifact upload path to `./public`.
+    * Configure GitHub Pages action (`actions/deploy-pages`) to deploy from the `./public` directory/artifact.
 
-**Phase 4: Frontend Static Website (HTML, CSS, JavaScript)**
+**Phase 4: Frontend Static Website (TypeScript, HTML, CSS)**
 
-* **4.1. Update HTML (`frontend/index.html`):**
-    * Add a district selector element near the top:
-      `<select id="district-selector"><option value="">-- Select District --</option></select>`
-    * Add specific loading indicators for district data loading:
-      `<div id="district-loading-indicator" style="display: none;">Loading district data...</div>`
-* **4.2. Update CSS (`frontend/css/style.css`):**
-    * Style the `#district-selector` and `#district-loading-indicator`.
-* **4.3. Update Main Orchestration (`frontend/js/main.js`):**
-    * Global variable: `let currentDistrictId = null; let kuzuDb = null; let webLlmEngine = null;`
-    * `async function initializeApp()`:
-        * Fetch `assets/db/manifest.json`.
-        * Populate `#district-selector` options based on the manifest.
-        * Add event listener to `#district-selector`: `selector.addEventListener('change', handleDistrictChange);`
-        * Initialize WebLLM *once*: `webLlmEngine = await webllm_handler.initWebLlm(...)`. Handle progress/errors.
-        * Maybe load a default district or prompt user selection.
-    * `async function handleDistrictChange(event)`:
-        * `const selectedId = event.target.value;`
-        * If `selectedId` is empty or same as `currentDistrictId`, return.
-        * `currentDistrictId = selectedId;`
-        * Show district loading indicator (`document.getElementById('district-loading-indicator').style.display = 'block';`).
-        * Clear chat UI (`chat_ui.clearMessages()`) and policy browser content (`policy_browser.clearContent()`).
-        * Get `dbPath` from the manifest based on `selectedId`.
-        * **Re-initialize KuzuDB:** `kuzuDb = await kuzudb_handler.initKuzuDb(dbPath, progressCallback);` (Ensure `initKuzuDb` handles potential previous instances). Handle errors.
-        * **Load Policy Browser Data:** `await policy_browser.loadDistrictData(currentDistrictId);` (Fetch corresponding JSON or query KuzuDB).
-        * Hide district loading indicator. Add status message ("District '...' loaded.").
-    * `async function handleChatSubmit(userQuery)`:
-        * Check if `kuzuDb` and `webLlmEngine` are initialized. If not, show error.
-        * Proceed with call to `rag_controller.processQuery(userQuery, kuzuDb, webLlmEngine, chat_ui.addMessage)`.
-    * Call `initializeApp()` on script load/DOMContentLoaded.
-* **4.4. Update KuzuDB Handler (`frontend/js/kuzudb_handler.js`):**
-    * `initKuzuDb` must accept `dbPath` argument.
-    * Consider if the KuzuDB WASM instance needs full re-initialization or just loading a new buffer. Test performance/memory implications. It might be necessary to fully reinstantiate if internal state doesn't clear properly.
-* **4.5. Update Policy Browser (`frontend/js/policy_browser.js`):**
-    * Implement `async function loadDistrictData(districtId)`: Fetch pre-exported JSON (e.g., `assets/data/${districtId}_policies.json`) or perform initial KuzuDB queries to populate the browser for the given `districtId`.
-    * Implement `function clearContent()` to empty the browser display area.
-* **4.6. Update Chat UI (`frontend/js/chat_ui.js`):**
-    * Add `function clearMessages()` to remove all messages from the chat window.
-* **4.7. Update RAG Controller (`frontend/js/rag_controller.js`):**
-    * Core logic using the passed `kuzuDb` and `webLlmEngine` instances remains largely the same.
-    * Prompts (Text-to-Cypher, Final Answer) might benefit from including the `currentDistrictId` or name if contextually useful, but the primary change is operating on the *correctly loaded* database instance.
+* **4.1. Update HTML (`public/index.html`):**
+    * Ensure it includes the compiled JavaScript entry point (e.g., `<script type="module" src="/js/main.js"></script>`).
+    * Add district selector and loading indicators as previously defined.
+* **4.2. Update CSS (`public/css/style.css`):** (Same as before)
+* **4.3. Implement Frontend Logic (`src/*.ts` -> compiled to `public/js/*.js`):**
+    * **`src/main.ts`:**
+        * Import necessary handlers (`kuzudbHandler`, `webllmHandler`, `policyBrowser`, `chatUi`, `ragController`).
+        * Global variables: `let currentDistrictId: string | null = null; let kuzuDb: KuzuDatabase | null = null; let webLlmEngine: WebLLMEngine | null = null;` (Use appropriate types from handlers/packages).
+        * `async function initializeApp()`: Fetch `assets/db/manifest.json`, populate selector, add listener, initialize WebLLM (`webLlmEngine = await webllmHandler.init(...)`).
+        * `async function handleDistrictChange(event: Event)`: Get selected ID, show loading, clear UI, get `dbPath`, re-initialize KuzuDB (`kuzuDb = await kuzudbHandler.init(dbPath, ...)`), load browser data (`await policyBrowser.loadDistrictData(currentDistrictId, kuzuDb)`), hide loading.
+        * `async function handleChatSubmit(userQuery: string)`: Check initializations, call `ragController.processQuery(userQuery, kuzuDb!, webLlmEngine!, chatUi.addMessage)`.
+        * Attach listeners and call `initializeApp()`.
+    * **`src/kuzudbHandler.ts`:**
+        * Use KuzuDB WASM bindings (e.g., import from the correct path/package).
+        * `init` function takes `dbPath` and returns a KuzuDB instance/connection wrapper. Handle loading the DB file buffer (`fetch`).
+    * **`src/webllmHandler.ts`:**
+        * Use WebLLM library (e.g., `@mlc-ai/web-llm`).
+        * `init` function initializes and returns the chat module/engine. Handle model loading progress.
+    * **`src/policyBrowser.ts`:**
+        * `loadDistrictData` function fetches initial data (either pre-exported JSON or via `kuzuDb` queries).
+        * `clearContent` function.
+    * **`src/chatUi.ts`:**
+        * `addMessage`, `clearMessages` functions.
+    * **`src/ragController.ts`:**
+        * `processQuery` function takes query, kuzuDb, webLlmEngine, addMessage callback. Implements Text-to-Cypher (using `webLlmEngine`), KuzuDB query execution (using `kuzuDb`), and final answer generation (using `webLlmEngine`).
+* **4.4 Ensure Type Safety:** Use TypeScript interfaces/types (`src/types.ts`) for data structures (manifest, policy data, etc.).
 
 **Phase 5: Deployment**
 
-* **5.1. Configure GitHub Pages:** (Same as before)
-* **5.2. Trigger Action:** (Same as before) - Verify it processes all configured districts and generates the manifest + separate DB files.
-* **5.3. Verify Deployment:** Check logs. Access the site and test the district selector.
+* **5.1. Configure GitHub Pages:** Set source to deploy from GitHub Actions artifact.
+* **5.2. Trigger Action:** Push changes to trigger the `data_pipeline.yml` workflow.
+* **5.3. Verify Deployment:** Check Action logs for successful pipeline execution, frontend build, and deployment. Access the site and test thoroughly.
 
 **Phase 6: Testing & Refinement**
 
-* **6.1. Pipeline Testing:** Verify correct processing for *each* configured district. Check manifest and individual DB files.
-* **6.2. Frontend Testing:**
-    * Test initial load and district selection UI.
-    * Test dynamic loading: Select a district, verify loading indicator, check console for DB loading logs, verify policy browser updates.
-    * Test chat functionality *after* selecting a district. Verify answers are relevant to that district's data.
-    * Test switching districts: Select District A, chat, select District B, chat again. Verify context switches correctly. Check for memory leaks in dev tools if re-initializing KuzuDB frequently.
-* **6.3. Cross-Browser/Device Testing:** (Same as before)
-* **6.4. Prompt Refinement:** (Same as before) - Ensure prompts work well generally across different district datasets.
-* **6.5. Optimization:** Pay close attention to the performance impact of loading different KuzuDB files. Consider DB size limits for reasonable browser performance.
+* **6.1. Pipeline Testing:** Verify TypeScript pipeline execution, data processing, and DB generation for *each* configured district.
+* **6.2. Frontend Testing:** Test district selection, dynamic loading (monitor network tab for DB file loading), chat functionality per district, context switching. Use browser dev tools to check for errors and performance.
+* **6.3. Build/Toolchain:** Ensure the TypeScript compilation and build process works reliably.
+* **6.4. Cross-Browser/Device Testing:** (Same as before)
+* **6.5. Prompt Refinement:** (Same as before)
+* **6.6. Optimization:** Focus on DB loading time and frontend performance.
 
 
