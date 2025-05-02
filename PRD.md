@@ -55,14 +55,14 @@ This project aims to create an accessible, easy-to-understand resource for navig
 
 **6. Technology Stack**
 
-* **Frontend:** HTML, CSS, JavaScript (ES Modules)
+* **Frontend:** HTML, CSS, TypeScript, JavaScript (ES Modules)
 * **LLM (In-Browser):** WebLLM (mlc-ai)
 * **Graph DB (In-Browser):** KuzuDB WASM
 * **Data Pipeline:** Python 3.x (for scraping, processing, graph building), KuzuDB Python Client, Configuration management (e.g., JSON/YAML parsing).
 * **LLM (Synthesis - Build Time):** External LLM API (e.g., Google Gemini API, OpenAI API) via REST calls during GitHub Action execution.
 * **Automation:** GitHub Actions
 * **Hosting:** GitHub Pages
-* **Development Environment:** Node.js (for potential JS tooling/dev server), Python 3.x
+* **Development Environment:** Node.js (using pnpm), Python 3.x
 
 **7. Non-Goals / Out of Scope (Initial Version)**
 
