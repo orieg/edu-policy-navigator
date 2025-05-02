@@ -4,6 +4,11 @@ node_modules/
 # Build output
 dist/
 
+# Source data (potentially large)
+pipeline/data/district_boundaries.geojson
+CDESchoolDirectoryExport.xlsx
+
 # Generated data
 pipeline/data/
-public/assets/districts.json 
+public/assets/districts.json
+public/assets/boundaries/ 

@@ -1,5 +1,6 @@
 import L from 'leaflet'; // Import Leaflet
 import { OpenStreetMapProvider } from 'leaflet-geosearch'; // Import Geosearch Provider
+import { GeoJsonObject, Feature } from 'geojson'; // Import GeoJSON type and Feature type
 
 // --- DOM Elements ---
 const searchInput = document.getElementById('district-search-input') as HTMLInputElement | null;
@@ -20,48 +21,35 @@ interface DistrictDataMap {
 
 // --- State ---
 let allDistricts: DistrictDataMap = {}; // Store all fetched district data
+// let districtBoundariesGeoJson: GeoJsonObject | null = null; // REMOVED - Load on demand
 let filteredDistricts: DistrictDetails[] = []; // Store currently filtered districts
 let selectedDistrictId: string | null = null;
 let highlightIndex = -1; // For keyboard navigation
 let mapInstance: L.Map | null = null; // Keep track of the map instance
+let boundaryLayer: L.GeoJSON | null = null; // Store the current boundary layer
 const geoSearchProvider = new OpenStreetMapProvider(); // Instantiate provider
 
 // --- Functions ---
-async function fetchDistricts(): Promise<void> {
-    console.log('Attempting to fetch districts...'); // Log start
+async function fetchDistrictData() {
+    console.log('Fetching districts data...');
     try {
-        const response = await fetch('/assets/districts.json');
-        console.log('Fetch response status:', response.status); // Log status
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        const data = await response.json();
-        console.log('Fetched data (type):', typeof data); // Log data type
-        // console.log('Fetched data (sample):', JSON.stringify(data).substring(0, 200)); // Uncomment for sample
-
-        // Basic validation (check if it's an object)
-        if (typeof data !== 'object' || data === null || Array.isArray(data)) {
-            console.error('Validation failed: Data is not an object map.'); // Log validation fail
+        const districtsResponse = await fetch('/assets/districts.json');
+        if (!districtsResponse.ok) throw new Error(`Districts fetch failed: ${districtsResponse.status}`);
+        const districtsData = await districtsResponse.json();
+        if (typeof districtsData !== 'object' || districtsData === null || Array.isArray(districtsData)) {
             throw new Error('Invalid district data format received (expected object map).');
         }
-        console.log('Data validation passed.'); // Log validation pass
-        allDistricts = data as DistrictDataMap;
+        allDistricts = districtsData as DistrictDataMap;
         console.log(`Loaded data for ${Object.keys(allDistricts).length} districts.`);
-        if (searchInput) {
-            searchInput.removeAttribute('disabled'); // Enable input after data loads
-            console.log('Search input enabled.'); // Log enabling
-        } else {
-            console.error('Search input element was null when trying to enable.');
-        }
+        searchInput?.removeAttribute('disabled');
+        console.log('Search input enabled.');
+
     } catch (error) {
-        console.error("Failed to fetch, parse, or validate districts:", error); // Log error
+        console.error("Failed during data fetching:", error);
         if (infoDisplay) {
-            infoDisplay.innerHTML = '<p class="error">Error loading district list. Please try refreshing.</p>';
+            infoDisplay.innerHTML = '<p class="error">Error loading initial data. Please try refreshing.</p>';
         }
-        if (searchInput) {
-            searchInput.disabled = true;
-            console.log('Search input explicitly disabled due to error.'); // Log disabling
-        }
+        if (searchInput) searchInput.disabled = true;
     }
 }
 
@@ -203,9 +191,9 @@ async function displayDistrictInfo(districtData: DistrictDetails) {
 
     // Add link to CA School Dashboard right below the header
     if (cdsCode !== 'N/A') {
-        const dashboardUrl = `https://www.caschooldashboard.org/reports/${cdsCode}/2024`;
+        const url = `https://www.caschooldashboard.org/reports/${cdsCode}/2024`;
         content += `<div class="dashboard-link">
-                       <a href="${dashboardUrl}" target="_blank" rel="noopener noreferrer">View CA School Dashboard Report (2024)</a>
+                       <a href="${url}" target="_blank" rel="noopener noreferrer">View CA School Dashboard Report (2024)</a>
                    </div>`;
     }
 
@@ -265,103 +253,139 @@ async function displayDistrictInfo(districtData: DistrictDetails) {
 
     // --- Map Column (Placeholder - actual map initialized later) --- 
     const mapContainerId = 'info-map';
-    const latString = districtData.Latitude as string;
-    const lonString = districtData.Longitude as string;
-    const hasValidLatLonData = latString && lonString && latString !== 'No Data' && lonString !== 'No Data';
-    let showMapContainer = hasValidLatLonData;
-    let geosearchAttempted = false;
-
-    if (!hasValidLatLonData && addressParts) { // Use consolidated address for check
-        showMapContainer = true;
-        geosearchAttempted = true;
-    }
-
-    if (showMapContainer) {
-        // Add the map container div - CSS grid will place it
-        content += `<div id="${mapContainerId}"></div>`;
-    }
-    // --- End Map Column --- 
-
+    content += `<div id="${mapContainerId}"></div>`; // Always add container now
     content += '</div>'; // End grid container
     content += '</div>'; // End info-card
 
-    // Set the HTML content first
+    // Set the HTML content
     infoDisplay.innerHTML = content;
 
-    // --- Initialize or update map (logic remains the same) --- 
+    // --- Initialize or update map --- 
+    const mapElement = document.getElementById(mapContainerId);
+    if (!mapElement) {
+        console.error('Map container element not found after setting innerHTML.');
+        return;
+    }
+
+    // Remove previous map instance and boundary layer
+    if (boundaryLayer) {
+        boundaryLayer.remove();
+        boundaryLayer = null;
+    }
     if (mapInstance) {
         mapInstance.remove();
         mapInstance = null;
     }
-    if (showMapContainer) {
-        const mapElement = document.getElementById(mapContainerId);
-        if (!mapElement) {
-            console.error('Map container element not found after setting innerHTML.');
-            return;
+
+    let mapCoords: L.LatLngTuple | null = null;
+    let mapZoom = 10; // Default zoom slightly more out
+    let foundBoundary = false;
+    let districtFeature: Feature | null = null;
+
+    // 1. Try fetching individual boundary file
+    if (cdsCode !== 'N/A') {
+        // Sanitize ID for filename match
+        const filenameId = String(cdsCode).replace(/[^a-zA-Z0-9_-]/g, '_');
+        const boundaryUrl = `/assets/boundaries/${filenameId}.geojson`;
+        console.log(`Attempting to fetch boundary: ${boundaryUrl}`);
+        try {
+            const response = await fetch(boundaryUrl);
+            if (response.ok) {
+                districtFeature = await response.json() as Feature;
+                if (districtFeature && districtFeature.type === 'Feature') {
+                    console.log(`Found boundary feature for ${districtName}`);
+                    mapInstance = L.map(mapContainerId); // Create map instance first
+                    boundaryLayer = L.geoJSON(districtFeature, {
+                        style: {
+                            color: "#0056b3", // Border color
+                            weight: 2,
+                            opacity: 0.7,
+                            fillColor: "#0056b3", // Fill color
+                            fillOpacity: 0.1
+                        }
+                    }).addTo(mapInstance);
+                    mapInstance.fitBounds(boundaryLayer.getBounds());
+                    foundBoundary = true;
+                } else {
+                    console.warn(`Fetched boundary file ${boundaryUrl} is not a valid GeoJSON Feature.`);
+                }
+            } else {
+                console.warn(`Boundary file not found or fetch failed (${response.status}): ${boundaryUrl}`);
+            }
+        } catch (error) {
+            console.error(`Error fetching or parsing boundary file ${boundaryUrl}:`, error);
         }
-        let mapCoords: L.LatLngTuple | null = null;
-        let mapZoom = 13;
+    }
+
+    // 2. Fallback to Lat/Lon if boundary fetch failed or wasn't attempted
+    if (!foundBoundary) {
+        const latString = districtData.Latitude as string;
+        const lonString = districtData.Longitude as string;
+        const hasValidLatLonData = latString && lonString && latString !== 'No Data' && lonString !== 'No Data';
         if (hasValidLatLonData) {
-            // ... (parse lat/lon logic - unchanged) ...
             try {
                 const lat = parseFloat(latString);
                 const lon = parseFloat(lonString);
                 if (!isNaN(lat) && !isNaN(lon)) {
                     mapCoords = [lat, lon];
-                } else {
-                    console.warn(`Could not parse Lat/Lon numbers for ${districtName}:`, latString, lonString);
+                    mapZoom = 13; // Zoom closer for point
                 }
-            } catch (e) {
-                console.error('Error parsing Lat/Lon:', e);
-            }
-        } else if (geosearchAttempted) {
-            // Use consolidated address for geosearch query
-            const addressQuery = addressParts; // Already built above
-            console.log(`Attempting geosearch for ${districtName} with query: "${addressQuery}"`);
-            try {
-                const results = await geoSearchProvider.search({ query: addressQuery });
-                if (results && results.length > 0) {
-                    console.log('Geosearch successful:', results[0]);
-                    mapCoords = [results[0].y, results[0].x];
-                    mapZoom = 15;
-                } else {
-                    console.warn(`Geosearch returned no results for "${addressQuery}"`);
-                }
-            } catch (error) {
-                console.error(`Geosearch failed for "${addressQuery}":`, error);
-            }
+            } catch (e) { console.error('Error parsing Lat/Lon:', e); }
         }
-        if (mapCoords) {
-            // ... (map initialization logic - unchanged) ...
-            try {
-                console.log(`Initializing map for ${districtName} at [${mapCoords[0]}, ${mapCoords[1]}]`);
-                mapInstance = L.map(mapContainerId).setView(mapCoords, mapZoom);
-                L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                }).addTo(mapInstance);
-                L.marker(mapCoords).addTo(mapInstance)
-                    .bindPopup(districtName);
-            } catch (e) {
-                console.error('Error initializing Leaflet map instance:', e);
+    }
+
+    // 3. Fallback to geosearch if other methods failed
+    if (!foundBoundary && !mapCoords && addressParts) {
+        const addressQuery = addressParts; // Declare before use
+        console.log(`Attempting geosearch for ${districtName} with query: "${addressQuery}"`);
+        try {
+            const results = await geoSearchProvider.search({ query: addressQuery });
+            if (results && results.length > 0) {
+                console.log('Geosearch successful:', results[0]);
+                mapCoords = [results[0].y, results[0].x];
+                mapZoom = 15; // Zoom closer for geocoded point
+            } else {
+                console.warn(`Geosearch returned no results for "${addressQuery}"`);
             }
-        } else {
-            mapElement.innerHTML = '<p>Map location could not be determined.</p>';
+        } catch (error) {
+            console.error(`Geosearch failed for "${addressQuery}":`, error);
         }
+    }
+
+    // Initialize point map if boundary wasn't shown but coords were found
+    if (!foundBoundary && mapCoords) {
+        try {
+            console.log(`Initializing map for ${districtName} point at [${mapCoords[0]}, ${mapCoords[1]}]`);
+            mapInstance = L.map(mapContainerId).setView(mapCoords, mapZoom);
+            L.marker(mapCoords).addTo(mapInstance).bindPopup(districtName);
+        } catch (e) {
+            console.error('Error initializing Leaflet point map instance:', e);
+        }
+    }
+
+    // Add base tiles if map was initialized
+    if (mapInstance) {
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(mapInstance);
+    } else {
+        // Only show error if no map could be made at all
+        mapElement.innerHTML = '<p>Map location could not be determined.</p>';
     }
 }
 
 // --- Initialization ---
 async function initializeApp() {
-    console.log('Initializing app...'); // Log init start
+    console.log('Initializing app...');
     if (!searchInput || !resultsList || !infoDisplay) {
-        console.error('Required DOM elements not found:', { searchInput, resultsList, infoDisplay }); // Log missing elements
+        console.error('Required DOM elements not found:', { searchInput, resultsList, infoDisplay });
         return;
     }
     console.log('Required DOM elements found.');
 
-    searchInput.disabled = true; // Disable until data loads
+    searchInput.disabled = true;
     console.log('Search input initially disabled.');
-    await fetchDistricts(); // Fetch data first
+    await fetchDistrictData(); // Changed from fetchData
 
     // Add event listeners
     searchInput.addEventListener('input', handleInput);
@@ -372,9 +396,8 @@ async function initializeApp() {
 
     // Initial message
     infoDisplay.innerHTML = '<p>Search for and select a district to see information.</p>';
-    console.log('App initialization complete.'); // Log init end
+    console.log('App initialization complete.');
 }
 
 // Wait for the DOM to be fully loaded
-document.addEventListener('DOMContentLoaded', initializeApp);
 document.addEventListener('DOMContentLoaded', initializeApp); 
