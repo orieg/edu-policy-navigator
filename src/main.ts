@@ -199,8 +199,17 @@ async function displayDistrictInfo(districtData: DistrictDetails) {
     const cdsCode = districtData['CDS Code'] || 'N/A';
 
     let content = `<div class="info-card">
-                     <h2>${districtName} (${cdsCode})</h2>
-                     <div class="info-card-content">`; // Start grid container
+                     <h2>${districtName} (${cdsCode})</h2>`;
+
+    // Add link to CA School Dashboard right below the header
+    if (cdsCode !== 'N/A') {
+        const dashboardUrl = `https://www.caschooldashboard.org/reports/${cdsCode}/2024`;
+        content += `<div class="dashboard-link">
+                       <a href="${dashboardUrl}" target="_blank" rel="noopener noreferrer">View CA School Dashboard Report (2024)</a>
+                   </div>`;
+    }
+
+    content += `<div class="info-card-content">`; // Start grid container
 
     // --- Details Column --- 
     content += '<dl class="district-details">';
@@ -272,13 +281,6 @@ async function displayDistrictInfo(districtData: DistrictDetails) {
         content += `<div id="${mapContainerId}"></div>`;
     }
     // --- End Map Column --- 
-
-    // --- Dashboard Link (Below Details) --- 
-    if (cdsCode !== 'N/A') {
-        const dashboardUrl = `https://www.caschooldashboard.org/reports/${cdsCode}/2024`;
-        content += `<div class="dashboard-link"><a href="${dashboardUrl}" target="_blank" rel="noopener noreferrer">View CA School Dashboard Report (2024)</a></div>`;
-    }
-    // --- End Dashboard Link --- 
 
     content += '</div>'; // End grid container
     content += '</div>'; // End info-card

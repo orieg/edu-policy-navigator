@@ -119,7 +119,7 @@ select {
 /* Grid layout for info card content */
 .info-card-content {
     display: grid;
-    grid-template-columns: 1fr 250px;
+    grid-template-columns: 1fr 1fr;
     /* Adjust map width as needed */
     gap: 1.5em;
     /* Space between columns */
@@ -149,7 +149,7 @@ select {
 
 /* Map container takes the second column */
 #info-map {
-    height: 250px;
+    height: 350px;
     /* margin-top: 1em; Removed, grid gap handles spacing */
     border: 1px solid #dee2e6;
     border-radius: 4px;
@@ -157,6 +157,7 @@ select {
     /* Place in the second column */
     grid-row: 1 / span 2;
     /* Span across details and link if present below */
+    z-index: 0;
 }
 
 /* Adjust map message styling */
@@ -170,11 +171,35 @@ select {
 }
 
 .dashboard-link {
-    margin-top: 1em;
-    padding-top: 1em;
+    margin-top: 0.5em;
+    /* Adjust spacing below h2 */
+    margin-bottom: 1em;
+    /* Space before details grid */
+    text-align: center;
+    font-size: 0.9em;
+}
+
+/* Footer Styling */
+footer {
+    margin-top: 3em;
+    padding-top: 1.5em;
     border-top: 1px solid #dee2e6;
     text-align: center;
-    grid-column: 1 / 2;
-    /* Place link under details */
-    font-size: 0.9em;
+    font-size: 0.85em;
+    color: #6c757d;
+    /* Gray text */
+}
+
+footer p {
+    margin: 0.5em 0;
+}
+
+footer a {
+    color: #0056b3;
+    /* Match heading color */
+    text-decoration: none;
+}
+
+footer a:hover {
+    text-decoration: underline;
 }

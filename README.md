@@ -1,6 +1,6 @@
-# edu-policy-navigator
+# Unofficial edu-policy-navigator
 
-This project provides an accessible, easy-to-understand resource for navigating policies and relevant education code sections for multiple configurable school districts or educational entities. It's implemented as a static website with:
+This project provides an accessible, easy-to-understand **unofficial** resource for navigating policies and relevant education code sections for multiple configurable school districts or educational entities. It's implemented as a static website with:
 
 *   **District Selection:** Allows users to choose the specific district they are interested in.
 *   **Synthesized Policy Summaries:** Presents simplified summaries of Board Policies (BP), Administrative Regulations (AR), and relevant Education Code sections for the selected district.
