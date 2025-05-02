@@ -1,0 +1,63 @@
+#!/bin/sh
+
+# Function to run a command and check its exit code
+run_check() {
+    COMMAND_NAME=$1
+    shift
+    echo "Running $COMMAND_NAME..."
+    "$@"
+    EXIT_CODE=$?
+    if [ $EXIT_CODE -ne 0 ]; then
+        echo "❌ $COMMAND_NAME failed. Please fix the issues before committing."
+        exit 1
+    fi
+    echo "✅ $COMMAND_NAME passed."
+}
+
+# Function to check for unstaged doc changes
+check_unstaged_docs() {
+    # Check for modified but unstaged doc files
+    MODIFIED_DOCS=$(git diff --name-only | grep '\.md$' || true)
+    # Check for untracked doc files
+    UNTRACKED_DOCS=$(git ls-files --others --exclude-standard | grep '\.md$' || true)
+    
+    if [ -n "$MODIFIED_DOCS" ] || [ -n "$UNTRACKED_DOCS" ]; then
+        echo "❌ Documentation files were generated or modified but not staged:"
+        if [ -n "$MODIFIED_DOCS" ]; then
+            echo "Modified files:"
+            echo "$MODIFIED_DOCS" | sed 's/^/  /'
+        fi
+        if [ -n "$UNTRACKED_DOCS" ]; then
+            echo "New files:"
+            echo "$UNTRACKED_DOCS" | sed 's/^/  /'
+        fi
+        echo
+        echo "Please add these files to your commit:"
+        echo "  git add <files>   # To add specific files"
+        echo "  git add *.md      # To add all markdown files"
+        exit 1
+    fi
+}
+
+# Get list of staged files
+STAGED_FILES=$(git diff --cached --name-only)
+
+# First check if there are any unstaged doc changes
+check_unstaged_docs
+
+# Check if any documentation files or source files that might affect docs are staged
+DOCS_CHANGED=$(echo "$STAGED_FILES" | grep -E '\.(md|ts|js|json|py|rs)$' || true)
+
+if [ -n "$DOCS_CHANGED" ]; then
+    # Run documentation build if relevant files have changed
+    run_check "Documentation build" pnpm build:docs
+    
+    # Check again for any new unstaged doc changes after the build
+    check_unstaged_docs
+fi
+
+# Run tests
+run_check "Tests" pnpm test
+
+echo "✅ All checks passed. Proceeding with commit."
+exit 0 

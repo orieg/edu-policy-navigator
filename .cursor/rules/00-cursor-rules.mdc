@@ -1,0 +1,93 @@
+---
+description: Cursor Rules Location
+globs: *.mdc
+alwaysApply: false
+---
+# Cursor Rules Location
+
+## Purpose
+This document defines the standards and requirements for placing and organizing Cursor rule files in the repository.
+
+## Directory Structure
+All Cursor rule files MUST be placed in the `.cursor/rules/` directory at the project root:
+
+```
+PROJECT_ROOT/
+├── .cursor/
+│   └── rules/
+│       ├── your-rule-name.mdc
+│       ├── another-rule.mdc
+│       └── ...
+└── ...
+```
+
+## File Naming Conventions
+1. Use kebab-case for filenames (e.g., `your-rule-name.mdc`)
+2. Always use `.mdc` file extension
+3. Make names descriptive of the rule's purpose
+4. Prefix with numbers for ordering (e.g., `00-`, `01-`, etc.)
+
+## Placement Rules
+
+### Required Location
+- All rule files MUST be placed in `.cursor/rules/`
+- No exceptions are allowed for placement in other directories
+
+### Prohibited Locations
+Do NOT place rule files in:
+- Project root directory
+- Subdirectories outside `.cursor/rules`
+- Any other location in the project
+
+## File Organization
+
+### Recommended Structure
+Each rule file should contain:
+1. Title (H1 heading)
+2. Purpose/Description
+3. Main content sections
+4. Examples (if applicable)
+5. Related rules (if any)
+
+### Example Rule File Structure
+```markdown
+# Rule Name
+
+## Purpose
+Brief description of the rule's purpose.
+
+## Main Content
+Rule details and requirements.
+
+## Examples
+Example usage and implementations.
+
+## Related Rules
+Links to related rules.
+```
+
+## Best Practices
+
+1. **File Management**
+   - Keep rule files organized and well-named
+   - Remove obsolete rules promptly
+   - Update rules when requirements change
+   - Maintain consistent formatting
+
+2. **Content Organization**
+   - Use clear headings and sections
+   - Include practical examples
+   - Reference related rules
+   - Keep content focused and concise
+
+3. **Version Control**
+   - Track changes to rules
+   - Document major updates
+   - Maintain change history
+   - Use descriptive commit messages
+
+## Validation
+- Regularly review rule placement
+- Ensure all rules follow naming conventions
+- Verify rule content is up to date
+- Check for broken references

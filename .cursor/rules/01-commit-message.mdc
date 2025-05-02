@@ -1,0 +1,224 @@
+---
+description: Git Commit Message Guidelines and Best Practices
+globs: 
+alwaysApply: false
+---
+# Commit Message Guidelines
+
+## When to Apply This Rule
+
+IMPORTANT: Apply this rule whenever:
+- The user asks to "commit changes" or any variation like:
+  - "let's commit this"
+  - "commit these changes"
+  - "create a commit"
+  - "save our changes"
+  - "push the changes"
+- You're about to create any git commit
+- You need to amend an existing commit
+
+Following this rule consistently ensures proper commit history and documentation.
+
+## Pre-commit Checklist
+
+IMPORTANT: Always follow these steps before creating a commit message:
+1. Check current status:
+   ```bash
+   git status | cat
+   ```
+2. Review staged changes:
+   ```bash
+   git diff --cached | cat
+   ```
+3. Review unstaged changes:
+   ```bash
+   git diff | cat
+   ```
+4. Create commit message based on actual changes, not just recent conversation
+5. Ensure message reflects:
+   - Modified files
+   - Added files
+   - Deleted files
+   - Renamed files
+   - Actual content changes
+
+## Format
+- Use conventional commit format
+- Use temporary files for commit messages to handle line breaks properly
+- Format:
+  ```
+  type: short description
+
+  Context:
+  Clear description of what this change accomplishes or why it's needed.
+
+  Changes made:
+  - Bullet point of specific change
+  - Another specific change
+  - List all significant changes
+
+  Impact:
+  What this change accomplishes and why it matters.
+  ```
+
+## Types
+- `feat`: New feature
+- `fix`: Bug fix
+- `docs`: Documentation changes
+- `style`: Code style changes (formatting, etc.)
+- `refactor`: Code refactoring
+- `test`: Adding or modifying tests
+- `chore`: Maintenance tasks
+- `perf`: Performance improvements
+- `ci`: CI/CD changes
+- `build`: Build system changes
+- `revert`: Reverting changes
+
+## Common Mistakes to Avoid
+1. ❌ Never use multiple `-m` flags
+2. ❌ Never use heredoc syntax
+3. ❌ Never use direct multiline strings
+4. ❌ Never pipe echo output directly
+5. ❌ Never forget to clean up temporary files
+6. ❌ Never commit without a type
+7. ❌ Never commit without a description
+8. ❌ Never skip the line break between title and description
+9. ❌ Never create commit message without reviewing actual changes
+10. ❌ Never use vague or incomplete descriptions
+
+## Examples
+
+### Using Temporary File (Required Method)
+```bash
+# Create temporary file with commit message
+printf "type: short description\n\nContext:\nClear description of what this change accomplishes.\n\nChanges made:\n- Specific change 1\n- Specific change 2\n\nImpact:\nWhat this change accomplishes and why it matters." > /tmp/commit_msg
+
+# Commit using the temporary file
+git commit -F /tmp/commit_msg
+
+# Clean up the temporary file
+rm /tmp/commit_msg
+```
+
+### Bad Multiline Commit Commands
+```bash
+# ❌ Multiple -m flags (creates unwanted blank lines)
+git commit -m "type: short description" -m "Detailed description"
+
+# ❌ Heredoc syntax (unreliable across shells)
+git commit << EOF
+type: short description
+
+Detailed description
+EOF
+
+# ❌ Direct multiline string (breaks formatting)
+git commit -m "type: short description
+Detailed description"
+
+# ❌ Using echo with multiple lines (breaks formatting)
+echo "type: short description
+Detailed description" | git commit -F -
+
+# ❌ Forgetting to clean up temporary file
+echo "type: short description" > /tmp/commit_msg
+git commit -F /tmp/commit_msg
+# Missing: rm /tmp/commit_msg
+```
+
+### Good Examples
+
+#### Feature Addition
+```
+feat: add color picker with alpha support
+
+Context:
+Color picker needs to support alpha channel for better visual effects.
+
+Changes made:
+- Add alpha slider UI component
+- Update color handling to support alpha values
+- Add CSS styles for alpha slider
+- Update color preview to show transparency
+
+Impact:
+Users can now create semi-transparent colors for better visual effects.
+```
+
+#### Bug Fix
+```
+fix: prevent duplicate color preview elements
+
+Context:
+Multiple color preview elements were being created, causing UI clutter.
+
+Changes made:
+- Add check for existing preview element
+- Update preview element creation logic
+- Ensure proper cleanup of old preview elements
+- Add error handling for edge cases
+
+Impact:
+UI remains clean with a single preview element, improving user experience.
+```
+
+#### Documentation Update
+```
+docs: add build system documentation
+
+Context:
+New developers need clear instructions for building and running components.
+
+Changes made:
+- Add prerequisites section to README
+- Document project structure
+- Add build and run commands
+- Include configuration details
+
+Impact:
+New developers can quickly set up and start contributing to the project.
+```
+
+#### Build System Change
+```
+build: migrate to bzlmod and simplify build configuration
+
+Context:
+Build system needs modernization and simplification for better maintainability.
+
+Changes made:
+- Add MODULE.bazel for modern dependency management
+- Migrate from WORKSPACE to Bzlmod
+- Simplify frontend build rules using Vite
+- Update shared library configurations
+
+Impact:
+Simplifies the build system, improves reliability, and enables local builds.
+```
+
+### Bad Examples
+```
+# Missing type
+add color picker
+
+# Missing description
+feat: add color picker
+
+# No line break between title and description
+feat: add color picker
+Add alpha channel support to color picker with slider control.
+
+# Missing cleanup
+feat: add color picker
+Add alpha channel support to color picker with slider control.
+# Missing: rm /tmp/commit_msg
+
+# Vague description without specific changes
+fix: fix color picker issues
+Fixed some bugs in the color picker.
+
+# Missing context and impact
+fix: prevent duplicate color preview elements
+- Add check for existing preview element
+- Update preview element creation logic
+```

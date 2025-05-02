@@ -1,0 +1,62 @@
+#!/bin/sh
+
+# prepare-commit-msg hook to provide a template for commit messages
+# Based on the guidelines in .cursor/rules/01-commit-message.mdc
+
+COMMIT_MSG_FILE=$1
+COMMIT_SOURCE=$2
+
+# Only provide template for commits that:
+# 1. Are not merge commits (no COMMIT_SOURCE)
+# 2. Are not commits with a message specified via -m or -F (no COMMIT_SOURCE)
+# 3. Are not amended or rebased commits (COMMIT_SOURCE != "commit")
+# 4. Are not for git submodules
+if [ -z "$COMMIT_SOURCE" ] && ! grep -q "^# On branch" "$COMMIT_MSG_FILE" && ! grep -q "^\[PATCH\]" "$COMMIT_MSG_FILE"; then
+  # Save any existing message
+  EXISTING_MSG=$(cat "$COMMIT_MSG_FILE")
+  
+  # Check if the template is already there (in case of reuse)
+  if ! grep -q "^type: " "$COMMIT_MSG_FILE"; then
+    # Create a template
+    cat > "$COMMIT_MSG_FILE" << EOF
+type: short description
+
+Context:
+Clear description of what this change accomplishes or why it's needed.
+
+Changes made:
+- Specific change 1
+- Specific change 2
+- List all significant changes
+
+Impact:
+What this change accomplishes and why it matters.
+
+# Valid types:
+# feat:     A new feature
+# fix:      A bug fix
+# docs:     Documentation changes
+# style:    Code style changes (formatting, etc.)
+# refactor: Code refactoring
+# test:     Adding or modifying tests
+# chore:    Maintenance tasks
+# perf:     Performance improvements
+# ci:       CI/CD changes
+# build:    Build system changes
+# revert:   Reverting changes
+#
+# For more details, see the commit message guidelines at:
+# .cursor/rules/01-commit-message.mdc
+#
+# Lines starting with '#' will be removed.
+EOF
+
+    # Add the existing message as a comment if there was one
+    if [ -n "$EXISTING_MSG" ]; then
+      echo "\n# Original commit message was:" >> "$COMMIT_MSG_FILE"
+      echo "# $EXISTING_MSG" | sed 's/^# # /# /' >> "$COMMIT_MSG_FILE"
+    fi
+  fi
+fi
+
+exit 0 
