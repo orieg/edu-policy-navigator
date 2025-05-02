@@ -48,6 +48,9 @@ This project aims to create an accessible, easy-to-understand resource for navig
 * **Configurable List:** The specific districts/schools and their data source URLs (e.g., Simbli, LegInfo, custom websites) will be defined in a configuration file within the repository. Examples:
     * SRVUSD Policy Listing (Simbli): `https://simbli.eboardsolutions.com/Policy/PolicyListing.aspx?S=36030429`
     * California Education Code (LegInfo): `https://leginfo.legislature.ca.gov/faces/codesTOCSelected.xhtml?tocCode=EDC` (Relevant sections)
+    * California School District List (CDE): `https://www.cde.ca.gov/re/lr/do/schooldistrictlist.asp` (Provides downloadable lists [XLSX] of districts, potentially useful for programmatic discovery or validation of districts configured in the list above).
+    * Wikipedia List of CA School Districts: `https://en.wikipedia.org/wiki/List_of_school_districts_in_California` (Alternative, potentially less structured list of districts).
+    * California School Directory (CDE): `https://www.cde.ca.gov/SchoolDirectory/` (Provides search and downloadable data for schools/districts, including website info. A local export `CDESchoolDirectoryExport.xlsx` is available in the repo, which may be preferred for automation over the direct export link [which may require CAPTCHA]: `https://www.cde.ca.gov/SchoolDirectory/Export?exportType=ALLSD&format=E&tab=1&reqURL=%2FSchoolDirectory%2FExportSelect%3Fsearch%3D%26allSearch%3D%26tab%3D1%26order%3D0%26qdc%3D1520%26qsc%3D25998%26simpleSearch%3DY%26sax%3Dtrue&sax=true&sd1=on&sd2=on&sd3=on&sd48=on&sd4=on&sd5=on&sd6=on&sd7=on&sd8=on&sd9=on&sd11=on&sd12=on&sd13=on&sd14=on&sd15=on&sd17=on&sd18=on&sd19=on&sd20=on&sd21=on&sd22=on&sd47=on&sd50=on&sd51=on&sd52=on&sd53=on&sd23=on&sd24=on&sd25=on&sd26=on&sd27=on&sd28=on&sd29=on&sd30=on&sd31=on&sd32=on&sd33=on&sd35=on&sd36=on&sd37=on`)
     * *[Future District/School Source URL]*
 
 **6. Technology Stack**
