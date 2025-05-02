@@ -181,13 +181,12 @@ select {
 
 /* Footer Styling */
 footer {
-    margin-top: 3em;
-    padding-top: 1.5em;
-    border-top: 1px solid #dee2e6;
+    margin-top: 2rem;
+    padding: 1rem 0;
     text-align: center;
-    font-size: 0.85em;
-    color: #6c757d;
-    /* Gray text */
+    font-size: 0.9rem;
+    color: #777;
+    border-top: 1px solid #eee;
 }
 
 footer p {
@@ -232,14 +231,9 @@ footer a:hover {
 }
 
 .schools-list li {
-    padding: 0.75em 0;
-    border-bottom: 1px solid #e9ecef;
-    font-size: 0.95em;
-    /* --- Prevent breaking inside list items --- */
-    break-inside: avoid;
-    page-break-inside: avoid;
-    /* Older browser fallback */
-    /* --- End Prevent Breaking --- */
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #eee;
 }
 
 .schools-list li:last-child {
@@ -247,16 +241,25 @@ footer a:hover {
 }
 
 .schools-list strong {
-    display: block;
-    /* School name on its own line */
-    margin-bottom: 0.25em;
-    font-weight: 600;
+    display: inline-block;
+    /* Or block if needed */
+    margin-right: 0.5rem;
 }
 
 .schools-list small {
-    color: #6c757d;
-    /* Gray text for address */
-    font-size: 0.9em;
+    display: block;
+    color: #555;
+    font-size: 0.85rem;
+    margin-top: 0.2rem;
+}
+
+/* School Marker Icon Style */
+.school-marker-icon {
+    font-size: 1.5rem;
+    text-align: center;
+    /* Center emoji within div */
+    line-height: 1;
+    /* Adjust line height for centering */
 }
 
 /* Error message styling (reusable) */

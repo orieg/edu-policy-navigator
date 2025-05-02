@@ -541,6 +541,14 @@ async function updateMapLayersAndContent(
         schoolCountInList = schoolsInDistrict.length;
 
         if (schoolCountInList > 0) {
+            // Define a smaller icon for schools (optional)
+            const schoolIcon = L.divIcon({
+                html: '🏫',        // School emoji
+                className: 'school-marker-icon', // Added CSS class
+                iconSize: undefined, // Let CSS control size (use undefined instead of null)
+                iconAnchor: [12, 12] // Adjust anchor based on final size if needed
+            });
+
             // ... (Copy markerPromises, Promise.all, and marker adding loop, lines approx 454-599) ...
             // --- Start copied marker logic ---
             // Use Promise.all to handle potential async geocoding for markers
@@ -610,7 +618,7 @@ async function updateMapLayersAndContent(
                 }
 
                 // Return marker coords and the generated HTML for this school
-                return { coords: schoolMarkerCoords, html: listItemHtml, name: schoolName };
+                return { coords: schoolMarkerCoords, html: listItemHtml, name: schoolName, address: schoolAddress };
             }); // End schoolsInDistrict.map
 
             // Wait for all potential geocoding lookups to finish
@@ -638,9 +646,9 @@ async function updateMapLayersAndContent(
 
                 // Add marker if coordinates were found
                 if (data.coords) {
-                    L.marker(data.coords /*, { icon: schoolIcon } */)
+                    L.marker(data.coords, { icon: schoolIcon })
                         .addTo(currentSchoolMarkersLayer) // Use the non-null reference
-                        .bindPopup(`<b>${data.name}</b>`);
+                        .bindPopup(`<b>${data.name}</b><br>${data.address || 'Address not available'}`);
                 } else {
                     console.warn(`[Map] Could not determine coordinates for school marker: ${data.name}`);
                 }
