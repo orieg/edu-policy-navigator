@@ -203,3 +203,56 @@ footer a {
 footer a:hover {
     text-decoration: underline;
 }
+
+/* --- School List Specific Styling --- */
+.schools-list-container {
+    margin-top: 2em;
+    /* Space above the school list section */
+    padding-top: 1.5em;
+    border-top: 1px solid #dee2e6;
+    /* Separator line */
+}
+
+.schools-list-container h3 {
+    margin-top: 0;
+    margin-bottom: 1em;
+    font-size: 1.2em;
+    color: #343a40;
+}
+
+.schools-list {
+    list-style: none;
+    padding-left: 0;
+    margin: 0;
+}
+
+.schools-list li {
+    padding: 0.75em 0;
+    border-bottom: 1px solid #e9ecef;
+    /* Separator between schools */
+    font-size: 0.95em;
+}
+
+.schools-list li:last-child {
+    border-bottom: none;
+}
+
+.schools-list strong {
+    display: block;
+    /* School name on its own line */
+    margin-bottom: 0.25em;
+    font-weight: 600;
+}
+
+.schools-list small {
+    color: #6c757d;
+    /* Gray text for address */
+    font-size: 0.9em;
+}
+
+/* Error message styling (reusable) */
+.error {
+    color: #dc3545;
+    /* Red */
+    font-weight: bold;
+}
