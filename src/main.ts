@@ -1,6 +1,15 @@
 import L from 'leaflet'; // Import Leaflet
 import { OpenStreetMapProvider } from 'leaflet-geosearch'; // Import Geosearch Provider
-import { GeoJsonObject, Feature } from 'geojson'; // Import GeoJSON type and Feature type
+import { GeoJsonObject, Feature, Point, Polygon, MultiPolygon } from 'geojson'; // Import GeoJSON type and geometry types
+import proj4 from 'proj4'; // Import proj4
+
+// --- proj4 Configuration ---
+// Define the projections we'll use
+proj4.defs('EPSG:3857', '+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs');
+proj4.defs('EPSG:4326', '+proj=longlat +datum=WGS84 +no_defs');
+
+// Create a transformation function
+const transform3857To4326 = proj4('EPSG:3857', 'EPSG:4326');
 
 // --- DOM Elements ---
 const searchInput = document.getElementById('district-search-input') as HTMLInputElement | null;
@@ -179,37 +188,56 @@ function handleBlur(event: FocusEvent) {
     }, 150);
 }
 
+// --- Helper Function for Reprojection ---
+function reprojectFeatureCoordinates(feature: Feature): Feature | null {
+    if (!feature || !feature.geometry) return null;
+
+    const geometry = feature.geometry;
+    let transformedCoordinates: any[] = []; // Use any[] for flexibility
+
+    try {
+        if (geometry.type === 'Polygon') {
+            transformedCoordinates = (geometry.coordinates as number[][][]).map(ring =>
+                ring.map(point => transform3857To4326.forward(point as [number, number]))
+            );
+        } else if (geometry.type === 'MultiPolygon') {
+            transformedCoordinates = (geometry.coordinates as number[][][][]).map(polygon =>
+                polygon.map(ring =>
+                    ring.map(point => transform3857To4326.forward(point as [number, number]))
+                )
+            );
+        } else {
+            console.warn(`[Reproject] Unsupported geometry type: ${geometry.type}`);
+            return null; // Don't process other types for now
+        }
+
+        // Create a *new* feature object with the same properties but transformed geometry
+        const transformedFeature: Feature = {
+            ...feature, // Copy properties
+            geometry: {
+                ...geometry, // Copy geometry type
+                coordinates: transformedCoordinates, // Use transformed coordinates
+            } as Polygon | MultiPolygon // Assert the correct geometry type
+        };
+        return transformedFeature;
+
+    } catch (error) {
+        console.error("[Reproject] Error during coordinate transformation:", error, "Original feature:", feature);
+        return null;
+    }
+}
+
 // --- Display Logic ---
 async function displayDistrictInfo(districtData: DistrictDetails) {
     if (!infoDisplay) return;
-
     const districtName = districtData.District || 'N/A';
     const cdsCode = districtData['CDS Code'] || 'N/A';
-
-    let content = `<div class="info-card">
-                     <h2>${districtName} (${cdsCode})</h2>`;
-
-    // Add link to CA School Dashboard right below the header
-    if (cdsCode !== 'N/A') {
-        const url = `https://www.caschooldashboard.org/reports/${cdsCode}/2024`;
-        content += `<div class="dashboard-link">
-                       <a href="${url}" target="_blank" rel="noopener noreferrer">View CA School Dashboard Report (2024)</a>
-                   </div>`;
-    }
-
-    content += `<div class="info-card-content">`; // Start grid container
-
-    // --- Details Column --- 
+    let content = `<div class="info-card"><h2>${districtName} (${cdsCode})</h2>`;
+    if (cdsCode !== 'N/A') { const url = `https://www.caschooldashboard.org/reports/${cdsCode}/2024`; content += `<div class="dashboard-link"><a href="${url}" target="_blank" rel="noopener noreferrer">View CA School Dashboard Report (2024)</a></div>`; }
+    content += `<div class="info-card-content">`;
     content += '<dl class="district-details">';
-
-    // Helper function to add detail if value exists
-    const addDetail = (label: string, value: string | number | null | undefined) => {
-        if (value) {
-            content += `<dt>${label}</dt><dd>${value}</dd>`;
-        }
-    };
-    // Helper function for links
-    const addLinkDetail = (label: string, value: string | null | undefined, url?: string) => {
+    const addDetail = (label: string, value: any) => { if (value) { content += `<dt>${label}</dt><dd>${value}</dd>`; } };
+    const addLinkDetail = (label: string, value: any, url?: string) => {
         if (value) {
             let href = url || value;
             if (typeof href === 'string' && href.includes('.') && !href.startsWith('http') && !href.startsWith('//')) {
@@ -218,107 +246,155 @@ async function displayDistrictInfo(districtData: DistrictDetails) {
             if (typeof href === 'string' && (href.startsWith('http') || href.startsWith('//'))) {
                 content += `<dt>${label}</dt><dd><a href="${href}" target="_blank" rel="noopener noreferrer">${value}</a></dd>`;
             } else {
-                content += `<dt>${label}</dt><dd>${value}</dd>`; // Display as text if not valid URL
+                content += `<dt>${label}</dt><dd>${value}</dd>`;
             }
         }
     };
-
-    // Display selected details in a specific order
-    addDetail('County', districtData.County);
-    addDetail('Type', districtData['Entity Type']);
-    addDetail('Status', districtData.Status);
-    addDetail('Funding Type', districtData['Funding Type']);
-
-    // Consolidate Address
-    const addressParts = [
-        districtData['Street Address'],
-        districtData['Street City'],
-        districtData['Street State'],
-        districtData['Street Zip']
-    ].filter(part => part).join(', '); // Join non-empty parts
-    addDetail('Address', addressParts);
-
-    // Consolidate Grades
-    const lowGrade = districtData['Low Grade'];
-    const highGrade = districtData['High Grade'];
-    if (lowGrade && highGrade) {
-        addDetail('Grade Span', `${lowGrade} - ${highGrade}`);
-    }
-
-    addDetail('Phone', districtData.Phone);
-    addLinkDetail('Website', districtData.Website as string);
-
-    content += '</dl>'; // End details list
-    // --- End Details Column --- 
-
-    // --- Map Column (Placeholder - actual map initialized later) --- 
+    addDetail('County', districtData.County); addDetail('Type', districtData['Entity Type']); addDetail('Status', districtData.Status); addDetail('Funding Type', districtData['Funding Type']);
+    const addressParts = [districtData['Street Address'], districtData['Street City'], districtData['Street State'], districtData['Street Zip']].filter(part => part).join(', '); addDetail('Address', addressParts);
+    const lowGrade = districtData['Low Grade']; const highGrade = districtData['High Grade']; if (lowGrade && highGrade) { addDetail('Grade Span', `${lowGrade} - ${highGrade}`); }
+    addDetail('Phone', districtData.Phone); addLinkDetail('Website', districtData.Website as string);
+    content += '</dl>';
     const mapContainerId = 'info-map';
-    content += `<div id="${mapContainerId}"></div>`; // Always add container now
-    content += '</div>'; // End grid container
-    content += '</div>'; // End info-card
-
-    // Set the HTML content
+    content += `<div id="${mapContainerId}"></div>`;
+    content += '</div></div>'; // End grid and card
     infoDisplay.innerHTML = content;
 
     // --- Initialize or update map --- 
     const mapElement = document.getElementById(mapContainerId);
     if (!mapElement) {
-        console.error('Map container element not found after setting innerHTML.');
+        console.error('[Map] Map container element not found after setting innerHTML.');
         return;
     }
+    mapElement.innerHTML = ''; // Clear any previous message
 
     // Remove previous map instance and boundary layer
-    if (boundaryLayer) {
-        boundaryLayer.remove();
-        boundaryLayer = null;
-    }
-    if (mapInstance) {
-        mapInstance.remove();
-        mapInstance = null;
-    }
+    if (boundaryLayer) { boundaryLayer.remove(); boundaryLayer = null; }
+    if (mapInstance) { mapInstance.remove(); mapInstance = null; }
 
     let mapCoords: L.LatLngTuple | null = null;
-    let mapZoom = 10; // Default zoom slightly more out
+    let mapZoom = 10;
     let foundBoundary = false;
     let districtFeature: Feature | null = null;
 
+    // --- Initialize Map Instance FIRST ---
+    try {
+        // Initialize with a default view (will be overridden)
+        mapInstance = L.map(mapContainerId).setView([37.8, -122.4], 5); // Default CA view
+        console.log('[Map] Base map instance created.');
+
+        // --- Add Base Tile Layer ---
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors'
+        }).addTo(mapInstance);
+        console.log('[Map] Base tile layer added.');
+
+    } catch (mapInitError) {
+        console.error('[Map] Critical error initializing map instance or tile layer:', mapInitError);
+        mapElement.innerHTML = '<p>Error initializing map.</p>';
+        return; // Stop if base map fails
+    }
+
+    // --- Now try to add boundary or fallback ---
+
     // 1. Try fetching individual boundary file
     if (cdsCode !== 'N/A') {
-        // Sanitize ID for filename match
         const filenameId = String(cdsCode).replace(/[^a-zA-Z0-9_-]/g, '_');
         const boundaryUrl = `/assets/boundaries/${filenameId}.geojson`;
-        console.log(`Attempting to fetch boundary: ${boundaryUrl}`);
+        console.log(`[Map] Attempting to fetch boundary: ${boundaryUrl}`);
         try {
             const response = await fetch(boundaryUrl);
+            console.log(`[Map] Boundary fetch status for ${cdsCode}: ${response.status}`);
             if (response.ok) {
-                districtFeature = await response.json() as Feature;
-                if (districtFeature && districtFeature.type === 'Feature') {
-                    console.log(`Found boundary feature for ${districtName}`);
-                    mapInstance = L.map(mapContainerId); // Create map instance first
-                    boundaryLayer = L.geoJSON(districtFeature, {
-                        style: {
-                            color: "#0056b3", // Border color
-                            weight: 2,
-                            opacity: 0.7,
-                            fillColor: "#0056b3", // Fill color
-                            fillOpacity: 0.1
-                        }
+                const originalFeature = await response.json() as Feature;
+
+                // --- Reproject the coordinates ---
+                console.log(`[Map] Attempting to reproject coordinates for ${cdsCode}`);
+                const reprojectedFeature = reprojectFeatureCoordinates(originalFeature);
+                // --- End Reprojection ---
+
+                if (reprojectedFeature) { // Use the reprojected feature
+                    console.log(`[Map] Successfully reprojected coordinates for ${cdsCode}`);
+                    boundaryLayer = L.geoJSON(reprojectedFeature, { // Pass reprojected feature to Leaflet
+                        style: { color: "#0056b3", weight: 2, opacity: 0.7, fillColor: "#0056b3", fillOpacity: 0.1 }
                     }).addTo(mapInstance);
-                    mapInstance.fitBounds(boundaryLayer.getBounds());
-                    foundBoundary = true;
+
+                    // --- Add detailed bounds logging ---
+                    const bounds = boundaryLayer.getBounds();
+                    console.log('[Map] Boundary Layer Object (after reprojection):', boundaryLayer);
+                    console.log('[Map] Calculated Bounds Object:', bounds);
+                    console.log('[Map] Bounds validity:', bounds.isValid());
+                    if (bounds.isValid()) {
+                        console.log('[Map] Bounds South-West:', bounds.getSouthWest());
+                        console.log('[Map] Bounds North-East:', bounds.getNorthEast());
+                    } else {
+                        console.warn('[Map] Calculated bounds are invalid after reprojection.');
+                    }
+                    // --- End bounds logging ---
+
+                    if (bounds.isValid()) { // Only fit if bounds are valid
+                        mapInstance.fitBounds(bounds);
+                        mapInstance.invalidateSize(); // Invalidate after fit
+                        foundBoundary = true;
+                        console.log(`[Map] Boundary layer added and map fitted for ${cdsCode}.`);
+
+                        // --- Add Address Marker --- 
+                        let markerCoords: L.LatLngTuple | null = null;
+                        const latString = districtData.Latitude as string;
+                        const lonString = districtData.Longitude as string;
+                        const hasValidLatLonData = latString && lonString && latString !== 'No Data' && lonString !== 'No Data';
+
+                        if (hasValidLatLonData) {
+                            try {
+                                const lat = parseFloat(latString);
+                                const lon = parseFloat(lonString);
+                                if (!isNaN(lat) && !isNaN(lon)) {
+                                    markerCoords = [lat, lon];
+                                }
+                            } catch (e) { console.warn('[Map] Error parsing Lat/Lon for marker:', e); }
+                        }
+
+                        // If Lat/Lon invalid or missing, try geocoding the address
+                        if (!markerCoords && addressParts) {
+                            console.log(`[Map] Lat/Lon invalid for marker, attempting geosearch for: "${addressParts}"`);
+                            try {
+                                const results = await geoSearchProvider.search({ query: addressParts });
+                                if (results && results.length > 0) {
+                                    markerCoords = [results[0].y, results[0].x];
+                                }
+                            } catch (error) { console.warn(`[Map] Geosearch failed for marker address "${addressParts}":`, error); }
+                        }
+
+                        // Add the marker if coordinates were found
+                        if (markerCoords) {
+                            L.marker(markerCoords)
+                                .addTo(mapInstance)
+                                .bindPopup(`<b>${districtName}</b><br>${addressParts || 'Address not available'}`);
+                            console.log(`[Map] Added address marker at [${markerCoords[0]}, ${markerCoords[1]}]`);
+                        } else {
+                            console.warn(`[Map] Could not determine coordinates for address marker for ${districtName}.`);
+                        }
+                        // --- End Address Marker --- 
+
+                    } else {
+                        console.error(`[Map] Could not fit map to invalid bounds for ${cdsCode}.`);
+                        // Proceed to fallbacks
+                    }
                 } else {
-                    console.warn(`Fetched boundary file ${boundaryUrl} is not a valid GeoJSON Feature.`);
+                    console.error(`[Map] Failed to reproject boundary for ${cdsCode}. Original feature:`, originalFeature);
+                    // Proceed to fallbacks
                 }
             } else {
-                console.warn(`Boundary file not found or fetch failed (${response.status}): ${boundaryUrl}`);
+                console.warn(`[Map] Boundary file not found or fetch failed (${response.status}): ${boundaryUrl}`);
             }
         } catch (error) {
-            console.error(`Error fetching or parsing boundary file ${boundaryUrl}:`, error);
+            console.error(`[Map] Error fetching, parsing, or processing boundary file ${boundaryUrl}:`, error);
         }
     }
 
-    // 2. Fallback to Lat/Lon if boundary fetch failed or wasn't attempted
+    // 2. Fallback to Lat/Lon if boundary not found/added/reprojected/fitted
     if (!foundBoundary) {
+        console.log('[Map] Boundary not shown, attempting Lat/Lon fallback.');
         const latString = districtData.Latitude as string;
         const lonString = districtData.Longitude as string;
         const hasValidLatLonData = latString && lonString && latString !== 'No Data' && lonString !== 'No Data';
@@ -328,48 +404,42 @@ async function displayDistrictInfo(districtData: DistrictDetails) {
                 const lon = parseFloat(lonString);
                 if (!isNaN(lat) && !isNaN(lon)) {
                     mapCoords = [lat, lon];
-                    mapZoom = 13; // Zoom closer for point
+                    mapZoom = 13;
                 }
             } catch (e) { console.error('Error parsing Lat/Lon:', e); }
         }
     }
 
-    // 3. Fallback to geosearch if other methods failed
+    // 3. Fallback to geosearch if needed
     if (!foundBoundary && !mapCoords && addressParts) {
-        const addressQuery = addressParts; // Declare before use
-        console.log(`Attempting geosearch for ${districtName} with query: "${addressQuery}"`);
+        const addressQuery = addressParts;
+        console.log(`[Map] No boundary or Lat/Lon, attempting geosearch for: "${addressQuery}"`);
         try {
             const results = await geoSearchProvider.search({ query: addressQuery });
             if (results && results.length > 0) {
-                console.log('Geosearch successful:', results[0]);
                 mapCoords = [results[0].y, results[0].x];
-                mapZoom = 15; // Zoom closer for geocoded point
+                mapZoom = 15;
             } else {
                 console.warn(`Geosearch returned no results for "${addressQuery}"`);
             }
         } catch (error) {
-            console.error(`Geosearch failed for "${addressQuery}":`, error);
+            console.error(`[Map] Geosearch failed for "${addressQuery}":`, error);
         }
     }
 
-    // Initialize point map if boundary wasn't shown but coords were found
+    // Set view to point if boundary wasn't found but coords were
     if (!foundBoundary && mapCoords) {
         try {
-            console.log(`Initializing map for ${districtName} point at [${mapCoords[0]}, ${mapCoords[1]}]`);
-            mapInstance = L.map(mapContainerId).setView(mapCoords, mapZoom);
+            console.log(`[Map] Setting view to point for ${districtName} at [${mapCoords[0]}, ${mapCoords[1]}]`);
+            mapInstance.setView(mapCoords, mapZoom);
             L.marker(mapCoords).addTo(mapInstance).bindPopup(districtName);
-        } catch (e) {
-            console.error('Error initializing Leaflet point map instance:', e);
-        }
+            mapInstance.invalidateSize(); // Invalidate after setView
+        } catch (e) { console.error('[Map] Error setting view/marker for point:', e); }
     }
 
-    // Add base tiles if map was initialized
-    if (mapInstance) {
-        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        }).addTo(mapInstance);
-    } else {
-        // Only show error if no map could be made at all
+    // Final check if map couldn't be positioned
+    if (!foundBoundary && !mapCoords) {
+        console.log('[Map] No boundary or point location found.');
         mapElement.innerHTML = '<p>Map location could not be determined.</p>';
     }
 }

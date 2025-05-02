@@ -92,20 +92,24 @@ This document outlines the step-by-step process for building the Multi-District 
 * **2.1. Prepare District List for Frontend (Run after CSV conversion):**
     * Run the preparation script: `pnpm run prepare:districts`.
     * This reads `pipeline/data/School and District Data.csv` (verify CSV name and required columns like 'DistrictName', 'DistrictCode'), extracts unique districts, and writes a simplified list to `public/assets/districts.json`.
-* **2.2. Refactor Scrapers (`pipeline/src/scrapers/`):**
+* **2.2. Split District Boundaries (Run after obtaining source GeoJSON):**
+    * Place the large `district_boundaries.geojson` file (downloaded from data.ca.gov source) into `pipeline/data/`.
+    * Run the splitting script: `pnpm run prepare:boundaries`.
+    * This reads the large GeoJSON, iterates through features, and saves each district boundary as a separate file in `public/assets/boundaries/<CDS_CODE>.geojson`. Verify the CDS Code property name in the script matches the GeoJSON source.
+* **2.3. Refactor Scrapers (`pipeline/src/scrapers/`):**
     * Create separate scraper functions/classes in TypeScript for each `policy_source_type`.
     * The main pipeline script (`pipeline/src/main.ts`) will read `config.json` and call the appropriate scraper based on `policy_source_type` for each district. Use libraries like `axios` or `node-fetch` for HTTP requests and `cheerio` or `jsdom` for HTML parsing if needed.
     * Scrapers should output data tagged with the district `id` (e.g., save intermediate JSON files).
-* **2.3. Update Preprocessor (`pipeline/src/preprocess.ts`):**
+* **2.4. Update Preprocessor (`pipeline/src/preprocess.ts`):**
     * Modify to read multiple raw input files based on `config.json`.
     * Process data for each district separately using TypeScript logic.
     * Ensure output chunks retain the district `id`.
     * Save processed data per district.
-* **2.4. Update Synthesizer (`pipeline/src/synthesize.ts`):**
+* **2.5. Update Synthesizer (`pipeline/src/synthesize.ts`):**
     * Modify to process data for each district defined in `config.json`.
     * Call the external LLM API (using `node-fetch` or `axios`) to generate summaries based on the processed data for each district.
     * Save synthesized data per district.
-* **2.5. Update Graph Builder (`pipeline/src/buildGraph.ts`):**
+* **2.6. Update Graph Builder (`pipeline/src/buildGraph.ts`):**
     * Modify to iterate through each district in `config.json`.
     * For each district:
         * Define the output DB path using the district `id` (e.g., `dbOutputPath = \`./dist/pipeline/output_db/\${district.id}/policy_graph.db\``). Create the directory if needed.
@@ -120,7 +124,7 @@ This document outlines the step-by-step process for building the Multi-District 
 * **3.1. Modify Job Steps:**
     * Setup Node.js environment using `actions/setup-node` (specify version, enable pnpm caching).
     * Install dependencies: `pnpm install --frozen-lockfile`.
-    * **Prepare Data:** Run `pnpm run convert:xlsx` and `pnpm run prepare:districts`.
+    * **Prepare Data:** Run `pnpm run prepare` (which includes `convert:xlsx`, `prepare:districts`, and `prepare:boundaries`). Assumes source XLSX and GeoJSON are present.
     * Run pipeline build: `pnpm run build:pipeline` (or equivalent script from `package.json`).
     * Execute the pipeline: `pnpm run start:pipeline` (or `node ./dist/pipeline/main.js`).
     * **Copy Output:** Modify the copy step to move generated district DB directories and the `manifest.json` file from the pipeline's output to `public/assets/db/`. Copy necessary WASM/model files to `public/assets/wasm`. **Note:** `districts.json` is already in `public/assets` by the `prepare:districts` script.
@@ -145,6 +149,13 @@ This document outlines the step-by-step process for building the Multi-District 
 * **4.2. Update CSS (`public/css/style.css`):** (Same as before)
 * **4.3. Implement Frontend Logic (`src/*.ts` -> compiled to `public/js/*.js`):**
     * **`src/main.ts`:**
+        * Modify `initializeApp` to only fetch `districts.json` initially (`fetchDistrictData`).
+        * Remove global state for the full boundary GeoJSON.
+        * Modify `displayDistrictInfo`:
+            * Fetch the specific boundary file (`/assets/boundaries/<CDS_CODE>.geojson`) on demand when a district is selected.
+            * If fetch is successful, parse the Feature and display using `L.geoJSON`.
+            * Use Lat/Lon or geosearch as fallbacks if the boundary file fetch fails or boundary is missing.
+            * Update map initialization logic to handle both boundary layers and point markers.
         * Import necessary handlers (`kuzudbHandler`, `webllmHandler`, `policyBrowser`, `chatUi`, `ragController`).
         * Global variables: `let currentDistrictId: string | null = null; let kuzuDb: KuzuDatabase | null = null; let webLlmEngine: WebLLMEngine | null = null;` (Use appropriate types from handlers/packages).
         * `async function initializeApp()`: Fetch `assets/db/manifest.json`, populate selector, add listener, initialize WebLLM (`webLlmEngine = await webllmHandler.init(...)`).
@@ -174,7 +185,7 @@ This document outlines the step-by-step process for building the Multi-District 
 
 **Phase 6: Testing & Refinement**
 
-* **6.1. Pipeline Testing:** Verify TypeScript pipeline execution, data processing, and DB generation for *each* configured district.
+* **6.1. Pipeline Testing:** Verify data prep steps (CSV conversion, district JSON, boundary splitting) execute correctly.
 * **6.2. Frontend Testing:** Test district selection, dynamic loading (monitor network tab for DB file loading), chat functionality per district, context switching. Use browser dev tools to check for errors and performance.
 * **6.3. Build/Toolchain:** Ensure the TypeScript compilation and build process works reliably.
 * **6.4. Cross-Browser/Device Testing:** (Same as before)

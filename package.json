@@ -8,6 +8,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "convert:xlsx": "tsc pipeline/scripts/convertXlsxToCsv.ts --outDir dist/pipeline/scripts && node dist/pipeline/scripts/convertXlsxToCsv.js",
     "prepare:districts": "tsc pipeline/scripts/generateDistrictJson.ts --outDir dist/pipeline/scripts && node dist/pipeline/scripts/generateDistrictJson.js",
+    "prepare:boundaries": "tsc pipeline/scripts/splitBoundaries.ts --outDir dist/pipeline/scripts && node dist/pipeline/scripts/splitBoundaries.js",
+    "prepare": "pnpm run convert:xlsx && pnpm run prepare:districts && pnpm run prepare:boundaries",
     "dev": "vite --force",
     "build": "vite build",
     "preview": "vite preview"
@@ -32,12 +34,15 @@
   "license": "AGPL-3.0-or-later",
   "packageManager": "pnpm@10.7.1",
   "dependencies": {
+    "@types/proj4": "^2.5.6",
     "csv-parse": "^5.6.0",
     "leaflet": "^1.9.4",
     "leaflet-geosearch": "^4.2.0",
+    "proj4": "^2.15.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@types/geojson": "^7946.0.16",
     "@types/leaflet": "^1.9.17",
     "@types/node": "^22.15.3",
     "@types/xlsx": "^0.0.36",
