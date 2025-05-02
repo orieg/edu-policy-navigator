@@ -224,13 +224,22 @@ footer a:hover {
     list-style: none;
     padding-left: 0;
     margin: 0;
+    /* --- Add Columns --- */
+    column-count: 2;
+    column-gap: 2em;
+    /* Adjust gap as needed */
+    /* --- End Columns --- */
 }
 
 .schools-list li {
     padding: 0.75em 0;
     border-bottom: 1px solid #e9ecef;
-    /* Separator between schools */
     font-size: 0.95em;
+    /* --- Prevent breaking inside list items --- */
+    break-inside: avoid;
+    page-break-inside: avoid;
+    /* Older browser fallback */
+    /* --- End Prevent Breaking --- */
 }
 
 .schools-list li:last-child {

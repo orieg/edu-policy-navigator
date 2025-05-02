@@ -35,6 +35,8 @@ interface SchoolDetails {
     'CDS Code': string;
     'School': string;
     'Status': string; // For filtering
+    'Public Yes/No': string; // Add this field
+    'Educational Program Type': string; // Add this field
 }
 
 // Add type for the schools data structure
@@ -445,7 +447,16 @@ async function displayDistrictInfo(districtData: DistrictDetails) {
     let schoolsHtml = '';
     if (shortDistrictCdsCode && allSchoolsByDistrict[shortDistrictCdsCode]) {
         const schoolsInDistrict = allSchoolsByDistrict[shortDistrictCdsCode]
-            .filter(school => school.Status === 'Active')
+            .filter(school => {
+                const isActive = school.Status === 'Active';
+                const programType = (school['Educational Program Type'] as string)?.toLowerCase() || '';
+                const schoolName = (school.School as string)?.toLowerCase() || ''; // Get lowercase school name
+
+                const isHomeschoolProgram = programType === 'homeschool';
+                const isHomeschoolName = schoolName === 'homeschool'; // Check if name is exactly "Homeschool"
+
+                return isActive && !isHomeschoolProgram && !isHomeschoolName; // Exclude both
+            })
             .sort((a, b) => a.School.localeCompare(b.School));
 
         if (schoolsInDistrict.length > 0) {
@@ -454,7 +465,7 @@ async function displayDistrictInfo(districtData: DistrictDetails) {
             schoolsHtml += '<ul class="schools-list">';
             schoolsInDistrict.forEach(school => {
                 const schoolName = school.School;
-                const schoolCdsCode = school['CDS Code']; // Full 14-digit code
+                const schoolCdsCode = school['CDS Code'];
                 const schoolAddress = [
                     school['Street Address'],
                     school['Street City'],
@@ -465,15 +476,43 @@ async function displayDistrictInfo(districtData: DistrictDetails) {
                     ? `(Grades: ${school['Low Grade']} - ${school['High Grade']})`
                     : '';
 
+                // --- Get Public/Private Status --- 
+                let publicPrivateText = '';
+                const publicStatus = school['Public Yes/No'];
+                if (publicStatus === 'Y') {
+                    publicPrivateText = '(Public)';
+                } else if (publicStatus === 'N') {
+                    publicPrivateText = '(Private)';
+                }
+                // --- End Public/Private Status --- 
+
                 // --- Add Website Link --- 
                 let websiteLinkHtml = '';
                 const websiteUrl = school.Website as string;
                 if (websiteUrl && websiteUrl !== 'No Data') {
-                    let href = websiteUrl;
+                    let href = websiteUrl.trim(); // Trim whitespace first
+
                     // Basic URL correction (add // if missing protocol)
                     if (href.includes('.') && !href.startsWith('http') && !href.startsWith('//')) {
                         href = `//${href}`;
                     }
+
+                    // --- SRVUSD.NET Specific Correction --- 
+                    if (href.includes('srvusd.net')) {
+                        const urlObject = new URL(href.startsWith('//') ? `https:${href}` : href); // Need a protocol for URL object
+                        if (urlObject.hostname.toLowerCase().startsWith('www.') && urlObject.hostname.toLowerCase().endsWith('srvusd.net')) {
+                            const correctedHostname = urlObject.hostname.substring(4); // Remove 'www.'
+                            href = `${urlObject.protocol}//${correctedHostname}${urlObject.pathname}${urlObject.search}${urlObject.hash}`;
+                            // If original started with //, remove the added https: part for the final link href
+                            if (websiteUrl.trim().startsWith('//')) {
+                                href = href.substring(href.indexOf('//'));
+                            }
+                            console.log(`[Debug] Corrected SRVUSD URL: ${href}`);
+                        }
+                    }
+                    // --- End SRVUSD.NET Correction --- 
+
+                    // Final check if it looks like a usable URL
                     if (href.startsWith('http') || href.startsWith('//')) {
                         websiteLinkHtml = ` <a href="${href}" target="_blank" rel="noopener noreferrer" title="Visit school website">(Website)</a>`;
                     }
@@ -487,7 +526,7 @@ async function displayDistrictInfo(districtData: DistrictDetails) {
 
                 schoolsHtml += `<li>
                                   <div>
-                                    <strong>${schoolName}</strong> ${gradeSpan}
+                                    <strong>${schoolName}</strong> ${publicPrivateText} ${gradeSpan}
                                     ${websiteLinkHtml}
                                     ${dashboardLinkHtml}
                                   </div>
@@ -497,7 +536,7 @@ async function displayDistrictInfo(districtData: DistrictDetails) {
             schoolsHtml += '</ul>';
             schoolsHtml += '</div>';
         } else {
-            schoolsHtml = '<div class="schools-list-container"><p>No active schools found for this district.</p></div>';
+            schoolsHtml = '<div class="schools-list-container"><p>No active schools (excluding Homeschool) found for this district.</p></div>';
         }
     } else {
         // Optional message if no school data exists

@@ -39,7 +39,9 @@ const SCHOOL_COLUMNS_TO_KEEP: string[] = [
     'Website',
     'Low Grade',
     'High Grade',
-    'Status'
+    'Status',
+    'Public Yes/No',
+    'Educational Program Type'
 ];
 
 // Define the expected CSV Headers based on the source structure
@@ -65,7 +67,6 @@ async function generateJsonData() {
     let districtCount = 0;
     let schoolCount = 0;
     let processedRecordCount = 0; // Count records after skipping metadata
-    let loggedRecords = 0; // Counter for logging
 
     // Wrap parser logic in a Promise
     await new Promise<void>((resolve, reject) => {
@@ -87,17 +88,9 @@ async function generateJsonData() {
         parser.on('readable', () => {
             let record;
             while ((record = parser.read()) !== null) {
-                // recordCount++; // Now count processed records
                 processedRecordCount++;
 
-                // --- Log first few records --- 
-                if (loggedRecords < 10) {
-                    console.log(`Processed Record ${processedRecordCount} raw data:`, JSON.stringify(record));
-                    loggedRecords++;
-                }
-                // --- End logging ---
-
-                const recordType = record['Record Type']; // This should now have the correct value
+                const recordType = record['Record Type'];
                 const cdsCode = record['CDS Code'];
                 if (!cdsCode) { console.warn(`Skipping processed record ${processedRecordCount} due to missing CDS Code.`); continue; }
 
