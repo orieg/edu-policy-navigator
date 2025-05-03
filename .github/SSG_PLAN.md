@@ -7,132 +7,141 @@
 ## **Phase 1: Vike Setup & Configuration**
 
 *   **Goal:** Install Vike and configure it within the existing Vite setup.
-*   [ ] **Step 1.1: Install Vike**
-    *   [ ] Run `pnpm add vike`.
-*   [ ] **Step 1.2: Configure Vite**
-    *   [ ] Update `vite.config.ts`.
-    *   [ ] Import `vike` from `vike/plugin`.
-    *   [ ] Add `vike()` to the `plugins` array.
-    *   [ ] Ensure Vite's `build.outDir` is set (e.g., `dist` - Vike manages subdirectories within it).
-    *   [ ] Remove any previous SSG/framework plugins if present.
-*   [ ] **Step 1.3: Update Package Scripts**
-    *   [ ] Modify `package.json` scripts:
-        *   `dev`: `vike dev`
-        *   `build`: `pnpm run prepare && vike build` (**Note:** Use `vike build` which handles client & server/SSG builds).
+*   [x] **Step 1.1: Install Vike**
+    *   [x] Run `pnpm add vike`.
+*   [x] **Step 1.2: Configure Vite**
+    *   [x] Update `vite.config.ts`.
+    *   [x] Import `vike` from `vike/plugin`.
+    *   [x] Add `vike()` to the `plugins` array.
+    *   [x] Ensure Vite's `build.outDir` is set (e.g., `dist` - Vike manages subdirectories within it).
+    *   [x] Remove any previous SSG/framework plugins if present.
+*   [x] **Step 1.3: Update Package Scripts**
+    *   [x] Modify `package.json` scripts:
+        *   `dev`: `pnpm run prepare && vike dev` (Added prepare step)
+        *   `build`: `pnpm run clean && pnpm run prepare && vite build` (Vike plugin handles build integration)
         *   `preview`: `vike preview` (To preview the production build).
-        *   `prepare`: Ensure this script (e.g., `pnpm run convert:xlsx && pnpm run prepare:districts && pnpm run prepare:boundaries`) places necessary JSON/GeoJSON data where Vike hooks can access it during the build (e.g., project root or a dedicated `data/` dir, accessible to Node.js).
-*   [ ] **Step 1.4: Basic Project Structure**
-    *   [ ] Create a `pages/` directory for Vike's file-based routing.
-    *   [ ] Create `renderer/` directory for Vike rendering hooks.
+        *   `prepare`: Ensure this script (e.g., `pnpm run convert:xlsx && pnpm run build:data && pnpm run build:boundaries`) places necessary JSON/GeoJSON data where Vike hooks can access it during the build (e.g., `public/assets/`).
+*   [x] **Step 1.4: Basic Project Structure**
+    *   [x] Create a `pages/` directory for Vike's file-based routing.
+    *   [x] Create `renderer/` directory for Vike rendering hooks.
 
 ## **Phase 2: Rendering Hooks Implementation**
 
 *   **Goal:** Define how Vike renders HTML pages and initializes client-side JavaScript.
-*   [ ] **Step 2.1: Create HTML Shell (`+onRenderHtml.js/.ts`)**
-    *   [ ] Create `renderer/+onRenderHtml.js` (or `.ts`).
-    *   [ ] Define the basic HTML structure (`<html>`, `<head>`, `<body>`).
-    *   [ ] Use Vike's templating mechanisms (e.g., `dangerouslySkipEscape` for injecting HTML snippets, template literals) to include:
+*   [x] **Step 2.1: Create HTML Shell (`+onRenderHtml.ts`)**
+    *   [x] Create `renderer/+onRenderHtml.ts`.
+    *   [x] Define the basic HTML structure (`<html>`, `<head>`, `<body>`).
+    *   [x] Use Vike's templating mechanisms (template literals, `dangerouslySkipEscape`) to include:
         *   Page title (`<title>${pageContext.title || 'Default Title'}</title>`).
-        *   Meta description (`<meta name="description" content="${pageContext.description || ''}">`).
-        *   Root element for client-side rendering (e.g., `<div id="page-view"></div>`).
+        *   Meta description (Set in `+onBeforeRender`, accessed via `pageContext.pageProps.description`).
+        *   Root element for client-side rendering (`<div id="page-view">${dangerouslySkipEscape(pageHtml)}</div>`).
         *   Links to CSS/JS assets (Vike handles injection).
-        *   Initial page data/state needed for hydration (e.g., using `<script type="application/json" id="page-data">${JSON.stringify(pageContext.pageProps)}</script>`).
-*   [ ] **Step 2.2: Create Client Entry Point (`+onRenderClient.js/.ts`)**
-    *   [ ] Create `renderer/+onRenderClient.js` (or `.ts`).
-    *   [ ] This becomes the main client-side JS entry point.
-    *   [ ] **CSS Handling:** Verify how CSS is best handled. Importing global CSS here (`import '../path/to/style.css'`) might work but *could* cause a brief Flash of Unstyled Content (FOUC). Check if Vike/Vite automatically injects CSS `<link>` tags when CSS is imported in `.page.js` files or handled via standard Vite processing, which is often preferred.
-    *   [ ] Read initial page data injected by `+onRenderHtml` (e.g., parsing the JSON from the script tag).
-    *   [ ] Implement hydration logic: Find the root element and render/initialize the interactive parts (search, map, etc.) using the initial data. This replaces the core logic previously in `src/main.ts`.
-    *   [ ] Adapt existing code from `src/main.ts` (map initialization, search handlers, event listeners) to work within this client-side hydration context, using the data passed from the server/SSG build.
+        *   Inject pageProps for client hydration (`<script id="page-props" type="application/json">${dangerouslySkipEscape(JSON.stringify(pageProps || {}))}</script>`).
+*   [x] **Step 2.2: Create Client Entry Point (`+onRenderClient.ts`)**
+    *   [x] Create `renderer/+onRenderClient.ts`.
+    *   [x] This becomes the main client-side JS entry point.
+    *   [x] **CSS Handling:** Global CSS (`pages/style.css`) imported in relevant `+Page.ts` files. Vike/Vite handle injection.
+    *   [x] Read initial page data if needed (e.g., parsing the JSON from the script tag, or reading data attributes set in `+Page.ts`). Map initialization currently uses data attributes.
+    *   [x] Implement hydration/initialization logic: Initialize search, map, etc.
+    *   [x] Adapt existing code (map initialization in `src/map.ts`, search handlers in `src/search.ts`) to be called from this client-side entry point.
 
 ## **Phase 3: Page Definition & Data Fetching (SSG)**
 
 *   **Goal:** Define the structure for district pages and fetch data during the build for pre-rendering.
-*   [ ] **Step 3.1: Create Basic Pages**
-    *   [ ] Create `pages/index/+Page.js` (or `.page.js`) for the homepage.
-    *   [ ] Define the basic content/structure for the homepage component/rendering logic.
-*   [ ] **Step 3.2: Create Dynamic District Page Route**
-    *   [ ] Create `pages/districts/@cdsCode/+Page.js` (or `.page.js`) for dynamic district routes.
-    *   [ ] This file will define the component structure or rendering logic for a single district page (info card, map placeholder, school list placeholder). It will receive data via `pageContext.pageProps`.
-*   [ ] **Step 3.3: Implement Data Fetching (`+onBeforeRender.js/.ts`)**
-    *   [ ] Create `pages/districts/@cdsCode/+onBeforeRender.js` (or `.ts`).
-    *   [ ] This hook runs *before* rendering the page (at build time for SSG).
-    *   [ ] Load the necessary data:
-        *   Read `districts.json` and `schools_by_district.json` (ensure `prepare` script places them accessibly).
-        *   Use `pageContext.routeParams.cdsCode` to get the specific district's CDS code.
-        *   Find the district data (`districtData`) and corresponding school data (`schoolsData`).
-    *   [ ] Return the fetched data and SEO metadata in the `pageContext`:
-        ```javascript
-        // Example structure to return
+*   [x] **Step 3.1: Create Basic Pages**
+    *   [x] Create `pages/index/+Page.ts` for the homepage.
+    *   [x] Define the basic content/structure for the homepage component/rendering logic.
+*   [x] **Step 3.2: Create Dynamic District Page Route**
+    *   [x] Create `pages/districts/@districtSlug/+Page.ts` for dynamic district routes (using slugs).
+    *   [x] This file defines the component structure/rendering logic for a single district page (info card, map placeholder, school list placeholder). It receives data via `pageContext.pageProps`.
+*   [x] **Step 3.3: Implement Data Fetching (`+onBeforeRender.ts`)**
+    *   [x] Create `pages/districts/@districtSlug/+onBeforeRender.ts`.
+    *   [x] This hook runs *before* rendering the page (at build time for SSG, or on request in dev/SSR).
+    *   [x] Load the necessary data:
+        *   Read `districts.json` and `schools_by_district.json` from `public/assets/`.
+        *   Use `pageContext.routeParams.districtSlug` to get the specific district's slug.
+        *   Find the district data (`districtData`) by slug and corresponding school data (`schoolsData`) by CDS code prefix.
+        *   Filter schools server-side based on criteria (Active, Public, valid coords).
+    *   [x] Return the fetched data and SEO metadata in the `pageContext`:
+        ```typescript
+        // Example structure returned
         return {
           pageContext: {
             pageProps: { // Data needed by the +Page component and potentially the client
-              districtData,
-              schoolsData
+              district: districtData,
+              schools: filteredSchools,
+              description: `Information and schools for ${districtData.District}...`
             },
             // SEO Metadata for +onRenderHtml
-            title: `${districtData.District} - CA School District Info`,
-            description: `Information and schools for ${districtData.District} in ${districtData.County}, California.`
+            title: `${districtData.District} - ${districtData['Entity Type']}` // Updated title format
           }
         }
         ```
 *   [ ] **Step 3.4: Enable & Configure Pre-rendering (SSG)**
-    *   [ ] Create `pages/districts/@cdsCode/+config.h.js`.
-    *   [ ] Define the `prerender` export to enable SSG and provide the list of district codes to generate:
-        ```javascript
-        // pages/districts/@cdsCode/+config.h.js
-        import fs from 'fs';
+    *   [x] Create `pages/districts/@districtSlug/+config.ts`.
+    *   [ ] **Currently Disabled:** The `prerender` export is commented out due to an internal Vike bug ([vike@0.4.229][Bug]) related to imports within the `prerender` function context when processing the generated `prerender-slugs.json`. Needs further investigation or a Vike update.
+    *   [ ] **(Intended Logic)** Define the `prerender` export to enable SSG and provide the list of district slugs to generate:
+        ```typescript
+        // pages/districts/@districtSlug/+config.ts
+        import fs from 'fs/promises';
         import path from 'path';
 
-        // Function to load districts.json data during build
-        // Adjust path as necessary relative to this config file
-        const loadDistrictsData = () => {
-          const filePath = path.resolve(process.cwd(), 'public/assets/districts.json'); // Or wherever 'prepare' puts it
-          const fileContent = fs.readFileSync(filePath, 'utf-8');
-          return JSON.parse(fileContent);
-        };
+        // Helper function to load generated slugs
+        async function loadSlugs(): Promise<string[]> {
+            const filePath = path.resolve(process.cwd(), 'public/assets/prerender-slugs.json');
+            try {
+                const fileContent = await fs.readFile(filePath, 'utf-8');
+                return JSON.parse(fileContent);
+            } catch (error) {
+                console.error("Failed to load slugs for prerendering:", error);
+                return [];
+            }
+        }
 
         export default {
-          prerender: () => {
-            const districtsData = loadDistrictsData();
-            // Map the keys (CDS codes) from the loaded data to the format Vike expects
-            return Object.keys(districtsData).map(code => ({ cdsCode: code }));
+          prerender: async () => {
+            const slugs = await loadSlugs();
+            return slugs.map(slug => ({ districtSlug: slug }));
           }
+          // Other config like title can also live here
+          // title: 'Default District Title' // If needed
         }
         ```
+    *   [x] Ensure `build:data` script generates `public/assets/prerender-slugs.json`.
 
 ## **Phase 4: Integrating Existing Logic & Assets**
 
 *   **Goal:** Adapt the existing map, search, and UI logic to Vike's structure and ensure static assets are handled.
-*   [ ] **Step 4.1: Adapt Component/Rendering Logic**
-    *   [ ] Move/refactor UI rendering logic (info card, school list generation) into the respective `+Page.js` files (homepage, district page).
-    *   [ ] Ensure these components/render functions receive data via `pageContext.pageProps` (populated by `+onBeforeRender`).
-*   [ ] **Step 4.2: Adapt Client-Side Interactivity**
-    *   [ ] Move/refactor map initialization, search input handling, event listeners, etc., from the old `src/main.ts` into `renderer/+onRenderClient.js`.
-    *   [ ] Ensure this client code correctly reads and uses the initial data passed from the server/SSG build (e.g., from the JSON script tag created in `+onRenderHtml`).
-*   [ ] **Step 4.3: Handle Static Assets**
-    *   [ ] Place static assets (Leaflet library files if not using CDN, GeoJSON boundaries) in Vite's `public/` directory (e.g., `public/leaflet/`, `public/assets/boundaries/`). Vite copies these automatically to the output directory.
-    *   [ ] Update paths in the code (e.g., in `+onRenderClient.js` map logic) to reference these paths correctly (e.g., `/leaflet/leaflet.css`, `/assets/boundaries/${cdsCode}.geojson`). Ensure they are root-relative paths.
-    *   [ ] Update the `prepare:boundaries` script output path to target `public/assets/boundaries/`.
+*   [x] **Step 4.1: Adapt Component/Rendering Logic**
+    *   [x] Move/refactor UI rendering logic (info card, school list generation) into the respective `+Page.ts` files (homepage, district page).
+    *   [x] Ensure these components/render functions receive data via `pageContext.pageProps` (populated by `+onBeforeRender`).
+*   [x] **Step 4.2: Adapt Client-Side Interactivity**
+    *   [x] Move/refactor map initialization (`src/map.ts`), search input handling (`src/search.ts`), event listeners, etc., to be called from `renderer/+onRenderClient.ts`.
+    *   [x] Ensure this client code correctly initializes using data available (e.g., from data attributes set in `+Page.ts` based on `pageProps`).
+*   [x] **Step 4.3: Handle Static Assets**
+    *   [x] Place static assets (GeoJSON boundaries) in Vite's `public/` directory (e.g., `public/assets/boundaries/`). Leaflet/MarkerCluster installed via pnpm.
+    *   [x] Update paths in the code (e.g., in `src/map.ts`) to reference these paths correctly (e.g., `/assets/boundaries/${cdsCode}.geojson`). Ensure they are root-relative paths.
+    *   [x] Update the `build:boundaries` script output path to target `public/assets/boundaries/`.
 
 ## **Phase 5: Testing & Verification**
 
 *   **Goal:** Ensure the site works correctly in dev (with HMR) and production (pre-rendered static HTML).
-*   [ ] **Step 5.1: Test Development Server (`vike dev`)**
-    *   [ ] Run `pnpm run dev`.
-    *   [ ] Verify the homepage loads.
-    *   [ ] Test navigation/linking to a district page (if implemented).
-    *   [ ] Verify JS/CSS load, HMR works for client-side code edits (`+onRenderClient.js`, related modules).
-    *   [ ] Check browser console for errors.
-*   [ ] **Step 5.2: Test Production Build (`vike build`)**
-    *   [ ] Run `pnpm run build`.
-    *   [ ] Inspect the build output directory (e.g., `dist/client/`).
-    *   [ ] Verify the generation of static HTML files for districts (e.g., `dist/client/districts/12345.html`).
-    *   [ ] Check the contents of a generated HTML file to ensure pre-rendered content and correct asset paths.
-*   [ ] **Step 5.3: Test Preview Server (`vike preview`)**
-    *   [ ] Run `pnpm run preview`.
-    *   [ ] Access the site in the browser.
-    *   [ ] Navigate to a district page (e.g., `/districts/12345`).
-    *   [ ] **Verify SSG:** Use browser developer tools (View Source) to confirm the initial HTML response contains the district-specific content (info card, school list structure) *before* JavaScript runs.
-    *   [ ] **Verify Hydration:** Confirm client-side JavaScript takes over correctly (map loads and becomes interactive, search input works).
-    *   [ ] Test multiple district pages. 
+*   [x] **Step 5.1: Test Development Server (`vike dev`)**
+    *   [x] Run `pnpm run dev`.
+    *   [x] Verify the homepage loads.
+    *   [x] Test search and navigation to a district page.
+    *   [x] Verify JS/CSS load, map initialization, school filtering. HMR works.
+    *   [x] Check browser console for errors.
+    *   [ ] **Note:** District pages are currently rendered on-demand (SSR/CSR) in dev due to disabled `prerender` config.
+*   [x] **Step 5.2: Test Production Build (`vite build`)**
+    *   [x] Run `pnpm run build`.
+    *   [x] Inspect the build output directory (`dist/`).
+    *   [ ] **Verify:** Static HTML files for districts are **NOT** generated in `dist/client/districts/` because `prerender` is disabled. Only the index page and assets are built statically.
+    *   [x] Check build logs for errors.
+*   [x] **Step 5.3: Test Preview Server (`vike preview`)**
+    *   [x] Run `pnpm run preview`.
+    *   [x] Access the site in the browser.
+    *   [x] Navigate to a district page (e.g., `/districts/some-slug-12345`).
+    *   [ ] **Verify SSG:** Use browser developer tools (View Source). The initial HTML response contains **server-rendered** content, not statically pre-rendered content for district pages.
+    *   [x] **Verify Hydration:** Confirm client-side JavaScript takes over correctly (map loads and becomes interactive, search input works).
+    *   [x] Test multiple district pages and 404 handling. 
