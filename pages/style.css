@@ -57,11 +57,17 @@ footer {
 .school-list {
     list-style: none;
     padding: 0;
+    column-count: 2;
+    /* Create two columns */
+    column-gap: 20px;
+    /* Space between columns */
 }
 
 .school-list li {
     border-bottom: 1px solid #eee;
     padding: 10px 0;
+    break-inside: avoid-column;
+    /* Prevent list items from breaking across columns */
 }
 
 .school-list li:last-child {

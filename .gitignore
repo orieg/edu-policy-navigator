@@ -12,4 +12,8 @@ CDESchoolDirectoryExport.xlsx
 pipeline/data/
 public/assets/districts.json
 public/assets/schools_by_district.json
-public/assets/boundaries/ 
+public/assets/boundaries/
+public/assets/prerender-slugs.json
+
+# Build/Output
+.vike/ 

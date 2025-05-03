@@ -65,14 +65,29 @@ async function selectDistrict(district: DistrictDetails) {
     if (!searchInputEl || !resultsListEl || !infoDisplayEl) return;
 
     const cdsCode = district['CDS Code'];
-    searchInputEl.value = district.District || '';
-    resultsListEl.hidden = true;
-    filteredDistricts = [];
+    const slug = district['slug']; // Get the slug from the district data
 
-    // --- Display Logic Moved Here ---
-    await displayDistrictInfo(infoDisplayEl, district, allSchools?.[cdsCode.substring(0, 7)] || []);
+    console.log(`District selected: ${district.District}, Slug: ${slug}, CDS: ${cdsCode}`);
+
+    if (!slug) {
+        console.error("Error: Selected district data is missing the 'slug' property. Cannot navigate.");
+        // Optionally display an error message to the user in infoDisplayEl
+        infoDisplayEl.innerHTML = '<p class="error">Could not generate link for the selected district.</p>';
+        searchInputEl.value = district.District || ''; // Keep name in input
+        resultsListEl.hidden = true;
+        filteredDistricts = [];
+        return;
+    }
+
+    // Navigate to the pre-rendered district page using its slug
+    window.location.href = `/districts/${slug}`;
+
+    // --- Remove direct display/map update logic --- 
+    // searchInputEl.value = district.District || '';
+    // resultsListEl.hidden = true;
+    // filteredDistricts = [];
+    // await displayDistrictInfo(infoDisplayEl, district, allSchools?.[cdsCode.substring(0, 7)] || []);
 }
-
 
 function updateHighlight(newIndex: number) {
     if (!resultsListEl) return;
@@ -148,35 +163,14 @@ export function setupSearchHandlers(
     console.log('Search event listeners added.');
 }
 
-// Function to display district info (can be called by search or directly on page load)
-// Moved from main.ts - requires map instance if updating map
+// Function to display district info - called only during client-side hydration or if needed later
 export async function displayDistrictInfo(
     infoElement: HTMLElement,
     districtData: DistrictDetails,
-    schoolsData: SchoolDetails[]
+    schoolsData: SchoolDetails[] // This data should already be filtered by +onBeforeRender
 ) {
     const districtName = districtData.District || 'N/A';
     const districtCdsCode = districtData['CDS Code'] || 'N/A';
-
-    // --- Log raw school data sample ---
-    console.log(`[Debug] Raw school data count for ${districtCdsCode}: ${schoolsData.length}`);
-    if (schoolsData.length > 0) {
-        console.log('[Debug] Sample raw school data (first 3):');
-        schoolsData.slice(0, 3).forEach((school, index) => {
-            console.log(`  [${index}] Name: ${school.School}, Status: ${school.Status}, Public: ${school['Public Yes/No']}, Lat: ${school.Latitude}, Lon: ${school.Longitude}`);
-        });
-    }
-    // --- End Log ---
-
-    // --- Filter Schools --- 
-    const filteredSchools = schoolsData.filter(school =>
-        school.Status === 'Active' &&
-        String(school['Public Yes/No']).trim().toUpperCase() === 'Y' && // Case-insensitive check
-        // Add any other necessary filters here, e.g., check for valid coordinates if desired
-        isValidCoordinate(school.Latitude, school.Longitude) // Also filter out schools without valid coordinates for display
-    );
-    console.log(`Filtered ${schoolsData.length} schools down to ${filteredSchools.length} active, public schools with coordinates.`);
-    // --- End Filter --- 
 
     // Helper to format address (can be moved to utils)
     const formatAddress = (street: string, city: string, state: string, zip: string): string => {
@@ -200,11 +194,11 @@ export async function displayDistrictInfo(
     const gradeSpan = (districtData['Low Grade'] && districtData['High Grade'] && districtData['Low Grade'] !== 'No Data' && districtData['High Grade'] !== 'No Data') ? `${districtData['Low Grade']} - ${districtData['High Grade']}` : 'N/A';
     const dashboardLink = `https://www.caschooldashboard.org/reports/gissearch/districts/${districtCdsCode}`;
 
-    // Build school list HTML string using FILTERED schools
-    let schoolsHtml = '<p>No active, public schools with valid coordinates found.</p>'; // Updated message
-    if (filteredSchools.length > 0) { // Use filtered list
+    // Build school list HTML string using the PRE-FILTERED schoolsData from props
+    let schoolsHtml = '<p>No active, public schools with valid coordinates found.</p>';
+    if (schoolsData && schoolsData.length > 0) { // Use schoolsData directly
         schoolsHtml = '<ul class="school-list">';
-        filteredSchools.forEach((school) => { // Iterate over filtered list
+        schoolsData.forEach((school) => { // Iterate over schoolsData
             const schoolCds = school['CDS Code'];
             const schoolGradeSpan = (school['Low Grade'] && school['High Grade'] && school['Low Grade'] !== 'No Data' && school['High Grade'] !== 'No Data') ? `(${school['Low Grade']} - ${school['High Grade']})` : '';
             const schoolAddress = formatAddress(school['Street Address'], school['Street City'], school['Street State'], school['Street Zip']);
@@ -225,7 +219,7 @@ export async function displayDistrictInfo(
     // Generate combined HTML for the info display area
     const infoHtml = `
         <article class="district-page" data-cds-code="${districtCdsCode}">
-          <div class="district-details-content">
+          <div class="district-details-content"> 
             <div class="info-card">
               <h2>${districtName} (${districtCdsCode})</h2>
               <div class="dashboard-link"><a href="${dashboardLink}" target="_blank" rel="noopener noreferrer">View on CA School Dashboard</a></div>
@@ -237,11 +231,11 @@ export async function displayDistrictInfo(
               <p><strong>Phone:</strong> ${districtData.Phone || 'N/A'}</p>
             </div>
             <div class="school-list-section">
-              <h3>Active Public Schools (${filteredSchools.length})</h3> <!-- Use filtered count -->
+              <h3>Active Public Schools (${schoolsData?.length || 0})</h3> <!-- Use schoolsData count -->
               ${schoolsHtml}
             </div>
           </div>
-          <div class="district-map-container">
+          <div class="district-map-container"> 
              <div id="info-map-${districtCdsCode}">Loading Map...</div>
           </div>
         </article>
@@ -251,28 +245,11 @@ export async function displayDistrictInfo(
     console.log(`Updated info display for ${districtName}`);
 
     // --- Trigger Map Update --- 
-    // Find the map element *after* setting innerHTML
     const mapElement = infoElement.querySelector<HTMLElement>(`#info-map-${districtCdsCode}`);
     if (mapElement) {
-        // Update the map with the new data, using FILTERED schools
-        await updateMapForDistrict(mapElement.id, districtData, filteredSchools);
+        // Pass the already filtered schoolsData to the map
+        await updateMapForDistrict(mapElement.id, districtData, schoolsData);
     } else {
         console.warn(`Map element #info-map-${districtCdsCode} not found after updating info display.`);
     }
-}
-
-// --- Add isValidCoordinate helper (copied from map.ts or define locally) ---
-// Helper needed for school filtering above
-function isValidCoordinate(lat: string | number | null | undefined, lon: string | number | null | undefined): lat is number | string {
-    // Basic check: Ensure they are not null/undefined and can be parsed as numbers
-    if (lat == null || lon == null) return false;
-    // Check for known invalid string values
-    const latStr = String(lat).toLowerCase();
-    const lonStr = String(lon).toLowerCase();
-    if (latStr === 'no data' || lonStr === 'no data' || latStr.includes('redacted') || lonStr.includes('redacted')) {
-        return false;
-    }
-    const latNum = parseFloat(String(lat));
-    const lonNum = parseFloat(String(lon));
-    return !isNaN(latNum) && !isNaN(lonNum) && latNum >= -90 && latNum <= 90 && lonNum >= -180 && lonNum <= 180;
 } 

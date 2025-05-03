@@ -7,6 +7,7 @@ const SOURCE_CSV_FILENAME = 'School and District Data.csv'; // Adjust if your CS
 const INPUT_CSV_PATH = path.resolve(process.cwd(), 'dist', 'pipeline', 'data', SOURCE_CSV_FILENAME);
 const OUTPUT_DISTRICTS_JSON_PATH = path.resolve(process.cwd(), 'public', 'assets', 'districts.json');
 const OUTPUT_SCHOOLS_JSON_PATH = path.resolve(process.cwd(), 'public', 'assets', 'schools_by_district.json');
+const OUTPUT_SLUGS_JSON_PATH = path.resolve(process.cwd(), 'public', 'assets', 'prerender-slugs.json');
 const OUTPUT_DIR = path.dirname(OUTPUT_DISTRICTS_JSON_PATH);
 
 // Columns to extract for the final JSON output
@@ -15,6 +16,7 @@ const DISTRICT_COLUMNS_TO_KEEP: string[] = [
     'District',
     'County',
     'Status',
+    'Entity Type',
     'Funding Type',
     'Street Address',
     'Street City',
@@ -50,6 +52,23 @@ const SCHOOL_COLUMNS_TO_KEEP: string[] = [
 const CSV_HEADERS: string[] = [
     'Record Type', 'CDS Code', 'Federal District ID', 'Federal School ID', 'Federal Charter District ID', 'County', 'District', 'School', 'Status', 'Open Date', 'Closed Date', 'Charter Yes/No', 'Charter Number', 'Funding Type', 'Educational Program Type', 'Entity Type', 'Low Grade', 'High Grade', 'Virtual Instruction Type', 'Magnet Yes/No', 'Year Round Yes/No', 'Public Yes/No', 'Multilingual Yes/No', 'Website', 'Latitude', 'Longitude', 'Last Update', 'Street Address', 'Street City', 'Street State', 'Street Zip', 'Mailing Address', 'Mailing City', 'Mailing State', 'Mailing Zip', 'Phone', 'Phone Extension', 'Fax Number', 'Administrator Name', 'Administrator Phone', 'Administrator Phone Ext.'
 ];
+
+// --- Helper Function for Slug Generation ---
+function generateSlug(name: string, cdsCode: string): string {
+    if (!name || name === 'No Data' || !cdsCode) {
+        // Fallback to just CDS code if name is invalid
+        return cdsCode;
+    }
+    const safeName = name
+        .toLowerCase()
+        .replace(/\s+/g, '-')       // Replace spaces with hyphens
+        .replace(/[^-a-z0-9]/g, '') // Remove non-alphanumeric or hyphen characters
+        .replace(/-+/g, '-')         // Replace multiple hyphens with single
+        .replace(/^-|-$/g, '');      // Trim leading/trailing hyphens
+
+    // Handle edge case where name becomes empty after sanitization
+    return safeName ? `${safeName}-${cdsCode}` : cdsCode;
+}
 
 // --- Main Function ---
 async function generateJsonData() {
@@ -94,7 +113,10 @@ async function generateJsonData() {
 
                 const recordType = record['Record Type'];
                 const cdsCode = record['CDS Code'];
-                if (!cdsCode) { console.warn(`Skipping processed record ${processedRecordCount} due to missing CDS Code.`); continue; }
+                if (!cdsCode) {
+                    console.warn(`Skipping processed record ${processedRecordCount} due to missing CDS Code.`);
+                    continue;
+                }
 
                 // Process Districts
                 if ((recordType === 'District' || recordType === 'County Office') && !districtsData[cdsCode]) {
@@ -102,6 +124,10 @@ async function generateJsonData() {
                     DISTRICT_COLUMNS_TO_KEEP.forEach(col => {
                         districtDetails[col] = record[col] !== undefined && record[col] !== null ? record[col] : 'No Data';
                     });
+
+                    // Generate and add the slug
+                    districtDetails['slug'] = generateSlug(districtDetails['District'], cdsCode);
+
                     districtsData[cdsCode] = districtDetails;
                     districtCount++;
                 }
@@ -175,6 +201,10 @@ async function generateJsonData() {
     }
     console.log('Directory checked. Proceeding with file writing...');
 
+    // Extract slugs AFTER processing all districts
+    const districtSlugs = Object.values(districtsData).map(d => d.slug).filter(Boolean);
+    console.log(`[DataGen] Extracted ${districtSlugs.length} slugs for prerender list.`);
+
     // Write districts.json
     try {
         fs.writeFileSync(OUTPUT_DISTRICTS_JSON_PATH, JSON.stringify(districtsData, null, 2));
@@ -190,6 +220,15 @@ async function generateJsonData() {
         console.log(`Successfully wrote school data to: ${OUTPUT_SCHOOLS_JSON_PATH}`);
     } catch (err) {
         console.error(`Error writing schools JSON file: ${err}`);
+        process.exit(1);
+    }
+
+    // Write prerender-slugs.json (This is the array of strings)
+    try {
+        fs.writeFileSync(OUTPUT_SLUGS_JSON_PATH, JSON.stringify(districtSlugs, null, 2));
+        console.log(`Successfully wrote prerender slug list to: ${OUTPUT_SLUGS_JSON_PATH}`);
+    } catch (err) {
+        console.error(`Error writing prerender slugs JSON file: ${err}`);
         process.exit(1);
     }
 
