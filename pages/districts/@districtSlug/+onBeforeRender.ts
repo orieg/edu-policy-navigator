@@ -4,6 +4,8 @@
 // See https://vike.dev/onBeforeRender
 
 import type { OnBeforeRenderAsync } from 'vike/types'
+// import { abort } from 'vike' // Incorrect
+import { render } from 'vike/abort' // Correct: import render from vike/abort
 import type { DistrictDetails, SchoolsByDistrictMap, DistrictDataMap } from '../../../src/types' // Adjusted path
 import fs from 'fs/promises'; // Use promises for async file reading
 import path from 'path';
@@ -79,21 +81,9 @@ const onBeforeRender: OnBeforeRenderAsync = async (pageContext): ReturnType<OnBe
 
     if (!districtData) {
         console.warn(`[onBeforeRender] District not found for slug: ${districtSlug}`);
-        // Handle district not found - Vike might automatically show a 404
-        // or you can return a specific pageContext to render a custom 404
-        // For now, let Vike handle it, but log the warning.
-        // throw new Error("District not found."); // Could uncomment to force error page
-        return {
-            pageContext: {
-                pageProps: {
-                    district: null,
-                    schools: [],
-                    description: 'The requested school district could not be found.'
-                },
-                title: 'District Not Found',
-                is404: true
-            }
-        };
+        // Handle district not found using throw render()
+        // throw abort({ reason: 'District not found', statusCode: 404 }); // Old way
+        throw render(404, 'District not found'); // Correct Vike way
     }
 
     console.log(`[onBeforeRender] Found district: ${districtData.District} (${districtData['CDS Code']})`);
@@ -123,7 +113,7 @@ const onBeforeRender: OnBeforeRenderAsync = async (pageContext): ReturnType<OnBe
         pageContext: {
             pageProps,
             // Only return title here, description is now in pageProps
-            title: `${districtData.District} - CA School District Info`
+            title: `${districtData.District || 'Unknown District'} - ${districtData['Entity Type'] || 'N/A'}`
         }
     }
 }

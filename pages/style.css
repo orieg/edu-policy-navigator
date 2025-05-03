@@ -57,17 +57,22 @@ footer {
 .school-list {
     list-style: none;
     padding: 0;
-    column-count: 2;
-    /* Create two columns */
-    column-gap: 20px;
-    /* Space between columns */
+    /* column-count: 2; */
+    /* Remove fixed column count */
+    /* column-gap: 20px; */
+    display: grid;
+    /* Use Grid for dynamic columns */
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    /* Responsive columns */
+    gap: 20px;
+    /* Gap between grid items */
 }
 
 .school-list li {
     border-bottom: 1px solid #eee;
     padding: 10px 0;
-    break-inside: avoid-column;
-    /* Prevent list items from breaking across columns */
+    /* break-inside: avoid-column; */
+    /* Remove property related to column-count */
 }
 
 .school-list li:last-child {
@@ -138,32 +143,56 @@ footer {
 
 /* District Page Layout */
 .district-page {
+    /* display: flex; */
+    /* Remove top-level flex, default block layout is fine */
+    /* flex-wrap: wrap; */
+    /* gap: 20px; */
+    /* Keep gap for spacing maybe, or handle within children */
+}
+
+/* NEW: Style the top row container */
+.district-top-row {
     display: flex;
     flex-wrap: wrap;
     /* Allow wrapping on smaller screens */
     gap: 20px;
-    /* Space between content and map */
+    /* Space between info card and map */
+    margin-bottom: 20px;
+    /* Space between top row and school list */
 }
 
-.district-details-content {
+/* REMOVE: No longer needed as school list/info are not siblings */
+/* .district-details-content {
     flex: 1 1 500px;
-    /* Grow, shrink, basis of 500px */
     min-width: 300px;
-    /* Prevent getting too small */
-}
+} */
 
-.district-map-container {
+/* Adjust flex for info-card within the top row */
+.district-top-row .info-card {
     flex: 1 1 400px;
-    /* Grow, shrink, basis of 400px */
+    /* Adjust basis/grow/shrink as needed */
     min-width: 300px;
-    /* Prevent getting too small */
+    margin-bottom: 0;
+    /* Remove default margin if conflicting */
 }
 
-/* Ensure map inside container takes full height */
+/* Adjust flex for map container within the top row */
+.district-top-row .district-map-container {
+    flex: 1 1 400px;
+    /* Adjust basis/grow/shrink as needed */
+    min-width: 300px;
+}
+
+/* Keep rule for map height inside container */
 .district-map-container [id^="info-map-"] {
     height: 100%;
     min-height: 450px;
-    /* Ensure map has a decent minimum height */
+}
+
+/* NEW: Ensure school list section takes full width */
+.school-list-section {
+    width: 100%;
+    /* Add other styling as needed, e.g., margin-top */
 }
 
 /* Custom Marker Styling */

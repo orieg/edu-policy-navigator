@@ -20,7 +20,7 @@ const onRenderHtml: OnRenderHtmlAsync = async (pageContext):
     const { Page, pageProps, title, exports } = pageContext
 
     // Get description from pageProps, fallback if needed
-    const description = pageProps?.description || 'Unofficial California Education Policy Navigator: Explore district data.';
+    const description = pageProps?.description || 'Unofficial California Education Policies Navigator: Explore district data.';
 
     // This onRenderHtml() hook defines the HTML structure, see https://vike.dev/render-modes#html-only
     let pageHtml = ''
