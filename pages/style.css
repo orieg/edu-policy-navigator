@@ -196,6 +196,47 @@ footer {
     /* Add other styling as needed, e.g., margin-top */
 }
 
+/* Breadcrumb Styles */
+.breadcrumbs {
+    font-size: 0.9em;
+    margin: 10px 0;
+    color: #555;
+}
+
+.breadcrumbs ol {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.breadcrumbs li {
+    display: inline;
+}
+
+.breadcrumbs li+li::before {
+    content: " > ";
+    /* Separator */
+    padding: 0 5px;
+    color: #888;
+}
+
+.breadcrumbs li a {
+    color: #007bff;
+    text-decoration: none;
+}
+
+.breadcrumbs li a:hover {
+    text-decoration: underline;
+}
+
+.breadcrumbs li[aria-current="page"] {
+    font-weight: bold;
+    /* color: #333; */
+    /* Change color to be visible on dark header */
+    color: #f0f0f0;
+    /* Light grey, adjust as needed */
+}
+
 /* Custom Marker Styling */
 .school-marker-icon {
     font-size: 1.5rem;

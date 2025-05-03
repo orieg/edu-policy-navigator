@@ -8,16 +8,15 @@ import type { OnRenderHtmlAsync } from 'vike/types'
 // This might need refinement based on +onBeforeRender return values
 interface PageProps {
     description?: string;
+    district?: { District?: string }; // Define structure for district prop
     // Add other expected props, e.g., district, schools
 }
 
 const onRenderHtml: OnRenderHtmlAsync = async (pageContext):
     ReturnType<OnRenderHtmlAsync> => {
     // Type assertion for pageContext to include custom props
-    // const { Page, title, exports } = pageContext
-    // const pageProps = pageContext.pageProps as PageProps | undefined
-    // Use destructured props directly now type is extended
-    const { Page, pageProps, title, exports } = pageContext
+    // Add urlPathname to the destructuring
+    const { Page, pageProps, title, exports, urlPathname } = pageContext
 
     // Get description from pageProps, fallback if needed
     const description = pageProps?.description || 'Unofficial California Education Policies Navigator: Explore district data.';
@@ -35,9 +34,29 @@ const onRenderHtml: OnRenderHtmlAsync = async (pageContext):
 
     // Read title from pageContext, fallback to default
     const documentProps = {
-        title: title || exports?.title || 'Unofficial California Education Policies Navigator',
+        // Ensure title is always a string for escapeInject
+        title: String(title || exports?.title || 'Unofficial California Education Policies Navigator'),
         description: description, // Use the description retrieved from pageProps
     }
+
+    // --- Remove separate breadcrumb build logic ---
+    /*
+    let breadcrumbHtml = '';
+    const districtName = pageProps?.district?.District;
+    console.log('[onRenderHtml] Attempting breadcrumb generation. Path:', urlPathname, 'District Name:', districtName); 
+    if (urlPathname?.startsWith('/districts/') && districtName) {
+        console.log('[onRenderHtml] Generating breadcrumb for:', districtName); 
+        breadcrumbHtml = `
+            <nav aria-label="breadcrumb" class="breadcrumbs">
+                <ol>
+                    <li><a href="/">Home</a></li>
+                    <li aria-current="page">${districtName}</li> 
+                </ol>
+            </nav>
+        `;
+    }
+    */
+    // --- End Removal ---
 
     const documentHtml = escapeInject`<!DOCTYPE html>
     <html lang="en">
@@ -52,18 +71,26 @@ const onRenderHtml: OnRenderHtmlAsync = async (pageContext):
       </head>
       <body>
         <header>
-            <h1><a href="/">${String(documentProps.title)}</a></h1>
-            <!-- Simple Nav Placeholder -->
-            <nav>
-                <a href="/">Home</a>
-                <!-- <a href="/about">About</a> -->
-            </nav>
+            <h1><a href="/">${documentProps.title}</a></h1>
+            
+            ${(pageProps?.district?.District && urlPathname?.startsWith('/districts/'))
+            ? escapeInject`
+                    <nav aria-label="breadcrumb" class="breadcrumbs">
+                        <ol>
+                            <li><a href="/">Home</a></li>
+                            <li aria-current="page">${String(pageProps.district.District)}</li>
+                        </ol>
+                    </nav>
+                `
+            : '' /* Render empty string if no district name or not on district path */
+        }
+
         </header>
-        <main id="page-view">${dangerouslySkipEscape(pageHtml)}</main> <!-- Render page content -->
+        <main id="page-view">${dangerouslySkipEscape(pageHtml)}</main> {/* Render page content */}
         <footer>
-            <p>&copy; ${String(new Date().getFullYear())} ${String(documentProps.title)}. All rights reserved.</p>
+            <p>&copy; ${String(new Date().getFullYear())} ${documentProps.title}. All rights reserved.</p>
         </footer>
-        <!-- Inject pageProps for the client, providing a fallback -->
+        {/* Inject pageProps for the client, providing a fallback */}
         <script id="page-props" type="application/json">${dangerouslySkipEscape(JSON.stringify(pageProps || {}))}</script>
         <!-- Leaflet JS (consider bundling with Vite later) -->
         <!-- <script src="/leaflet/leaflet.js"></script> -->
