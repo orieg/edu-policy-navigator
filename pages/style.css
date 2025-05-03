@@ -101,9 +101,10 @@ footer {
     /* Position relative to .search-container */
     top: 100%;
     /* Position it right below the input */
-    left: 0;
-    right: 0;
-    /* Make it same width as input */
+    width: 100%;
+    /* Make width match the container (and the input) */
+    box-sizing: border-box;
+    /* Include padding/border in the width calculation */
     background-color: #fff;
     border: 1px solid #ccc;
     border-top: none;

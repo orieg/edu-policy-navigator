@@ -29,14 +29,12 @@ function Page(pageProps: PageProps) {
           id="district-search-input" 
           placeholder="Enter district name..." 
           disabled 
-          aria-label="Search for a school district" 
-          style="margin-left: 10px; padding: 8px; width: 300px;"
+          aria-label="Search for a school district"
         />
         <div 
           id="district-results" 
           hidden 
-          role="listbox" 
-          style="border: 1px solid #ccc; margin-top: 5px; max-height: 200px; width: 318px; overflow-y: auto; background-color: white; position: absolute; z-index: 1000;"
+          role="listbox"
         ></div>
       </div>
 
