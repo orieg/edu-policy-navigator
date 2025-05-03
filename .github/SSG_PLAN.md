@@ -1,96 +1,138 @@
-# Static Site Generation (SSG) Plan using Hugo & Vite
+# **Static Site Generation (SSG) Plan using Vike**
 
-**Goal:** Generate individual static HTML pages for each California school district using the Hugo static site generator, integrated with Vite for JavaScript/CSS bundling and development. This approach aims for simplicity while leveraging Hugo's speed for content generation and Vite's modern frontend tooling.
+**Goal:** Generate individual static HTML pages for each California school district by extending the existing Vite application using Vike. This aims to leverage the current Vite setup and TypeScript codebase while adding SSG (pre-rendering) capabilities for improved SEO and static hosting compatibility (e.g., GitHub Pages).
 
-**Reasoning:** Previous attempts with manual scripts and Eleventy encountered complexities. Hugo is known for its performance and content management capabilities, while `vite-hugo-plugin` simplifies the integration with Vite's development server and asset bundling.
+**Reasoning:** Vike integrates directly with Vite, offering SSR/SSG features without requiring a full framework change. This approach fits well with the existing vanilla TypeScript application, maintains Vite's HMR for development, and provides control over the rendering process.
 
-## Phase 1: Setup & Configuration
+## **Phase 1: Vike Setup & Configuration**
 
-*   **Goal:** Install Hugo, configure Vite with `vite-hugo-plugin`, and establish project structure.
-*   [ ] **Step 1.1: Install Hugo**
-    *   [ ] Follow official Hugo installation instructions for your OS (e.g., `brew install hugo` on macOS). Verify installation with `hugo version`.
-*   [ ] **Step 1.2: Install Vite Hugo Plugin**
-    *   [ ] Run `pnpm add -D vite-hugo-plugin`.
-*   [ ] **Step 1.3: Configure Vite**
+*   **Goal:** Install Vike and configure it within the existing Vite setup.
+*   [ ] **Step 1.1: Install Vike**
+    *   [ ] Run `pnpm add vike`.
+*   [ ] **Step 1.2: Configure Vite**
     *   [ ] Update `vite.config.ts`.
-    *   [ ] Import `hugoPlugin` from `vite-hugo-plugin`.
-    *   [ ] Add `hugoPlugin()` to the `plugins` array. Configure `appDir` (project root) and `hugoOutDir` (Hugo's publish directory, default `public`).
-    *   [ ] Ensure Vite's `build.outDir` is set appropriately (e.g., `dist` or `public/dist`) to avoid conflicts with Hugo's output. The plugin handles coordination.
-    *   [ ] *Note: The `vite-hugo-plugin` aims to manage the Hugo process within the Vite dev server (`pnpm run dev`), simplifying development builds.*
-*   [ ] **Step 1.4: Establish Hugo Project Structure**
-    *   [ ] Create standard Hugo directories:
-        *   `content/`: For Markdown content files (if any). District data will likely be handled as Data Templates.
-        *   `data/`: For data files (JSON, YAML, TOML). Our processed district/school JSON will go here.
-        *   `layouts/`: For Hugo HTML templates (.html).
-        *   `static/`: For static assets Hugo should copy directly (e.g., large pre-processed files, maybe boundaries).
-        *   `assets/`: For assets processed by Hugo Pipes (or potentially by Vite if configured). We'll primarily use Vite for JS/CSS.
-    *   [ ] Create Hugo config file (`hugo.toml` or `hugo.yaml`). Define `baseURL`, `title`, etc. Set `publishDir = "public"` (or match `hugoOutDir` in Vite config).
-    *   [ ] **Permalink Strategy:** Configure Hugo's permalinks in `hugo.toml` or define output paths within the template logic to create `/districts/{CDS_CODE}/index.html`. This might involve creating dummy content files or using specific layout types. Research Hugo Data Templates for the best approach.
-    *   [ ] *Research Hugo Data Templates (see [Hugo Docs: Data Templates](https://gohugo.io/templates/data-templates/)) for the best approach to generate pages from `data/districts.json`.*
-    *   [ ] *Research Hugo permalink options (see [Hugo Docs: Permalinks](https://gohugo.io/content-management/urls/#permalinks)) or headless bundles for creating the desired URL structure.*
-    *   [ ] Embed necessary data for the client-side script (map, schools) into the HTML (e.g., data attributes).
+    *   [ ] Import `vike` from `vike/plugin`.
+    *   [ ] Add `vike()` to the `plugins` array.
+    *   [ ] Ensure Vite's `build.outDir` is set (e.g., `dist` - Vike manages subdirectories within it).
+    *   [ ] Remove any previous SSG/framework plugins if present.
+*   [ ] **Step 1.3: Update Package Scripts**
+    *   [ ] Modify `package.json` scripts:
+        *   `dev`: `vike dev`
+        *   `build`: `pnpm run prepare && vike build` (**Note:** Use `vike build` which handles client & server/SSG builds).
+        *   `preview`: `vike preview` (To preview the production build).
+        *   `prepare`: Ensure this script (e.g., `pnpm run convert:xlsx && pnpm run prepare:districts && pnpm run prepare:boundaries`) places necessary JSON/GeoJSON data where Vike hooks can access it during the build (e.g., project root or a dedicated `data/` dir, accessible to Node.js).
+*   [ ] **Step 1.4: Basic Project Structure**
+    *   [ ] Create a `pages/` directory for Vike's file-based routing.
+    *   [ ] Create `renderer/` directory for Vike rendering hooks.
 
-## Phase 2: Data Integration
+## **Phase 2: Rendering Hooks Implementation**
 
-*   **Goal:** Make district and school data accessible to Hugo templates.
-*   [ ] **Step 2.1: Place Processed Data**
-    *   [ ] Ensure the `prepare` script (`pipeline/scripts/generateDistrictJson.ts`) outputs `districts.json` and `schools_by_district.json` into the Hugo `data/` directory (e.g., `data/districts.json`, `data/schools.json`).
-    *   [ ] Update `pipeline/scripts/generateDistrictJson.ts` output paths if necessary.
+*   **Goal:** Define how Vike renders HTML pages and initializes client-side JavaScript.
+*   [ ] **Step 2.1: Create HTML Shell (`+onRenderHtml.js/.ts`)**
+    *   [ ] Create `renderer/+onRenderHtml.js` (or `.ts`).
+    *   [ ] Define the basic HTML structure (`<html>`, `<head>`, `<body>`).
+    *   [ ] Use Vike's templating mechanisms (e.g., `dangerouslySkipEscape` for injecting HTML snippets, template literals) to include:
+        *   Page title (`<title>${pageContext.title || 'Default Title'}</title>`).
+        *   Meta description (`<meta name="description" content="${pageContext.description || ''}">`).
+        *   Root element for client-side rendering (e.g., `<div id="page-view"></div>`).
+        *   Links to CSS/JS assets (Vike handles injection).
+        *   Initial page data/state needed for hydration (e.g., using `<script type="application/json" id="page-data">${JSON.stringify(pageContext.pageProps)}</script>`).
+*   [ ] **Step 2.2: Create Client Entry Point (`+onRenderClient.js/.ts`)**
+    *   [ ] Create `renderer/+onRenderClient.js` (or `.ts`).
+    *   [ ] This becomes the main client-side JS entry point.
+    *   [ ] **CSS Handling:** Verify how CSS is best handled. Importing global CSS here (`import '../path/to/style.css'`) might work but *could* cause a brief Flash of Unstyled Content (FOUC). Check if Vike/Vite automatically injects CSS `<link>` tags when CSS is imported in `.page.js` files or handled via standard Vite processing, which is often preferred.
+    *   [ ] Read initial page data injected by `+onRenderHtml` (e.g., parsing the JSON from the script tag).
+    *   [ ] Implement hydration logic: Find the root element and render/initialize the interactive parts (search, map, etc.) using the initial data. This replaces the core logic previously in `src/main.ts`.
+    *   [ ] Adapt existing code from `src/main.ts` (map initialization, search handlers, event listeners) to work within this client-side hydration context, using the data passed from the server/SSG build.
 
-## Phase 3: Templating & Page Generation (Hugo)**
+## **Phase 3: Page Definition & Data Fetching (SSG)**
 
-*   **Goal:** Create Hugo templates to generate district pages using the data files.
-*   [ ] **Step 3.1: Create Base Layout**
-    *   [ ] Create Hugo base layout: `layouts/_default/baseof.html`.
-    *   [ ] Define common HTML structure (head, header, footer). Include blocks for `title` and `main` content.
-    *   [ ] **Crucially:** Link to Vite-processed CSS and JS using Hugo's `resources.Get` and potentially reading Vite's manifest file for hashed filenames in production builds. The `vite-hugo-plugin` *might* assist with this, or manual setup might be needed. Start simple, linking to expected dev paths first.
-*   [ ] **Step 3.2: Create District List/Index Page (Optional)**
-    *   [ ] Create `layouts/index.html` to list districts or provide search functionality.
-*   [ ] **Step 3.3: Create District Single Page Template**
-    *   [ ] Hugo generates pages based on content files or data. We'll use a Data Template approach.
-    *   [ ] Create `layouts/_default/list.html` or a custom layout that ranges over the data.
-    *   [ ] Use Hugo's `range` function to iterate over `site.Data.districts`.
-    *   [ ] For each district, generate the HTML structure (info card, school list placeholder, map placeholder) using the district data (`{{ .Value }}`) and accessing school data (`{{ index site.Data.schools (.Key | substr 0 7) }}`).
-    *   [ ] **Permalink Strategy:** Configure Hugo's permalinks in `hugo.toml` or define output paths within the template logic to create `/districts/{CDS_CODE}/index.html`. This might involve creating dummy content files or using specific layout types. Research Hugo Data Templates for the best approach.
-    *   [ ] Embed necessary data for the client-side script (map, schools) into the HTML (e.g., data attributes).
+*   **Goal:** Define the structure for district pages and fetch data during the build for pre-rendering.
+*   [ ] **Step 3.1: Create Basic Pages**
+    *   [ ] Create `pages/index/+Page.js` (or `.page.js`) for the homepage.
+    *   [ ] Define the basic content/structure for the homepage component/rendering logic.
+*   [ ] **Step 3.2: Create Dynamic District Page Route**
+    *   [ ] Create `pages/districts/@cdsCode/+Page.js` (or `.page.js`) for dynamic district routes.
+    *   [ ] This file will define the component structure or rendering logic for a single district page (info card, map placeholder, school list placeholder). It will receive data via `pageContext.pageProps`.
+*   [ ] **Step 3.3: Implement Data Fetching (`+onBeforeRender.js/.ts`)**
+    *   [ ] Create `pages/districts/@cdsCode/+onBeforeRender.js` (or `.ts`).
+    *   [ ] This hook runs *before* rendering the page (at build time for SSG).
+    *   [ ] Load the necessary data:
+        *   Read `districts.json` and `schools_by_district.json` (ensure `prepare` script places them accessibly).
+        *   Use `pageContext.routeParams.cdsCode` to get the specific district's CDS code.
+        *   Find the district data (`districtData`) and corresponding school data (`schoolsData`).
+    *   [ ] Return the fetched data and SEO metadata in the `pageContext`:
+        ```javascript
+        // Example structure to return
+        return {
+          pageContext: {
+            pageProps: { // Data needed by the +Page component and potentially the client
+              districtData,
+              schoolsData
+            },
+            // SEO Metadata for +onRenderHtml
+            title: `${districtData.District} - CA School District Info`,
+            description: `Information and schools for ${districtData.District} in ${districtData.County}, California.`
+          }
+        }
+        ```
+*   [ ] **Step 3.4: Enable & Configure Pre-rendering (SSG)**
+    *   [ ] Create `pages/districts/@cdsCode/+config.h.js`.
+    *   [ ] Define the `prerender` export to enable SSG and provide the list of district codes to generate:
+        ```javascript
+        // pages/districts/@cdsCode/+config.h.js
+        import fs from 'fs';
+        import path from 'path';
 
-## Phase 4: Asset Handling & JS Library (Vite)**
+        // Function to load districts.json data during build
+        // Adjust path as necessary relative to this config file
+        const loadDistrictsData = () => {
+          const filePath = path.resolve(process.cwd(), 'public/assets/districts.json'); // Or wherever 'prepare' puts it
+          const fileContent = fs.readFileSync(filePath, 'utf-8');
+          return JSON.parse(fileContent);
+        };
 
-*   **Goal:** Use Vite to bundle JavaScript (TypeScript), CSS, and other frontend assets.
-*   [ ] **Step 4.1: Configure Vite Entry Points**
-    *   [ ] Define entry points in `vite.config.ts` for main JS/CSS (e.g., `src/main.ts`, `src/style.css`).
-    *   [ ] Ensure `src/` contains the TypeScript code for the map, navigation, chatbot, etc.
-*   [ ] **Step 4.2: Link Assets in Hugo Templates**
-    *   [ ] In `layouts/_default/baseof.html`, link to the Vite entry CSS and JS.
-    *   [ ] **Development:** Links might be direct (e.g., `/src/main.ts`). Vite dev server handles this via the plugin.
-    *   [ ] **Production:** Need to link to the hashed, bundled files in Vite's output directory. This requires reading `manifest.json` generated by `vite build`. Hugo templates need logic to find the correct filenames. (Example: Check `vite-hugo-plugin` docs or Hugo forums for manifest integration techniques).
-    *   [ ] *This production linking often involves creating a Hugo partial template to read `manifest.json`.*
-*   [ ] **Step 4.3: Handle Static Assets (Boundaries, etc.)**
-    *   [ ] Place large, static assets not processed by Vite (like GeoJSON boundaries) in Hugo's `static/` directory. Hugo will copy them directly to `public/`.
-    *   [ ] Link to these from templates or JS using their final path (e.g., `/assets/boundaries/...`).
+        export default {
+          prerender: () => {
+            const districtsData = loadDistrictsData();
+            // Map the keys (CDS codes) from the loaded data to the format Vike expects
+            return Object.keys(districtsData).map(code => ({ cdsCode: code }));
+          }
+        }
+        ```
 
-## Phase 5: Script Updates**
+## **Phase 4: Integrating Existing Logic & Assets**
 
-*   **Goal:** Update `package.json` scripts for the Hugo + Vite workflow.
-*   [ ] **Step 5.1: Update/Create Dev Script**
-    *   [ ] `dev`: `vite` (The `vite-hugo-plugin` should trigger Hugo builds within the Vite dev server).
-*   [ ] **Step 5.2: Update/Create Build Script**
-    *   [ ] `build`: `pnpm run clean && pnpm run prepare && hugo --minify && vite build` (Run Hugo first, then Vite build. Order might depend on manifest generation/reading).
-    *   [ ] Adjust `clean` script to remove Hugo's `public` and potentially Vite's `dist` folder.
-*   [ ] **Step 5.3: Add Prepare Script (if needed)**
-    *   [ ] Ensure `prepare` script (`pnpm run build:data`) correctly generates JSON into Hugo's `data/` directory.
-    *   [ ] `prepare`: `pnpm run build:data` (Assuming `build:data` calls `generateDistrictJson.ts`).
+*   **Goal:** Adapt the existing map, search, and UI logic to Vike's structure and ensure static assets are handled.
+*   [ ] **Step 4.1: Adapt Component/Rendering Logic**
+    *   [ ] Move/refactor UI rendering logic (info card, school list generation) into the respective `+Page.js` files (homepage, district page).
+    *   [ ] Ensure these components/render functions receive data via `pageContext.pageProps` (populated by `+onBeforeRender`).
+*   [ ] **Step 4.2: Adapt Client-Side Interactivity**
+    *   [ ] Move/refactor map initialization, search input handling, event listeners, etc., from the old `src/main.ts` into `renderer/+onRenderClient.js`.
+    *   [ ] Ensure this client code correctly reads and uses the initial data passed from the server/SSG build (e.g., from the JSON script tag created in `+onRenderHtml`).
+*   [ ] **Step 4.3: Handle Static Assets**
+    *   [ ] Place static assets (Leaflet library files if not using CDN, GeoJSON boundaries) in Vite's `public/` directory (e.g., `public/leaflet/`, `public/assets/boundaries/`). Vite copies these automatically to the output directory.
+    *   [ ] Update paths in the code (e.g., in `+onRenderClient.js` map logic) to reference these paths correctly (e.g., `/leaflet/leaflet.css`, `/assets/boundaries/${cdsCode}.geojson`). Ensure they are root-relative paths.
+    *   [ ] Update the `prepare:boundaries` script output path to target `public/assets/boundaries/`.
 
-## Phase 6: Testing & Verification**
+## **Phase 5: Testing & Verification**
 
-*   **Goal:** Ensure the site works correctly in dev and production.
-*   [ ] **Step 6.1: Test Development Server**
+*   **Goal:** Ensure the site works correctly in dev (with HMR) and production (pre-rendered static HTML).
+*   [ ] **Step 5.1: Test Development Server (`vike dev`)**
     *   [ ] Run `pnpm run dev`.
-    *   [ ] Verify Hugo pages are generated and served correctly by Vite.
-    *   [ ] Check JS/CSS are loaded and functional (HMR should work).
-    *   [ ] Test navigation to a district page.
-*   [ ] **Step 6.2: Test Production Build**
+    *   [ ] Verify the homepage loads.
+    *   [ ] Test navigation/linking to a district page (if implemented).
+    *   [ ] Verify JS/CSS load, HMR works for client-side code edits (`+onRenderClient.js`, related modules).
+    *   [ ] Check browser console for errors.
+*   [ ] **Step 5.2: Test Production Build (`vike build`)**
     *   [ ] Run `pnpm run build`.
-    *   [ ] Inspect Hugo's output (`public/`) and Vite's output (e.g., `public/dist/`).
-    *   [ ] Verify HTML links to correctly hashed JS/CSS bundles.
-    *   [ ] Use a local static server (`npx http-server public`) to test the final site. 
+    *   [ ] Inspect the build output directory (e.g., `dist/client/`).
+    *   [ ] Verify the generation of static HTML files for districts (e.g., `dist/client/districts/12345.html`).
+    *   [ ] Check the contents of a generated HTML file to ensure pre-rendered content and correct asset paths.
+*   [ ] **Step 5.3: Test Preview Server (`vike preview`)**
+    *   [ ] Run `pnpm run preview`.
+    *   [ ] Access the site in the browser.
+    *   [ ] Navigate to a district page (e.g., `/districts/12345`).
+    *   [ ] **Verify SSG:** Use browser developer tools (View Source) to confirm the initial HTML response contains the district-specific content (info card, school list structure) *before* JavaScript runs.
+    *   [ ] **Verify Hydration:** Confirm client-side JavaScript takes over correctly (map loads and becomes interactive, search input works).
+    *   [ ] Test multiple district pages. 

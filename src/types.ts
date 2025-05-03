@@ -1,0 +1,47 @@
+// src/types.ts
+
+// Type for the main districts data object (keyed by CDS Code)
+export interface DistrictDataMap {
+    [id: string]: DistrictDetails;
+}
+
+// Type for individual district details
+export interface DistrictDetails {
+    [key: string]: string | number | null;
+    // Ensure specific keys exist
+    'CDS Code': string;
+    'District': string;
+    'Status': string;
+    'Street Address': string;
+    'Street City': string;
+    'Street State': string;
+    'Street Zip': string;
+    'Latitude': string;
+    'Longitude': string;
+    'Website': string;
+    // Add other relevant fields from districts.json
+}
+
+// Type for individual school details
+export interface SchoolDetails {
+    [key: string]: string | number | null;
+    // Ensure specific keys exist
+    'CDS Code': string;
+    'School': string;
+    'Status': string;
+    'Public Yes/No': string;
+    'Educational Program Type': string;
+    'Street Address': string;
+    'Street City': string;
+    'Street State': string;
+    'Street Zip': string;
+    'Latitude': string;
+    'Longitude': string;
+    'Website': string;
+    // Add other relevant fields from schools.json
+}
+
+// Type for schools data grouped by district prefix
+export interface SchoolsByDistrictMap {
+    [districtCdsPrefix: string]: SchoolDetails[];
+} 

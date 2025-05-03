@@ -1,19 +1,37 @@
 import { defineConfig } from 'vite';
 import path from 'path';
+import { fileURLToPath } from 'url';
+import vike from 'vike/plugin'; // Import Vike plugin
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 // https://vitejs.dev/config/
 export default defineConfig({
-    root: 'public', // Keep root as public
-    publicDir: 'public', // Directory for static assets (like index.html)
+    // root: __dirname, // Let Vite default to project root
+    plugins: [
+        vike() // Add Vike plugin
+    ],
+    // publicDir: false, // Let Vike/Vite handle public dir defaults
     resolve: {
         alias: {
-            // Map absolute /src path to the project's src directory
-            '/src': path.resolve(__dirname, 'src'),
+            '@': path.resolve(__dirname, 'src'),
         },
     },
+    // server: { // Remove server.origin for now, Vike might handle it
+    //     origin: 'http://localhost:5173'
+    // },
     build: {
-        outDir: path.resolve(__dirname, 'dist/frontend'), // Output directory relative to project root, not 'public' root
+        // Standard output directory
+        outDir: path.resolve(__dirname, 'dist'),
         emptyOutDir: true,
+        // Vike likely manages manifest generation implicitly
+        // manifest: true, // Remove explicit manifest setting
+        rollupOptions: {
+            // Vike handles input based on pages/
+            // input: {
+            //     main: path.resolve(__dirname, 'src/main.ts')
+            // }
+        }
     }
-    // We can add plugins and customizations here later if needed
 }); 

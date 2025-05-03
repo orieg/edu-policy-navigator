@@ -1,10 +1,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as xlsx from 'xlsx';
+import XLSX from 'xlsx';
 
 const XLSX_FILE_NAME = 'CDESchoolDirectoryExport.xlsx';
 const INPUT_XLSX_PATH = path.resolve(process.cwd(), XLSX_FILE_NAME);
-const OUTPUT_DIR = path.resolve(__dirname, '..', 'data');
+const OUTPUT_DIR = path.resolve(process.cwd(), 'dist', 'pipeline', 'data');
 
 function convertXlsxToCsv(): void {
     console.log(`Reading workbook: ${INPUT_XLSX_PATH}`);
@@ -14,7 +14,7 @@ function convertXlsxToCsv(): void {
     }
 
     try {
-        const workbook = xlsx.readFile(INPUT_XLSX_PATH);
+        const workbook = XLSX.readFile(INPUT_XLSX_PATH);
 
         if (!fs.existsSync(OUTPUT_DIR)) {
             console.log(`Creating output directory: ${OUTPUT_DIR}`);
@@ -26,7 +26,7 @@ function convertXlsxToCsv(): void {
             console.log(`Converting sheet "${sheetName}" to ${csvFilePath}...`);
 
             const worksheet = workbook.Sheets[sheetName];
-            const csvData = xlsx.utils.sheet_to_csv(worksheet);
+            const csvData = XLSX.utils.sheet_to_csv(worksheet);
 
             fs.writeFileSync(csvFilePath, csvData);
             console.log(`Successfully wrote ${csvFilePath}`);

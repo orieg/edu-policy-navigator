@@ -1,0 +1,173 @@
+/* pages/style.css */
+
+body {
+    font-family: sans-serif;
+    line-height: 1.6;
+    margin: 0;
+    padding: 0;
+    background-color: #f4f4f4;
+}
+
+header {
+    background: #333;
+    color: #fff;
+    padding: 1rem 0;
+    text-align: center;
+}
+
+header h1 a {
+    color: #fff;
+    text-decoration: none;
+}
+
+nav a {
+    color: #fff;
+    margin: 0 10px;
+    text-decoration: none;
+}
+
+main {
+    padding: 20px;
+    max-width: 1200px;
+    margin: 20px auto;
+    background: #fff;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    min-height: 60vh;
+    /* Ensure main takes up some space */
+}
+
+footer {
+    text-align: center;
+    margin-top: 20px;
+    padding: 10px;
+    background: #333;
+    color: #fff;
+}
+
+/* Component styles (move relevant styles from old src/style.css here) */
+
+.info-card {
+    background-color: #eef;
+    border: 1px solid #ccd;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 5px;
+}
+
+.school-list {
+    list-style: none;
+    padding: 0;
+}
+
+.school-list li {
+    border-bottom: 1px solid #eee;
+    padding: 10px 0;
+}
+
+.school-list li:last-child {
+    border-bottom: none;
+}
+
+/* Search Input and Results Styling */
+.search-container {
+    position: relative;
+    /* Establishes a positioning context */
+    margin-bottom: 20px;
+    /* Add some space below the search */
+}
+
+#district-search-input {
+    width: 100%;
+    /* Make input take full width of container */
+    padding: 10px;
+    font-size: 1rem;
+    box-sizing: border-box;
+    /* Include padding in width */
+}
+
+#district-results {
+    position: absolute;
+    /* Position relative to .search-container */
+    top: 100%;
+    /* Position it right below the input */
+    left: 0;
+    right: 0;
+    /* Make it same width as input */
+    background-color: #fff;
+    border: 1px solid #ccc;
+    border-top: none;
+    /* Avoid double border */
+    max-height: 200px;
+    /* Limit height and add scroll */
+    overflow-y: auto;
+    z-index: 1000;
+    /* Ensure it appears above other content */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+#district-results div[role="option"] {
+    padding: 8px 12px;
+    cursor: pointer;
+}
+
+#district-results div[role="option"]:hover,
+#district-results div[role="option"].highlighted {
+    background-color: #f0f0f0;
+}
+
+/* Map placeholder style */
+[id^="info-map-"] {
+    height: 400px;
+    /* Default height - can be overridden by container */
+    width: 100%;
+    background-color: #eee;
+    /* Changed background slightly */
+    margin-bottom: 0;
+    /* Remove bottom margin if inside flex/grid */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+}
+
+/* District Page Layout */
+.district-page {
+    display: flex;
+    flex-wrap: wrap;
+    /* Allow wrapping on smaller screens */
+    gap: 20px;
+    /* Space between content and map */
+}
+
+.district-details-content {
+    flex: 1 1 500px;
+    /* Grow, shrink, basis of 500px */
+    min-width: 300px;
+    /* Prevent getting too small */
+}
+
+.district-map-container {
+    flex: 1 1 400px;
+    /* Grow, shrink, basis of 400px */
+    min-width: 300px;
+    /* Prevent getting too small */
+}
+
+/* Ensure map inside container takes full height */
+.district-map-container [id^="info-map-"] {
+    height: 100%;
+    min-height: 450px;
+    /* Ensure map has a decent minimum height */
+}
+
+/* Custom Marker Styling */
+.school-marker-icon {
+    font-size: 1.5rem;
+    /* Adjust size of the emoji */
+    background: none;
+    border: none;
+    /* Center the emoji if needed */
+    /* display: flex; */
+    /* justify-content: center; */
+    /* align-items: center; */
+}
