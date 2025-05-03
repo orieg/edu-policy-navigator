@@ -1,11 +1,22 @@
 /* pages/style.css */
 
+html {
+    height: 100%;
+    /* Ensure html takes full height */
+}
+
 body {
     font-family: sans-serif;
     line-height: 1.6;
     margin: 0;
     padding: 0;
     background-color: #f4f4f4;
+    display: flex;
+    /* Use flexbox */
+    flex-direction: column;
+    /* Stack header, main, footer vertically */
+    min-height: 100vh;
+    /* Minimum height of the viewport */
 }
 
 header {
@@ -30,9 +41,15 @@ main {
     padding: 20px;
     max-width: 1200px;
     margin: 20px auto;
+    /* Keep horizontal centering */
+    width: 100%;
+    /* Ensure main takes up width within flex */
     background: #fff;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    min-height: 60vh;
+    /* min-height: 60vh; */
+    /* Remove fixed min-height */
+    flex-grow: 1;
+    /* Allow main to grow and fill space */
     /* Ensure main takes up some space */
 }
 
