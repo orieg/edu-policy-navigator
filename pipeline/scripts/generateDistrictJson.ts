@@ -1,3 +1,4 @@
+import * as fsPromises from 'fs/promises';
 import * as fs from 'fs';
 import * as path from 'path';
 import { parse } from 'csv-parse';
@@ -202,37 +203,32 @@ async function generateJsonData() {
     console.log('Directory checked. Proceeding with file writing...');
 
     // Extract slugs AFTER processing all districts
-    const districtSlugs = Object.values(districtsData).map(d => d.slug).filter(Boolean);
-    console.log(`[DataGen] Extracted ${districtSlugs.length} slugs for prerender list.`);
+    const slugs = Object.values(districtsData).map(d => d.slug).filter(slug => slug);
+    console.log(`[DataGen] Extracted ${slugs.length} slugs for prerender list.`);
 
-    // Write districts.json
+    // Generate the structured parameters for the new file
+    const prerenderParams = slugs.map(slug => ({ districtSlug: slug }));
+
+    const districtsOutputPath = path.join(OUTPUT_DIR, 'districts.json');
+    const schoolsOutputPath = path.join(OUTPUT_DIR, 'schools_by_district.json');
+    const slugsOutputPath = path.join(OUTPUT_DIR, 'prerender-slugs.json'); // Keep old slugs file for now?
+    const paramsOutputPath = path.join(OUTPUT_DIR, 'prerender-params.json'); // Path for the new params file
+
     try {
-        fs.writeFileSync(OUTPUT_DISTRICTS_JSON_PATH, JSON.stringify(districtsData, null, 2));
-        console.log(`Successfully wrote district data to: ${OUTPUT_DISTRICTS_JSON_PATH}`);
-    } catch (err) {
-        console.error(`Error writing districts JSON file: ${err}`);
+        await fsPromises.writeFile(districtsOutputPath, JSON.stringify(districtsData, null, 2));
+        console.log(`Successfully wrote district data to: ${districtsOutputPath}`);
+        await fsPromises.writeFile(schoolsOutputPath, JSON.stringify(schoolsByDistrictData, null, 2));
+        console.log(`Successfully wrote school data to: ${schoolsOutputPath}`);
+        await fsPromises.writeFile(slugsOutputPath, JSON.stringify(slugs, null, 2));
+        console.log(`Successfully wrote prerender slug list to: ${slugsOutputPath}`);
+        await fsPromises.writeFile(paramsOutputPath, JSON.stringify(prerenderParams, null, 2));
+        console.log(`Successfully wrote prerender parameter list to: ${paramsOutputPath}`);
+    } catch (error) {
+        console.error("Error writing output files:", error);
         process.exit(1);
     }
 
-    // Write schools_by_district.json
-    try {
-        fs.writeFileSync(OUTPUT_SCHOOLS_JSON_PATH, JSON.stringify(schoolsByDistrictData, null, 2));
-        console.log(`Successfully wrote school data to: ${OUTPUT_SCHOOLS_JSON_PATH}`);
-    } catch (err) {
-        console.error(`Error writing schools JSON file: ${err}`);
-        process.exit(1);
-    }
-
-    // Write prerender-slugs.json (This is the array of strings)
-    try {
-        fs.writeFileSync(OUTPUT_SLUGS_JSON_PATH, JSON.stringify(districtSlugs, null, 2));
-        console.log(`Successfully wrote prerender slug list to: ${OUTPUT_SLUGS_JSON_PATH}`);
-    } catch (err) {
-        console.error(`Error writing prerender slugs JSON file: ${err}`);
-        process.exit(1);
-    }
-
-    console.log('Data generation complete.');
+    console.log("Data generation complete.");
 }
 
 // Execute the main function

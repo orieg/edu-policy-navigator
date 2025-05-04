@@ -12,9 +12,9 @@
     "build:boundaries": "tsc pipeline/scripts/splitBoundaries.ts --module nodenext --outDir dist/pipeline/scripts && node dist/pipeline/scripts/splitBoundaries.js",
     "prepare": "pnpm run convert:xlsx && pnpm run build:data && pnpm run build:boundaries",
     "clean": "rm -rf dist .vike/ public/assets/boundaries public/assets/districts.json public/assets/schools_by_district.json public/assets/prerender-slugs.json",
-    "dev": "pnpm run prepare && vike dev",
-    "build": "pnpm run clean && pnpm run prepare && vite build",
-    "preview": "vike preview"
+    "dev": "pnpm run prepare && astro dev",
+    "build": "pnpm run clean && pnpm run prepare && astro build",
+    "preview": "astro preview"
   },
   "engines": {
     "node": ">=20.11.0",
@@ -37,6 +37,7 @@
   "packageManager": "pnpm@10.7.1",
   "dependencies": {
     "@types/proj4": "^2.5.6",
+    "astro": "^5.7.10",
     "csv-parse": "^5.6.0",
     "leaflet": "^1.9.4",
     "leaflet-geosearch": "^4.2.0",
@@ -49,7 +50,6 @@
     "@types/leaflet": "^1.9.17",
     "@types/leaflet.markercluster": "^1.5.5",
     "@types/node": "^22.15.3",
-    "@types/xlsx": "^0.0.36",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3",
     "vite": "^6.3.4",

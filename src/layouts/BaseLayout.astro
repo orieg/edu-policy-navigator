@@ -1,0 +1,42 @@
+---
+// src/layouts/BaseLayout.astro
+import '../styles/global.css';
+export interface Props {
+    title?: string;
+    description?: string;
+}
+const {
+    title = 'Unofficial California Education Policies Navigator',
+    description = 'Explore California K-12 school district data and policies.'
+} = Astro.props;
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
+    <title>{title}</title>
+    {/* Link Leaflet and MarkerCluster CSS globally */}
+    <link rel="stylesheet" href="/node_modules/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="/node_modules/leaflet.markercluster/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="/node_modules/leaflet.markercluster/dist/MarkerCluster.Default.css" />
+</head>
+<body>
+    <header>
+        <h1><a href="/">{title}</a></h1>
+        <!-- Breadcrumbs might need specific logic per page -->
+    </header>
+    <div class="disclaimer">
+        <strong>Disclaimer:</strong> Data is based on publicly available sources...
+    </div>
+    <main id="page-view">
+        <slot /> <!-- Page content goes here -->
+    </main>
+    <footer>
+        <p>&copy; {new Date().getFullYear()} {title}. All rights reserved.</p>
+    </footer>
+    {/* Leaflet JS is imported dynamically by the map script where needed */}
+    {/* Client-side scripts specific to pages will be added in those pages */}
+</body>
+</html> 

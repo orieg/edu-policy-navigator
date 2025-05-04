@@ -1,19 +1,18 @@
 // src/search.ts
 
 import type { DistrictDataMap, DistrictDetails, SchoolDetails, SchoolsByDistrictMap } from './types';
-// Import map functions if search needs to trigger map updates
-import { updateMapForDistrict } from './map';
+// Import map functions if search needs to trigger map updates (currently not used directly in search logic)
+// import { updateMapForDistrict } from './map';
 
 let filteredDistricts: DistrictDetails[] = [];
 let highlightIndex = -1;
-let currentMapInstance: L.Map | null = null; // Keep track of map if needed
 
-// Store references to DOM elements passed from onRenderClient
+// Store references to DOM elements - will be fetched inside setupSearchHandlers
 let searchInputEl: HTMLInputElement | null = null;
 let resultsListEl: HTMLDivElement | null = null;
-let infoDisplayEl: HTMLElement | null = null;
+let infoDisplayEl: HTMLElement | null = null; // Keep for potential future use, though navigation is primary
 let allDistricts: DistrictDataMap | null = null;
-let allSchools: SchoolsByDistrictMap | null = null;
+let allSchools: SchoolsByDistrictMap | null = null; // Keep for potential future use
 
 function filterDistricts(searchTerm: string) {
     if (!allDistricts) {
@@ -62,7 +61,7 @@ function displayResults() {
 }
 
 async function selectDistrict(district: DistrictDetails) {
-    if (!searchInputEl || !resultsListEl || !infoDisplayEl) return;
+    if (!searchInputEl || !resultsListEl) return; // Removed infoDisplayEl check as it might not be needed for navigation
 
     const cdsCode = district['CDS Code'];
     const slug = district['slug']; // Get the slug from the district data
@@ -71,10 +70,10 @@ async function selectDistrict(district: DistrictDetails) {
 
     if (!slug) {
         console.error("Error: Selected district data is missing the 'slug' property. Cannot navigate.");
-        // Optionally display an error message to the user in infoDisplayEl
-        infoDisplayEl.innerHTML = '<p class="error">Could not generate link for the selected district.</p>';
+        // Optionally display an error message to the user (e.g., in resultsListEl or a dedicated error area)
+        if (resultsListEl) resultsListEl.innerHTML = '<p class="error">Could not generate link for the selected district.</p>';
         searchInputEl.value = district.District || ''; // Keep name in input
-        resultsListEl.hidden = true;
+        // resultsListEl.hidden = true; // Keep results open to show error?
         filteredDistricts = [];
         return;
     }
@@ -82,11 +81,10 @@ async function selectDistrict(district: DistrictDetails) {
     // Navigate to the pre-rendered district page using its slug
     window.location.href = `/districts/${slug}`;
 
-    // --- Remove direct display/map update logic --- 
-    // searchInputEl.value = district.District || '';
-    // resultsListEl.hidden = true;
-    // filteredDistricts = [];
-    // await displayDistrictInfo(infoDisplayEl, district, allSchools?.[cdsCode.substring(0, 7)] || []);
+    // Reset search state after navigation attempt
+    searchInputEl.value = '';
+    resultsListEl.hidden = true;
+    filteredDistricts = [];
 }
 
 function updateHighlight(newIndex: number) {
@@ -136,36 +134,50 @@ function handleKeyDown(event: KeyboardEvent) {
 }
 
 function handleBlur(event: FocusEvent) {
-    setTimeout(() => {
-        if (!resultsListEl?.contains(event.relatedTarget as Node)) {
+    // Use relatedTarget to check if focus moved within the results list
+    const relatedTarget = event.relatedTarget as Node;
+    if (!resultsListEl?.contains(relatedTarget)) {
+        // Adding a small delay allows click events on results to fire before hiding
+        setTimeout(() => {
             if (resultsListEl) resultsListEl.hidden = true;
-        }
-    }, 150);
+        }, 150); // 150ms delay
+    }
 }
 
-// Main setup function called by onRenderClient
+
+// Main setup function called from Astro page script
 export function setupSearchHandlers(
-    inputElement: HTMLInputElement,
-    resultsElement: HTMLDivElement,
-    infoElement: HTMLElement,
+    inputElementId: string,
+    resultsElementId: string,
+    // infoElementId: string, // Optional: ID for info display if needed
     districts: DistrictDataMap,
-    schools: SchoolsByDistrictMap
+    schools: SchoolsByDistrictMap // Keep schools data if needed for future features
 ) {
-    searchInputEl = inputElement;
-    resultsListEl = resultsElement;
-    infoDisplayEl = infoElement;
+    // Get elements by ID inside the function
+    searchInputEl = document.getElementById(inputElementId) as HTMLInputElement;
+    resultsListEl = document.getElementById(resultsElementId) as HTMLDivElement;
+    // infoDisplayEl = document.getElementById(infoElementId);
+
+    if (!searchInputEl || !resultsListEl) {
+        console.error('Search input or results element not found. Search handlers not attached.');
+        return;
+    }
+
+    // Store data globally within the module
     allDistricts = districts;
     allSchools = schools;
 
-    inputElement.addEventListener('input', handleInput);
-    inputElement.addEventListener('blur', handleBlur);
-    inputElement.addEventListener('keydown', handleKeyDown);
+    searchInputEl.addEventListener('input', handleInput);
+    searchInputEl.addEventListener('blur', handleBlur);
+    searchInputEl.addEventListener('keydown', handleKeyDown);
     console.log('Search event listeners added.');
 }
 
-// Function to display district info - called only during client-side hydration or if needed later
+
+// Function to display district info - Kept for potential future use, but not primary for SSG nav
+/*
 export async function displayDistrictInfo(
-    infoElement: HTMLElement,
+    infoElement: HTMLElement, // Takes the element directly if called
     districtData: DistrictDetails,
     schoolsData: SchoolDetails[] // This data should already be filtered by +onBeforeRender
 ) {
@@ -245,11 +257,12 @@ export async function displayDistrictInfo(
     console.log(`Updated info display for ${districtName}`);
 
     // --- Trigger Map Update --- 
-    const mapElement = infoElement.querySelector<HTMLElement>(`#info-map-${districtCdsCode}`);
-    if (mapElement) {
-        // Pass the already filtered schoolsData to the map
-        await updateMapForDistrict(mapElement.id, districtData, schoolsData);
-    } else {
-        console.warn(`Map element #info-map-${districtCdsCode} not found after updating info display.`);
-    }
-} 
+    // This part is likely handled by the district page itself now
+    // const mapElement = infoElement.querySelector<HTMLElement>(`#info-map-${districtCdsCode}`);
+    // if (mapElement) {
+    //     await updateMapForDistrict(mapElement.id, districtData, schoolsData);
+    // } else {
+    //     console.warn(`Map element #info-map-${districtCdsCode} not found after updating info display.`);
+    // }
+}
+*/ 

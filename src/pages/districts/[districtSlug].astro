@@ -1,0 +1,85 @@
+---
+// src/pages/districts/[districtSlug].astro
+// --- FRONTMATTER START ---
+
+// Imports
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import type { DistrictDetails, SchoolDetails } from '../../scripts/types';
+import {
+    loadDistrictData,
+    loadSchoolsData,
+    isValidCoordinate,
+    renderDistrictInfoHtml
+} from '../../scripts/districtUtils';
+
+// Function to generate static paths and fetch data for each path
+export async function getStaticPaths() {
+    console.log('[getStaticPaths] Starting generation...');
+    const paramsPath = path.resolve(process.cwd(), 'public/assets/prerender-params.json');
+    const paramsData = await fs.readFile(paramsPath, 'utf-8');
+    const prerenderParams = JSON.parse(paramsData);
+    console.log(`[getStaticPaths] Loaded ${prerenderParams.length} slugs.`);
+
+    const allDistricts = await loadDistrictData();
+    const allSchools = await loadSchoolsData();
+    console.log('[getStaticPaths] Loaded all district and school data.');
+
+    const paths = prerenderParams.map((param) => {
+        const districtSlug = param.districtSlug;
+        const districtData = Object.values(allDistricts).find(d => d.slug === districtSlug);
+
+        if (!districtData) {
+            console.warn(`[getStaticPaths] District not found for slug: ${districtSlug}. Skipping page.`);
+            return null;
+        }
+
+        const districtCdsCode = districtData['CDS Code'];
+        const rawSchoolsData = districtCdsCode ? (allSchools[districtCdsCode.substring(0, 7)] || []) : [];
+        const filteredSchools = rawSchoolsData.filter(school =>
+            school.Status === 'Active' &&
+            String(school['Public Yes/No']).trim().toUpperCase() === 'Y' &&
+            isValidCoordinate(school.Latitude, school.Longitude)
+        );
+
+        return {
+            params: { districtSlug: districtSlug },
+            props: {
+                district: districtData,
+                schools: filteredSchools,
+            },
+        };
+    }).filter(Boolean);
+
+    console.log(`[getStaticPaths] Generated ${paths.length} valid paths.`);
+    return paths;
+}
+
+// Get props passed from getStaticPaths for this specific page instance
+const { district, schools } = Astro.props;
+
+// Prepare variables needed for the template
+const districtName = district.District || 'Unknown District';
+const pageTitle = `${districtName} - District Details`;
+const pageDescription = `Information and schools for ${districtName} in ${district.County || 'California'}. View address, website, grades, and map.`;
+const districtHtml = renderDistrictInfoHtml(district, schools);
+
+// --- FRONTMATTER END ---
+---
+
+{/* --- TEMPLATE START --- */}
+<BaseLayout title={pageTitle} description={pageDescription}>
+    {/* Render the HTML string directly into a div */}
+    <div set:html={districtHtml}></div>
+
+    {/* Client-side script now just calls the initializer function */}
+    <script type="module" define:vars={{ districtData: district, schoolsData: schools }}>
+        // Import the initialization function using root-relative source path
+        import { initializeDistrictMapOnClient } from '/src/scripts/initializeDistrictMap.ts';
+
+        // Call the function, passing the data received from the server
+        initializeDistrictMapOnClient(districtData, schoolsData);
+    </script>
+</BaseLayout>
+{/* --- TEMPLATE END --- */}

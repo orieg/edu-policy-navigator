@@ -106,6 +106,7 @@ const onBeforeRender: OnBeforeRenderAsync = async (pageContext): ReturnType<OnBe
     const pageProps = {
         district: districtData,
         schools: filteredSchools, // Pass the filtered list
+        cdsCode: districtCdsCode, // Explicitly include cdsCode in pageProps
         description: `Information and schools for ${districtData.District} in ${districtData.County || 'California'}. View address, website, grades, and map.`
     };
 

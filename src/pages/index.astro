@@ -1,0 +1,77 @@
+---
+// src/pages/index.astro
+import BaseLayout from '../layouts/BaseLayout.astro';
+// Fetch initial data if needed (currently none needed for index based on old Vike structure)
+const pageTitle = "Unofficial California Education Policies Navigator";
+const pageDescription = "Explore California K-12 school district data and policies.";
+---
+<BaseLayout title={pageTitle} description={pageDescription}>
+    <h1>Welcome!</h1>
+    <div class="search-container">
+        <input type="search" id="district-search" placeholder="Search districts..." />
+        <ul id="search-results" hidden></ul>
+    </div>
+    <div id="info-display">
+        <!-- District info will be loaded here or on district pages -->
+    </div>
+    <div id="map-container">
+        <!-- Map might be initialized here or on district pages -->
+        <div id="map">Loading Map...</div>
+    </div>
+</BaseLayout>
+
+<script>
+    import { setupSearchHandlers } from '../scripts/search';
+    import { initializeMap } from '../scripts/map';
+    import type { DistrictDataMap, SchoolsByDistrictMap } from '../scripts/types';
+
+    async function initializeSearch() {
+        try {
+            console.log('Fetching data for search...');
+            const [districtsRes, schoolsRes] = await Promise.all([
+                fetch('/assets/districts.json'),
+                fetch('/assets/schools_by_district.json')
+            ]);
+
+            if (!districtsRes.ok) {
+                throw new Error(`Failed to fetch districts: ${districtsRes.statusText}`);
+            }
+            if (!schoolsRes.ok) {
+                throw new Error(`Failed to fetch schools: ${schoolsRes.statusText}`);
+            }
+
+            const districtsData: DistrictDataMap = await districtsRes.json();
+            const schoolsData: SchoolsByDistrictMap = await schoolsRes.json();
+            console.log('Data fetched, setting up search handlers...');
+
+            // Pass element IDs and fetched data
+            setupSearchHandlers(
+                'district-search', 
+                'search-results', 
+                // 'info-display', // Optional info display ID if needed by search handlers
+                districtsData,
+                schoolsData
+            );
+
+        } catch (error) {
+            console.error('Failed to initialize search:', error);
+            // Optionally display an error message to the user
+            const searchContainer = document.querySelector('.search-container');
+            if(searchContainer) {
+                searchContainer.innerHTML = '<p class="error">Could not load search functionality.</p>';
+            }
+        }
+    }
+
+    // Initialize map and search when the DOM is ready
+    document.addEventListener('DOMContentLoaded', () => {
+        try {
+            initializeMap('map');
+        } catch (error) {
+             console.error('Failed to initialize map:', error);
+             const mapContainer = document.getElementById('map');
+             if(mapContainer) mapContainer.innerHTML = '<p class="error">Could not load map.</p>';
+        }
+        initializeSearch();
+    });
+</script> 

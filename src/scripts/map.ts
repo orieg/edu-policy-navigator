@@ -2,12 +2,13 @@
 
 import type { DistrictDetails, SchoolDetails } from './types';
 import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+// CSS Imports removed - will be handled in layout or Astro component
+// import 'leaflet/dist/leaflet.css';
 import proj4 from 'proj4';
 import type { Feature, Polygon, MultiPolygon } from 'geojson';
 import { OpenStreetMapProvider } from 'leaflet-geosearch';
-import 'leaflet.markercluster/dist/MarkerCluster.css'; // Import cluster CSS
-import 'leaflet.markercluster/dist/MarkerCluster.Default.css'; // Import default cluster theme
+// import 'leaflet.markercluster/dist/MarkerCluster.css'; // Import cluster CSS
+// import 'leaflet.markercluster/dist/MarkerCluster.Default.css'; // Import default cluster theme
 import 'leaflet.markercluster'; // Import cluster JS (adds L.markerClusterGroup)
 
 console.log('map.ts loaded'); // Add a log to confirm loading
@@ -45,6 +46,14 @@ const layerGroups = new Map<string, { boundary?: L.LayerGroup, districtMarker?: 
 
 // --- Helper Functions ---
 
+// Added from districtUtils.ts for client-side use
+const formatAddress = (street: string, city: string, state: string, zip: string): string => {
+    const parts = [street, city, state, zip].filter(p => p && p !== 'No Data');
+    if (parts.length >= 3) return `${parts[0]}, ${parts[1]}, ${parts[2]} ${parts[3] || ''}`.trim();
+    if (parts.length === 2) return `${parts[0]}, ${parts[1]}`;
+    return parts[0] || 'Address Not Available';
+}
+
 function isValidCoordinate(lat: string | number | null | undefined, lon: string | number | null | undefined): lat is number | string {
     // Basic check: Ensure they are not null/undefined and can be parsed as numbers
     if (lat == null || lon == null) return false;
@@ -69,8 +78,9 @@ function clearMapLayers(mapId: string) {
 /**
  * Initializes a Leaflet map on the given element ID if it doesn't exist.
  * Returns the existing or new map instance.
+ * Renamed from getOrCreateMap for clarity.
  */
-function getOrCreateMap(mapElementId: string): L.Map {
+export function initializeMap(mapElementId: string): L.Map {
     if (mapInstances.has(mapElementId)) {
         return mapInstances.get(mapElementId)!;
     }
@@ -151,7 +161,8 @@ export async function updateMapForDistrict(
 
     let map: L.Map;
     try {
-        map = getOrCreateMap(mapElementId);
+        // Use the newly renamed initializeMap function
+        map = initializeMap(mapElementId);
     } catch (error) {
         console.error(`Failed to get or create map for ${mapElementId}:`, error);
         const mapElement = document.getElementById(mapElementId);
@@ -249,42 +260,39 @@ export async function updateMapForDistrict(
         districtMarkerLayerGroup.addLayer(marker);
         if (!bounds.isValid()) { // If boundary failed, extend bounds with marker
             bounds.extend(districtMarkerCoords);
+        } else {
+            bounds.extend(districtMarkerCoords); // Always extend bounds
         }
-        console.log(`[Map] Added district office marker at [${districtMarkerCoords[0]}, ${districtMarkerCoords[1]}]`);
-    } else {
-        console.warn(`[Map] Could not determine coordinates for district office marker for ${districtData.District}.`);
+        console.log("District office marker added.");
     }
 
-    // 3. Add School Markers TO CLUSTER GROUP
-    let schoolMarkersAdded = 0;
-    schoolsData.forEach(school => {
-        if (isValidCoordinate(school.Latitude, school.Longitude)) {
-            const lat = parseFloat(String(school.Latitude));
-            const lon = parseFloat(String(school.Longitude));
-            const marker = L.marker([lat, lon], {
-                icon: schoolIcon // Use the custom school icon
-            }).bindPopup(`<b>${school.School}</b><br>${school['Street Address'] || ''}`);
-            schoolClusterGroup.addLayer(marker);
-            bounds.extend([lat, lon]); // Extend bounds to include schools
-            schoolMarkersAdded++;
-        } else {
-            console.warn(`Invalid coordinates for school ${school.School}: ${school.Latitude}, ${school.Longitude}`);
-        }
-    });
-    console.log(`Added ${schoolMarkersAdded} school markers to cluster group.`);
-
-    // 4. Fit Map View
-    if (bounds.isValid()) {
-        // Add a small padding to the bounds
-        map.fitBounds(bounds.pad(0.1));
+    // 3. Add School Markers (using MarkerClusterGroup)
+    if (schoolsData && schoolsData.length > 0) {
+        schoolsData.forEach(school => {
+            if (isValidCoordinate(school.Latitude, school.Longitude)) {
+                const lat = parseFloat(String(school.Latitude));
+                const lon = parseFloat(String(school.Longitude));
+                // Format the school address using the helper function
+                const schoolAddress = formatAddress(school['Street Address'], school['Street City'], school['Street State'], school['Street Zip']);
+                const schoolMarker = L.marker([lat, lon], { icon: schoolIcon })
+                    .bindPopup(`<b>${school.School || 'Unknown School'}</b><br>${schoolAddress}`); // Use address here
+                schoolClusterGroup.addLayer(schoolMarker); // Add to cluster group
+                bounds.extend([lat, lon]); // Extend bounds for each school
+            }
+        });
+        console.log(`Added ${schoolClusterGroup.getLayers().length} school markers to cluster group.`);
     } else {
-        console.warn(`Could not determine valid bounds for ${districtData.District}. Using default view.`);
-        // Optionally set a default view if bounds are invalid (e.g., center of district if coords valid)
-        if (isValidCoordinate(districtData.Latitude, districtData.Longitude)) {
-            map.setView([parseFloat(String(districtData.Latitude)), parseFloat(String(districtData.Longitude))], 12); // Zoom closer
-        } else {
-            map.setView(DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM); // Fallback to California center
-        }
+        console.log("No valid school data to add to map.");
+    }
+
+    // 4. Fit map view
+    if (bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [50, 50] }); // Add padding
+        console.log("Map view fitted to bounds.");
+    } else {
+        // Fallback if no bounds could be determined (e.g., no boundary, no valid markers)
+        map.setView(DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM);
+        console.log("No valid bounds found, using default map view.");
     }
 }
 

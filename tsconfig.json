@@ -1,4 +1,5 @@
 {
+    "extends": "astro/tsconfigs/base",
     "compilerOptions": {
         "target": "ESNext",
         "module": "ESNext",
@@ -10,7 +11,8 @@
         "resolveJsonModule": true,
         "isolatedModules": true,
         "noEmit": true,
-        "jsx": "react-jsx",
+        "jsx": "preserve",
+        "jsxImportSource": "astro",
         "lib": [
             "ESNext",
             "DOM",
@@ -27,10 +29,9 @@
         }
     },
     "include": [
-        "src",
-        "renderer",
-        "pages",
-        "types",
+        "src/**/*.ts",
+        "src/**/*.astro",
+        "astro.config.mjs",
         "vite.config.ts"
     ],
     "exclude": [

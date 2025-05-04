@@ -22,9 +22,9 @@ declare global {
             // Property available on server-side
             // someAsyncProps?: string;
 
-            // Route params (e.g., for /districts/@cdsCode)
+            // Route params (e.g., for /districts/@districtSlug)
             routeParams?: {
-                cdsCode?: string;
+                districtSlug?: string;
             };
 
             // Custom title property (if set by hooks/pages)

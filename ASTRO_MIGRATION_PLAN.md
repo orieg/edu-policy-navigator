@@ -11,7 +11,7 @@
 
 ## Phase 1: Astro Setup & Basic Configuration
 
-- [x] **1.1: Install Astro:**
+- [ ] **1.1: Install Astro:**
     - Run `pnpm add astro`.
 - [ ] **1.2: Create Astro Configuration:**
     - Create `astro.config.mjs` at the project root.
@@ -150,15 +150,12 @@
 
 - [ ] **4.1: Create Dynamic District Page:**
     - Create `src/pages/districts/[districtSlug].astro`. (The `[...]` denotes a dynamic route parameter).
-- [x] **4.2: Implement `getStaticPaths`:**
+- [ ] **4.2: Implement `getStaticPaths`:**
     - In the frontmatter of `src/pages/districts/[districtSlug].astro`, define and export `getStaticPaths`.
     - This function will replace `+onBeforePrerenderStart.ts`.
     - Load the district slugs from `public/assets/prerender-params.json`.
-- [ ] **4.3: Implement `getStaticProps`:**
-    - In the frontmatter of `src/pages/districts/[districtSlug].astro`, define and export `getStaticProps`.
-    - This function will replace `+onBeforeRender.ts`.
-    - Load the data for the specific district based on the `districtSlug` parameter.
-    - Return an object containing the `props` for the page template.
+    - Return an array where each item defines the `params` (containing `districtSlug`) for one page to be generated.
+    - Optionally, load the data for *each* district within `getStaticPaths` and pass it as `props` to avoid fetching again in the page template. This mirrors the `+onBeforeRender` logic but happens at build time for all pages.
       ```astro
       ---
       // src/pages/districts/[districtSlug].astro
@@ -371,25 +368,26 @@
 
 ## Phase 5: Client-Side Script Integration
 
-- [x] **5.1: Adapt Map Initialization:**
+- [ ] **5.1: Adapt Map Initialization:**
     - Modify `src/scripts/map.ts` (`updateMapForDistrict`).
     - Ensure it can be called from Astro page `<script>` tags.
     - Pass necessary data (`districtData`, `schoolsData`, `mapElementId`) using `define:vars` in the `<script>` tag as shown above.
     - Ensure Leaflet library and CSS are loaded (either via global layout or imported directly in the script).
-- [x] **5.2: Adapt Search Initialization:**
+- [ ] **5.2: Adapt Search Initialization:**
     - Modify `src/scripts/search.ts` (`setupSearchHandlers`).
     - Ensure it's called from the index page (`src/pages/index.astro`) script tag.
     - Make sure it correctly fetches necessary data (`districts.json`, `schools_by_district.json`) relative to the `public/` directory (e.g., `fetch('/assets/districts.json')`).
     - Update the navigation logic in `selectDistrict` to use standard `window.location.href` pointing to the static paths (e.g., `/districts/${slug}`).
-- [x] **5.3: Handle Other Client-Side JS:**
+- [ ] **5.3: Handle Other Client-Side JS:**
     - Review any other JS initialization logic that was in `renderer/+onRenderClient.ts` and integrate it into the relevant Astro page or component scripts.
 
 ## Phase 6: Testing & Verification
 
-- [x] **6.1: Test Development Server (`astro dev`):**
+- [ ] **6.1: Test Development Server (`astro dev`):**
     - Run `pnpm run dev`.
     - Verify the homepage loads and search works.
     - Navigate to a district page (it should be rendered on demand in dev). Verify data and map load correctly.
+    - Check browser console for errors.
 - [ ] **6.2: Test Production Build (`astro build`):**
     - Run `pnpm run build`.
     - Inspect the build output directory (`dist/` by default).
