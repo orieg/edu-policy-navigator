@@ -40,7 +40,7 @@ nav a {
 main {
     padding: 20px;
     max-width: 1200px;
-    margin: 20px auto;
+    margin: 5px auto;
     /* Keep horizontal centering */
     width: 100%;
     /* Ensure main takes up width within flex */
@@ -79,7 +79,7 @@ footer {
     /* column-gap: 20px; */
     display: grid;
     /* Use Grid for dynamic columns */
-    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
     /* Responsive columns */
     gap: 20px;
     /* Gap between grid items */
@@ -264,4 +264,19 @@ footer {
     /* display: flex; */
     /* justify-content: center; */
     /* align-items: center; */
+}
+
+/* Disclaimer Block Styles */
+.disclaimer {
+    font-size: 0.9em;
+    margin: 5px auto;
+    /* Top/bottom margin, horizontal auto centering */
+    background-color: #e3fcfedd;
+    border: 1px solid #eee;
+    padding: 10px;
+    max-width: 1200px;
+    /* Match main content width */
+    text-align: center;
+    box-sizing: border-box;
+    /* Include padding/border in width calculation */
 }

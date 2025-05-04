@@ -76,22 +76,22 @@ function Page(pageProps: DistrictPageProps) {
   return `
     <article class="district-page" data-cds-code="${cdsCode}">
       <div class="district-top-row">
-        <div class="info-card">
+      <div class="info-card">
           <h2>${district.District || 'Unknown District'}</h2>
           <div class="district-links">
              <a href="${dashboardLink}" target="_blank" rel="noopener noreferrer">Dashboard</a> |
              <a href="https://www.cde.ca.gov/schooldirectory/details?cdscode=${cdsCode}" target="_blank" rel="noopener noreferrer">CDE Profile</a> |
              ${formatWebsiteLink(district.Website)}
-          </div>
-          <p><strong>Status:</strong> ${district.Status || 'N/A'}</p>
-          <p><strong>Type:</strong> ${district['Entity Type'] || 'N/A'}</p>
-          <p><strong>Grades:</strong> ${gradeSpan}</p>
-          <p><strong>Address:</strong> ${districtAddress}</p>
-          <p><strong>Phone:</strong> ${district.Phone || 'N/A'}</p>
         </div>
+        <p><strong>Status:</strong> ${district.Status || 'N/A'}</p>
+        <p><strong>Type:</strong> ${district['Entity Type'] || 'N/A'}</p>
+        <p><strong>Grades:</strong> ${gradeSpan}</p>
+        <p><strong>Address:</strong> ${districtAddress}</p>
+        <p><strong>Phone:</strong> ${district.Phone || 'N/A'}</p>
+      </div>
 
         <div class="district-map-container">
-          <div id="info-map-${cdsCode}">Loading Map...</div>
+      <div id="info-map-${cdsCode}">Loading Map...</div>
         </div>
       </div>
 

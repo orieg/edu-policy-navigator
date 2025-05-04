@@ -86,11 +86,15 @@ const onRenderHtml: OnRenderHtmlAsync = async (pageContext):
         }
 
         </header>
-        <main id="page-view">${dangerouslySkipEscape(pageHtml)}</main> {/* Render page content */}
+
+        <div class="disclaimer">
+            <strong>Disclaimer:</strong> Data is based on publicly available sources from the CDE and other agencies. Policy information is synthesized and may require verification against official documents.
+        </div>
+
+        <main id="page-view">${dangerouslySkipEscape(pageHtml)}</main> 
         <footer>
             <p>&copy; ${String(new Date().getFullYear())} ${documentProps.title}. All rights reserved.</p>
         </footer>
-        {/* Inject pageProps for the client, providing a fallback */}
         <script id="page-props" type="application/json">${dangerouslySkipEscape(JSON.stringify(pageProps || {}))}</script>
         <!-- Leaflet JS (consider bundling with Vite later) -->
         <!-- <script src="/leaflet/leaflet.js"></script> -->

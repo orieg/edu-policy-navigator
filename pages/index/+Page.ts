@@ -16,11 +16,6 @@ function Page(pageProps: PageProps) {
         Search for a district below to view details, schools, and relevant policy information.
       </p>
 
-      <!-- Disclaimer/Notes Placeholder -->
-      <div class="disclaimer" style="font-size: 0.9em; margin: 15px 0; background-color: #f9f9f9; border: 1px solid #eee; padding: 10px;">
-          <strong>Disclaimer:</strong> Data is based on publicly available sources from the CDE and other agencies. Policy information is synthesized and may require verification against official documents.
-      </div>
-
       <!-- Search Section -->
       <div class="search-container">
         <label for="district-search-input"><strong>Search for a District:</strong></label>
