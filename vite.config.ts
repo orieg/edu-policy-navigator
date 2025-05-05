@@ -1,7 +1,6 @@
 import { defineConfig } from 'vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import vike from 'vike/plugin'; // Import Vike plugin
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,7 +9,8 @@ const __dirname = path.dirname(__filename);
 export default defineConfig({
     // root: __dirname, // Let Vite default to project root
     plugins: [
-        vike() // Add Vike plugin
+        // Remove Vike plugin usage
+        // vike() 
     ],
     // publicDir: false, // Let Vike/Vite handle public dir defaults
     resolve: {

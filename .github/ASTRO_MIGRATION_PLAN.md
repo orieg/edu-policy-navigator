@@ -48,10 +48,10 @@
     - Create `src/components/` (for reusable UI parts, if any)
     - Create `src/styles/`
     - Create `src/scripts/` (for client-side JS)
-- [ ] **2.2: Move Existing Code:**
+- [x] **2.2: Move Existing Code:**
     - Move contents of the current `src/` (like `map.ts`, `search.ts`, `types.ts` etc.) into `src/scripts/`. Update internal imports within these files if needed.
     - Move global CSS (`pages/style.css`) into `src/styles/global.css`.
-- [ ] **2.3: Verify `public/` Directory:**
+- [x] **2.3: Verify `public/` Directory:**
     - Ensure all static assets needed at runtime (JSON data, GeoJSON boundaries, images, Leaflet assets if not bundled) remain in the `public/` directory. Astro serves this directory statically.
 
 ## Phase 3: Core Layout & Index Page
@@ -395,19 +395,19 @@
     - Run `pnpm run build`.
     - Check the output in the `dist/` folder. Ensure `dist/index.html` and `dist/districts/[districtSlug]/index.html` files are generated.
     - Verify the build command completes without errors.
-- [ ] **6.3: Test Built Site Locally:**
+- [x] **6.3: Test Built Site Locally:**
     - Run `pnpm run preview`.
     - Open the preview URL.
 
 ## Phase 7: Cleanup
 
-- [ ] **7.1: Remove Vike Files & Dependencies:**
+- [x] **7.1: Remove Vike Files & Dependencies:**
     - Delete the old `pages/` directory (Vike structure).
     - Delete the `renderer/` directory.
     - Delete `types/vike.d.ts`.
     - Run `pnpm remove vike vike-types` (or similar, check exact package names).
     - Remove Vike plugin from `vite.config.ts` if it exists and isn't needed by Astro's Vite integration.
-- [ ] **7.2: Remove Old Configs/Scripts:**
+- [x] **7.2: Remove Old Configs/Scripts:**
     - Clean up any leftover configuration or scripts related solely to Vike.
 
 --- 
