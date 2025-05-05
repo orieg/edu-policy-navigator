@@ -120,6 +120,10 @@ const pageBreadcrumbs = [
         import { OpenStreetMapProvider } from "leaflet-geosearch";
         import "leaflet.markercluster"; // Import for side effects
 
+        // --- Set Leaflet Image Path ---
+        // Point Leaflet to the correct location for default marker icons
+        L.Icon.Default.imagePath = "/images/leaflet/";
+
         // --- Extend Leaflet namespace for MarkerCluster ---
         // This assumes leaflet.markercluster.js is loaded globally (e.g., via CDN)
         // and attaches its functionality to the L object.
