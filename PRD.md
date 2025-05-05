@@ -56,7 +56,7 @@ This project aims to create an accessible, easy-to-understand resource for navig
 
 **6. Technology Stack**
 
-* **Frontend:** HTML, CSS, TypeScript, JavaScript (ES Modules)
+* **Frontend:** HTML, CSS, TypeScript, JavaScript (ES Modules), **Astro**
 * **LLM (In-Browser):** WebLLM (mlc-ai)
 * **Graph DB (In-Browser):** KuzuDB WASM
 * **Data Pipeline:** Node.js/TypeScript (for scraping, processing, graph building), KuzuDB Node.js Client, Configuration management (e.g., JSON/YAML parsing).

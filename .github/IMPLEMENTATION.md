@@ -29,11 +29,7 @@ This document outlines the step-by-step process for building the Multi-District 
     │   │   └── main.ts            # Main pipeline execution script
     │   ├── tsconfig.json
     │   └── config.json          # Configuration for districts/schools
-    ├── public/                    # Static assets served directly (replaces frontend/)
-    │   ├── index.html
-    │   ├── css/
-    │   │   └── style.css
-    │   ├── js/                    # Compiled JS output from src/
+    ├── public/                    # Static assets served directly by Astro
     │   ├── assets/
     │   │   ├── db/
     │   │   │   └── manifest.json
@@ -41,25 +37,32 @@ This document outlines the step-by-step process for building the Multi-District 
     │   │   │   │   └── policy_graph.db
     │   │   │   └── other_district/
     │   │   │       └── policy_graph.db
+    │   │   ├── boundaries/        # Directory for split GeoJSON boundaries
+    │   │   │   └── <CDS_CODE>.geojson
+    │   │   ├── districts.json     # List of districts for selector
     │   │   └── wasm/              # KuzuDB/WebLLM files (or use CDN)
-    │   │   └── data/              # Optional: Pre-exported JSON
-    │   │       └── srvusd_policies.json
-    │   │       └── other_district_policies.json
-    ├── src/                       # Frontend source code (TypeScript)
-    │   ├── main.ts                # Entry point for frontend logic
-    │   ├── policyBrowser.ts
-    │   ├── chatUi.ts
-    │   ├── kuzudbHandler.ts
-    │   ├── webllmHandler.ts
-    │   ├── ragController.ts
-    │   └── types.ts               # Shared types
+    │   └── # Other static files (favicon, robots.txt, etc.)
+    ├── src/                       # Frontend source code (Astro + TypeScript)
+    │   ├── components/            # Reusable Astro/UI components (e.g., ChatWindow.astro, PolicyItem.astro)
+    │   ├── layouts/               # Base page layouts (e.g., MainLayout.astro)
+    │   ├── pages/                 # Astro pages (e.g., index.astro)
+    │   ├── styles/                # CSS/SCSS files
+    │   ├── lib/                   # Core logic modules (TypeScript)
+    │   │   ├── kuzudbHandler.ts
+    │   │   ├── webllmHandler.ts
+    │   │   ├── ragController.ts
+    │   │   ├── policyBrowserHelper.ts # Renamed/refactored from policyBrowser.ts
+    │   │   ├── state.ts             # Optional: For managing shared state
+    │   │   └── types.ts             # Shared types
+    │   └── env.d.ts               # Astro environment types
     ├── .gitignore
     ├── LICENSE
     ├── README.md
     ├── PRD.md
+    ├── astro.config.mjs           # Astro configuration file
     ├── package.json
     ├── pnpm-lock.yaml
-    └── tsconfig.json              # Root TypeScript config (can extend)
+    └── tsconfig.json              # Root TypeScript config (Astro typically handles this)
     ```
 * **1.4. Create Configuration File (`pipeline/config.json`):** (Structure remains the same, just moved)
     ```json
@@ -81,7 +84,7 @@ This document outlines the step-by-step process for building the Multi-District 
       // Add more districts here
     ]
     ```
-* **1.5. Setup Build Process:** Configure `tsconfig.json` for both `pipeline` and `src` (frontend) and potentially a build tool (like Vite, esbuild, or tsc directly) in `package.json` scripts to compile TypeScript to JavaScript (e.g., outputting to `public/js`).
+* **1.5. Setup Build Process:** Configure `tsconfig.json` for `pipeline`. Astro handles the frontend build configuration via `astro.config.mjs` and its own `tsconfig.json` (often extending the root one). Ensure `package.json` scripts include `astro dev`, `astro build`, `astro preview`.
 
 **Phase 2: Data Pipeline Backend (Node.js/TypeScript)**
 
@@ -113,11 +116,9 @@ This document outlines the step-by-step process for building the Multi-District 
     * Modify to iterate through each district in `config.json`.
     * For each district:
         * Define the output DB path using the district `id` (e.g., `dbOutputPath = \`./dist/pipeline/output_db/\${district.id}/policy_graph.db\``). Create the directory if needed.
-        * Use the KuzuDB Node.js client (`kuzu` npm package): `const db = new kuzu.Database(dbOutputPath);`.
-        * Connect: `const conn = new kuzu.Connection(db);`.
-        * Create the schema using Cypher queries via `conn.query()`.
-        * Load *only the data* corresponding to the current district `id` from the **generated CSV files (e.g., `pipeline/data/SheetName.csv`)** or synthesized data files into this specific KuzuDB instance using `conn.query()` with appropriate Cypher `LOAD CSV` or parameter binding.
-    * After processing all districts, generate `manifest.json` listing districts and their relative DB paths (for the frontend, e.g., `assets/db/srvusd/policy_graph.db`). Save this manifest to a location accessible by the frontend build process (e.g., `./dist/pipeline/manifest.json`).
+        * Use the KuzuDB Node.js client (`kuzu` npm package).
+        * Connect and create schema/load data for the *specific district*.
+    * After processing all districts, generate `manifest.json` listing districts and their relative DB paths (e.g., `assets/db/srvusd/policy_graph.db`). Save this manifest to the pipeline output (e.g., `./dist/pipeline/manifest.json`). The GitHub Action will copy this to the correct `public/assets/db/` location later. **Also ensure the `districts.json` generated in step 2.1 is placed or copied into `public/assets/`.**
 
 **Phase 3: GitHub Action Workflow (`.github/workflows/data_pipeline.yml`)**
 
@@ -127,55 +128,59 @@ This document outlines the step-by-step process for building the Multi-District 
     * **Prepare Data:** Run `pnpm run prepare` (which includes `convert:xlsx`, `prepare:districts`, and `prepare:boundaries`). Assumes source XLSX and GeoJSON are present.
     * Run pipeline build: `pnpm run build:pipeline` (or equivalent script from `package.json`).
     * Execute the pipeline: `pnpm run start:pipeline` (or `node ./dist/pipeline/main.js`).
-    * **Copy Output:** Modify the copy step to move generated district DB directories and the `manifest.json` file from the pipeline's output to `public/assets/db/`. Copy necessary WASM/model files to `public/assets/wasm`. **Note:** `districts.json` is already in `public/assets` by the `prepare:districts` script.
+    * **Copy Output:** Modify the copy step to move generated district DB directories, the `manifest.json`, and `districts.json` from the pipeline's output/prepared locations to `public/assets/`. Ensure boundary files are also placed correctly in `public/assets/boundaries/`. Copy necessary WASM/model files to `public/assets/wasm`.
         ```yaml
         - name: Copy Pipeline Output to Public Assets
           run: |
-            mkdir -p public/assets/db
-            cp -r ./dist/pipeline/output_db/* public/assets/db/
-            cp ./dist/pipeline/manifest.json public/assets/db/
-            # Ensure districts.json is present from prepare step
+            mkdir -p public/assets/db public/assets/boundaries
+            cp -r ./dist/pipeline/output_db/* public/assets/db/ # Copy district DBs
+            cp ./dist/pipeline/manifest.json public/assets/db/  # Copy manifest
+            # Ensure districts.json from prepare step is in public/assets/
+            cp pipeline/data/districts.json public/assets/districts.json # Adjust source path if needed
+            # Ensure boundary files from prepare step are in public/assets/boundaries/
+            cp pipeline/data/boundaries/* public/assets/boundaries/ # Adjust source path if needed
             # Add steps to copy WASM/model files if needed
         ```
-    * Configure the frontend build step (if separate): `pnpm run build:frontend`. **Note:** Vite build will automatically include files from `public/`.
-    * Update artifact upload path to `./dist/frontend` (Vite's build output).
-    * Configure GitHub Pages action (`actions/deploy-pages`) to deploy from the `./dist/frontend` artifact.
+    * Configure the frontend build step: `pnpm run build` (assuming this runs `astro build`). Astro build automatically includes files from `public/`.
+    * Update artifact upload path to `./dist` (Astro's default build output directory).
+    * Configure GitHub Pages action (`actions/deploy-pages`) to deploy from the `./dist` artifact.
 
-**Phase 4: Frontend Static Website (TypeScript, HTML, CSS)**
+**Phase 4: Frontend Static Website (Astro, TypeScript)**
 
-* **4.1. Update HTML (`public/index.html`):**
-    * Ensure it includes the compiled JavaScript entry point (e.g., `<script type="module" src="/js/main.js"></script>`).
-    * Add district selector and loading indicators as previously defined.
-* **4.2. Update CSS (`public/css/style.css`):** (Same as before)
-* **4.3. Implement Frontend Logic (`src/*.ts` -> compiled to `public/js/*.js`):**
-    * **`src/main.ts`:**
-        * Modify `initializeApp` to only fetch `districts.json` initially (`fetchDistrictData`).
-        * Remove global state for the full boundary GeoJSON.
-        * Modify `displayDistrictInfo`:
-            * Fetch the specific boundary file (`/assets/boundaries/<CDS_CODE>.geojson`) on demand when a district is selected.
-            * If fetch is successful, parse the Feature and display using `L.geoJSON`.
-            * Use Lat/Lon or geosearch as fallbacks if the boundary file fetch fails or boundary is missing.
-            * Update map initialization logic to handle both boundary layers and point markers.
-        * Import necessary handlers (`kuzudbHandler`, `webllmHandler`, `policyBrowser`, `chatUi`, `ragController`).
-        * Global variables: `let currentDistrictId: string | null = null; let kuzuDb: KuzuDatabase | null = null; let webLlmEngine: WebLLMEngine | null = null;` (Use appropriate types from handlers/packages).
-        * `async function initializeApp()`: Fetch `assets/db/manifest.json`, populate selector, add listener, initialize WebLLM (`webLlmEngine = await webllmHandler.init(...)`).
-        * `async function handleDistrictChange(event: Event)`: Get selected ID, show loading, clear UI, get `dbPath`, re-initialize KuzuDB (`kuzuDb = await kuzudbHandler.init(dbPath, ...)`), load browser data (`await policyBrowser.loadDistrictData(currentDistrictId, kuzuDb)`), hide loading.
-        * `async function handleChatSubmit(userQuery: string)`: Check initializations, call `ragController.processQuery(userQuery, kuzuDb!, webLlmEngine!, chatUi.addMessage)`.
-        * Attach listeners and call `initializeApp()`.
-    * **`src/kuzudbHandler.ts`:**
-        * Use KuzuDB WASM bindings (e.g., import from the correct path/package).
-        * `init` function takes `dbPath` and returns a KuzuDB instance/connection wrapper. Handle loading the DB file buffer (`fetch`).
-    * **`src/webllmHandler.ts`:**
-        * Use WebLLM library (e.g., `@mlc-ai/web-llm`).
-        * `init` function initializes and returns the chat module/engine. Handle model loading progress.
-    * **`src/policyBrowser.ts`:**
-        * `loadDistrictData` function fetches initial data (either pre-exported JSON or via `kuzuDb` queries).
-        * `clearContent` function.
-    * **`src/chatUi.ts`:**
-        * `addMessage`, `clearMessages` functions.
-    * **`src/ragController.ts`:**
-        * `processQuery` function takes query, kuzuDb, webLlmEngine, addMessage callback. Implements Text-to-Cypher (using `webLlmEngine`), KuzuDB query execution (using `kuzuDb`), and final answer generation (using `webLlmEngine`).
-* **4.4 Ensure Type Safety:** Use TypeScript interfaces/types (`src/types.ts`) for data structures (manifest, policy data, etc.).
+* **4.1. Update Astro Components/Pages (`src/`):**
+    * Define base layouts in `src/layouts/` (e.g., `MainLayout.astro`) including common head elements, navigation, footer.
+    * Create the main page in `src/pages/` (e.g., `index.astro`). This page will contain the primary UI elements:
+        * District selector (populates from `/assets/districts.json`).
+        * Map display area (integrating Leaflet).
+        * Policy browsing section.
+        * Chat interface component.
+    * Develop reusable UI components in `src/components/` (e.g., `DistrictSelector.astro`, `ChatWindow.astro`, `MapDisplay.astro`, `PolicyBrowser.astro`). These components might use client-side scripts (`<script>`) for interactivity.
+* **4.2. Update CSS (`src/styles/`):** Use global CSS or component-scoped styles as preferred.
+* **4.3. Implement Frontend Logic (Client-side Scripts & Modules in `src/lib/`):**
+    * **State Management:** Decide on a state management approach if needed (e.g., simple module state in `src/lib/state.ts`, Astro Stores, or Nano Stores) to hold `currentDistrictId`, `kuzuDb` instance, `webLlmEngine` instance, loading states, etc.
+    * **Initialization (`index.astro` or layout script):**
+        * Fetch `/assets/db/manifest.json` on initial load.
+        * Populate the district selector.
+        * Add event listener to the selector.
+        * Initialize WebLLM (`webLlmEngine = await webllmHandler.init(...)` from `src/lib/webllmHandler.ts`). Trigger this early but manage loading state.
+    * **District Change Handler (in `DistrictSelector.astro` or `index.astro` script):**
+        * Get selected district ID and update global state (`currentDistrictId`).
+        * Show loading indicators.
+        * Clear previous district's UI elements (policy browser, chat).
+        * Retrieve the corresponding `dbPath` from the manifest.
+        * Re-initialize KuzuDB (`kuzuDb = await kuzudbHandler.init(dbPath, ...)` from `src/lib/kuzudbHandler.ts`). Update global state.
+        * Fetch and display the specific district boundary (`/assets/boundaries/<CDS_CODE>.geojson`).
+        * Load data for the policy browser (`await policyBrowserHelper.loadDistrictData(currentDistrictId, kuzuDb)`).
+        * Hide loading indicators.
+    * **Chat Interaction (`ChatWindow.astro` script):**
+        * Get user input.
+        * Call `ragController.processQuery(userQuery, kuzuDb!, webLlmEngine!, addMessageCallback)` from `src/lib/ragController.ts`. Ensure `kuzuDb` and `webLlmEngine` are initialized and passed correctly from the shared state.
+        * The `addMessageCallback` would update the chat UI within the Astro component.
+    * **`src/lib/kuzudbHandler.ts`:** (Similar logic as before) Use KuzuDB WASM bindings. `init` function takes `dbPath`, fetches the DB file, and returns a KuzuDB instance/wrapper.
+    * **`src/lib/webllmHandler.ts`:** (Similar logic as before) Use WebLLM library. `init` function initializes and returns the engine. Handle progress.
+    * **`src/lib/policyBrowserHelper.ts`:** Refactored logic for fetching/displaying policy data, likely called by the main page/component after KuzuDB is ready for the selected district. Takes `kuzuDb` instance.
+    * **`src/lib/ragController.ts`:** (Similar logic as before) Implements Text-to-Cypher, KuzuDB query, and answer generation logic, taking `kuzuDb` and `webLlmEngine` instances.
+* **4.4 Ensure Type Safety:** Use TypeScript interfaces/types (`src/lib/types.ts`) consistently across modules and components. Leverage Astro's TypeScript integration.
 
 **Phase 5: Deployment**
 
@@ -187,7 +192,7 @@ This document outlines the step-by-step process for building the Multi-District 
 
 * **6.1. Pipeline Testing:** Verify data prep steps (CSV conversion, district JSON, boundary splitting) execute correctly.
 * **6.2. Frontend Testing:** Test district selection, dynamic loading (monitor network tab for DB file loading), chat functionality per district, context switching. Use browser dev tools to check for errors and performance.
-* **6.3. Build/Toolchain:** Ensure the TypeScript compilation and build process works reliably.
+* **6.3. Build/Toolchain:** Ensure the Astro build process (`astro build`) works reliably and integrates the TypeScript modules correctly.
 * **6.4. Cross-Browser/Device Testing:** (Same as before)
 * **6.5. Prompt Refinement:** (Same as before)
 * **6.6. Optimization:** Focus on DB loading time and frontend performance.
