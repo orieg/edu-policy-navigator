@@ -384,23 +384,20 @@
 - [x] **5.3: Handle Other Client-Side JS:**
     - Review any other JS initialization logic that was in `renderer/+onRenderClient.ts` and integrate it into the relevant Astro page or component scripts.
 
-## Phase 6: Testing & Verification
+## Phase 6: Testing & Refinement
 
-- [x] **6.1: Test Development Server (`astro dev`):**
+- [x] **6.1: Test Development Server:**
     - Run `pnpm run dev`.
-    - Verify the homepage loads and search works.
-    - Navigate to a district page (it should be rendered on demand in dev). Verify data and map load correctly.
-- [ ] **6.2: Test Production Build (`astro build`):**
+    - Verify the index page loads and search/map components initialize (if included on index).
+    - Navigate to a few district pages and verify content, layout, and map functionality.
+    - Debug any console errors or rendering issues.
+- [x] **6.2: Test Production Build:**
     - Run `pnpm run build`.
-    - Inspect the build output directory (`dist/` by default).
-    - **Verify SSG:** Confirm that HTML files for districts exist (e.g., `dist/districts/some-slug-12345/index.html`).
-    - Check build logs for errors.
-- [ ] **6.3: Test Preview Server (`astro preview`):**
+    - Check the output in the `dist/` folder. Ensure `dist/index.html` and `dist/districts/[districtSlug]/index.html` files are generated.
+    - Verify the build command completes without errors.
+- [ ] **6.3: Test Built Site Locally:**
     - Run `pnpm run preview`.
-    - Access the site in the browser.
-    - Navigate to a district page.
-    - **Verify SSG:** Use browser developer tools (View Source). The initial HTML response should contain the fully rendered content for the district.
-    - **Verify Hydration:** Confirm client-side JavaScript (map) initializes correctly.
+    - Open the preview URL.
 
 ## Phase 7: Cleanup
 

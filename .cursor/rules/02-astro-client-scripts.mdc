@@ -1,0 +1,162 @@
+---
+description: Guidelines for ensuring client-side JavaScript reliability on dynamic Astro pages in preview/production builds.
+globs: ["*.astro"]
+alwaysApply: false
+---
+# **Astro Client-Side Script Guidelines (Prioritizing Standard Imports)**
+
+## **Goal**
+
+The objective is to ensure client-side JavaScript functions correctly and reliably, prioritizing Astro's recommended practices while providing a fallback for specific challenges encountered on dynamic routes in production-like environments.
+
+## **Mandatory Testing**
+
+**Crucial:** Regardless of the method chosen, **always** verify client-side script functionality using the production build and preview server, especially for dynamic routes:
+
+1. Run pnpm run build  
+2. Run pnpm run preview  
+3. Thoroughly test the page and script functionality in the browser pointed to the preview server URL. This step is essential to confirm whether the standard approach works or if the fallback is necessary.
+
+## **Scope**
+
+These guidelines cover adding client-side <script> tags within .astro components, with specific considerations for **dynamic Astro routes** (files containing [brackets] or ...spreads in their names, e.g., src/pages/posts/[slug].astro).
+
+## **Executive Summary & Recommendation**
+
+**Primary Recommendation (Best Practice):** Utilize **Standard Astro Script Imports** (<script> without is:inline) for client-side JavaScript whenever possible, including on dynamic routes. This leverages Astro's built-in bundling, optimization, code-splitting, and dependency management via NPM, aligning with official best practices.
+
+**Fallback Solution:** If, *and only if*, rigorous testing using pnpm run build && pnpm run preview reveals that standard script imports consistently fail to load (e.g., resulting in 404 errors) specifically on **dynamic routes**, *then* consider the **Inline Script with Globally Loaded Dependencies** approach as a targeted fallback solution for those specific routes.
+
+**Key Principle:** Always attempt the standard method first. Only resort to the fallback after confirming the standard method fails in the preview/production environment for your specific dynamic route.
+
+## **Primary Recommendation: Standard Astro Imports (Default Approach)**
+
+This is the standard and officially recommended way to add client-side JavaScript in Astro.
+
+* **Mechanism:** Use <script> tags without the is:inline directive. Import local JavaScript/TypeScript files or dependencies from node_modules using standard import statements.  
+  ```
+  ---
+  // src/pages/posts/[slug].astro  
+  import { someData } from '../../utils/dataHelper';  
+  const pageData = someData(Astro.params.slug);  
+  ---  
+  <script>  
+    import { setupInteractiveComponent } from '../../scripts/interactiveComponent';  
+    import confetti from 'canvas-confetti'; // Import from node_modules
+
+    // Use data passed via data attributes (see Data Passing section below)  
+    const dataElement = document.getElementById('page-data-container');  
+    const initialData = JSON.parse(dataElement?.dataset.pageData || '{}');
+
+    console.log('Data received:', initialData);  
+    setupInteractiveComponent(initialData);
+
+    // Example using imported dependency  
+    document.getElementById('celebrate-btn')?.addEventListener('click', () => {  
+      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });  
+    });  
+  </script>
+
+  {/* Example passing data via data-* attribute */}  
+  <div id="page-data-container" data-page-data={JSON.stringify(pageData)}>  
+    </div>  
+  <button id="celebrate-btn">Celebrate!</button>
+  ```
+
+* **Benefits:**  
+  * Leverages Astro's/Vite's bundling, code-splitting, and optimization.  
+  * Supports TypeScript out-of-the-box.  
+  * Manages dependencies via npm/pnpm/yarn.  
+  * Scripts are processed and optimized for production.  
+  * Avoids script duplication if the component is used multiple times.  
+  * Aligns with modern JavaScript module practices.  
+* **Applicability:** Recommended for **all routes (static and dynamic)** as the first approach.  
+* **Requirement:** Must be thoroughly tested using pnpm run build && pnpm run preview, especially on dynamic routes, to ensure reliability in the production environment.
+
+## **Potential Issue & When to Consider the Fallback**
+
+While the standard import method is preferred, we have observed instances where scripts added this way on **dynamic routes** work correctly in the development server (pnpm run dev) but fail to load (causing 404 errors for the script asset) when served by the preview server (pnpm run preview) after a production build.
+
+This seems related to how static assets for dynamically generated pages are sometimes mapped or served in the production build environment.
+
+**Decision Point:** If you encounter these consistent 404 errors for your scripts *only* on dynamic routes *only* in the preview environment after confirming your import paths and build process are otherwise correct, you may need to employ the fallback solution below for that specific dynamic route.
+
+## **Fallback Solution: Inline Script + Globally Loaded Dependencies**
+
+Use this method *only* as a workaround if the **Primary Recommendation (Standard Astro Imports)** demonstrably fails for a specific dynamic route during build + preview testing.
+
+This approach bypasses Astro's script processing/bundling for the specific script block, ensuring the code is directly embedded in the HTML. It relies on dependencies being loaded globally *before* the inline script runs.
+
+**Core Steps:**
+
+1. **Use is:inline:** Add the is:inline directive to the <script> tag in your dynamic .astro file.  
+   ```
+   <script is:inline>  
+     // All necessary JS code MUST be placed here directly.  
+     // Cannot use `import` or `export` statements.
+
+     function initializeMap(L, proj4 /*...*/) { /* ... function body ... */ }
+
+     document.addEventListener('DOMContentLoaded', () => {  
+       const mapElement = document.getElementById('map');  
+       // Check for global variables from CDN/local copy  
+       if (mapElement && typeof L !== 'undefined' && typeof proj4 !== 'undefined') {  
+         // Check for data if needed (see Data Passing below)  
+         const dataElement = document.getElementById('map-data');  
+         if (dataElement?.textContent) {  
+            try {  
+              const data = JSON.parse(dataElement.textContent);  
+              initializeMap(L, proj4, data); // Pass data if needed  
+            } catch (e) { console.error('Failed to parse map data:', e); }  
+         } else {  
+            initializeMap(L, proj4); // Initialize without extra data  
+         }  
+       } else {  
+         console.error('Map initialization failed: Dependencies (L, Proj4) or map element not found.');  
+       }  
+     });  
+   </script>
+   ```
+
+2. **Load Dependencies Globally:** Choose **one** method (CDN preferred). Load necessary CSS via <link> tags.  
+   * **Method A: Via CDN (Preferred):** Simple, uses specific versions, CDN caching. Requires internet. Add <script>/<link> tags to your main layout's <head>.  
+   * **Method B: Via Local node_modules Copy (High Maintenance):** Copy needed distribution files (.js, .css, images) from node_modules to public/vendor/. **Requires manual re-copying every time the dependency is updated via pnpm.** High risk of outdated code. Use standard <script>/<link> tags in the layout <head> pointing to these copied files (e.g., /vendor/leaflet/leaflet.js).  
+3. **Remove Conflicting imports:** Ensure any import statements for these globally loaded libraries are removed from your inline script and any other standard scripts that might conflict.  
+4. **Data Passing (for is:inline scripts):**  
+   * **Option 1: JSON Script Tag (Good for Complex Data):** define:vars doesn't work with is:inline. Use a hidden JSON script tag.  
+     ```
+     ---
+     const mapData = { /* ... */ };
+     --- 
+     <script type="application/json" id="map-data" style="display: none;">  
+       {JSON.stringify(mapData)}  
+     </script>  
+     {/* Inline script reads from #map-data */}
+     ```
+
+   * **Option 2: data-* Attributes (Simpler for Basic Data):** Pass data via attributes on a relevant HTML element.  
+     ``` 
+     ---  
+     const mapConfig = { center: [lat, lon], zoom: 10 };  
+     ---  
+     <div id="map-container" data-config={JSON.stringify(mapConfig)}></div>  
+     {/* Inline script reads from #map-container.dataset.config */}
+     ```
+
+**Drawbacks of is:inline:**
+
+* Reduced Maintainability (code in .astro files, potential duplication).  
+* No Bundling/Optimization by Astro/Vite.  
+* Relies on global scope, increasing potential for conflicts.  
+* Manual dependency management if using local copies.
+
+## **Troubleshooting**
+
+1. **Check Browser Console (F12):** Look for JavaScript errors.  
+2. **Verify Script Loading (Network Tab):**  
+   * **Standard Imports:** Is the bundled script (e.g., /_astro/myScript.a1b2c3d4.js) loading with Status 200? Or is it 404?  
+   * **Inline Method:** Are the global dependency scripts (CDN or local /vendor/) loading with Status 200?  
+3. **Check Loading Order:** Ensure dependency scripts/styles load *before* scripts that use them. Put dependencies in <head> or early <body>.  
+4. **Use DOMContentLoaded:** Wrap code interacting with the DOM or globals in a DOMContentLoaded listener.  
+5. **Verify Data Passing:** Check element IDs, attribute names (data-*), and JSON validity.  
+6. **(If using Local Copy Fallback):** Did you re-copy files to public/ after the last pnpm update?
