@@ -1,42 +1,75 @@
 ---
 // src/layouts/BaseLayout.astro
-import '../styles/global.css';
+import "../styles/global.css";
+// Import Leaflet CSS from node_modules
+import "leaflet/dist/leaflet.css";
+
+// Import MarkerCluster CSS from node_modules
+import "leaflet.markercluster/dist/MarkerCluster.css";
+import "leaflet.markercluster/dist/MarkerCluster.Default.css";
+
 export interface Props {
     title?: string;
     description?: string;
+    breadcrumbs?: { text: string; href?: string }[];
 }
 const {
-    title = 'Unofficial California Education Policies Navigator',
-    description = 'Explore California K-12 school district data and policies.'
+    title = "Unofficial California Education Policies Navigator",
+    description = "Explore California K-12 school district data and policies.",
+    breadcrumbs,
 } = Astro.props;
 ---
-<!DOCTYPE html>
+
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content={description} />
-    <title>{title}</title>
-    {/* Link Leaflet and MarkerCluster CSS globally */}
-    <link rel="stylesheet" href="/node_modules/leaflet/dist/leaflet.css" />
-    <link rel="stylesheet" href="/node_modules/leaflet.markercluster/dist/MarkerCluster.css" />
-    <link rel="stylesheet" href="/node_modules/leaflet.markercluster/dist/MarkerCluster.Default.css" />
-</head>
-<body>
-    <header>
-        <h1><a href="/">{title}</a></h1>
-        <!-- Breadcrumbs might need specific logic per page -->
-    </header>
-    <div class="disclaimer">
-        <strong>Disclaimer:</strong> Data is based on publicly available sources...
-    </div>
-    <main id="page-view">
-        <slot /> <!-- Page content goes here -->
-    </main>
-    <footer>
-        <p>&copy; {new Date().getFullYear()} {title}. All rights reserved.</p>
-    </footer>
-    {/* Leaflet JS is imported dynamically by the map script where needed */}
-    {/* Client-side scripts specific to pages will be added in those pages */}
-</body>
-</html> 
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="description" content={description} />
+        <title>{title}</title>
+    </head>
+    <body>
+        <header>
+            <h1><a href="/">{title}</a></h1>
+            {
+                breadcrumbs && breadcrumbs.length > 0 && (
+                    <nav aria-label="breadcrumb" class="breadcrumbs">
+                        <ol>
+                            {breadcrumbs.map((crumb, index) => (
+                                <li
+                                    aria-current={
+                                        index === breadcrumbs.length - 1
+                                            ? "page"
+                                            : undefined
+                                    }
+                                >
+                                    {crumb.href &&
+                                    index < breadcrumbs.length - 1 ? (
+                                        <a href={crumb.href}>{crumb.text}</a>
+                                    ) : (
+                                        crumb.text
+                                    )}
+                                </li>
+                            ))}
+                        </ol>
+                    </nav>
+                )
+            }
+        </header>
+        <div class="disclaimer">
+            <strong>Disclaimer:</strong> Data is based on publicly available sources
+            from the CDE and other agencies. Policy information is synthesized and
+            may require verification against official documents.
+        </div>
+        <main id="page-view">
+            <slot />
+            <!-- Page content goes here -->
+        </main>
+        <footer>
+            <p>
+                &copy; {new Date().getFullYear()}
+                {title}. All rights reserved.
+            </p>
+        </footer>
+    </body>
+</html>

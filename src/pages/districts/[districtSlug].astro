@@ -3,83 +3,623 @@
 // --- FRONTMATTER START ---
 
 // Imports
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import BaseLayout from '../../layouts/BaseLayout.astro';
-import type { DistrictDetails, SchoolDetails } from '../../scripts/types';
+import fs from "node:fs/promises";
+import path from "node:path";
+import BaseLayout from "../../layouts/BaseLayout.astro";
+// import DistrictMapInitializer from "../../components/DistrictMapInitializer.astro";
+import type { DistrictDetails, SchoolDetails } from "../../scripts/types";
 import {
     loadDistrictData,
     loadSchoolsData,
     isValidCoordinate,
-    renderDistrictInfoHtml
-} from '../../scripts/districtUtils';
+    renderDistrictInfoHtml,
+} from "../../scripts/districtUtils";
+
+// Define interface for parameters used in getStaticPaths map
+interface PrerenderParam {
+    districtSlug: string;
+}
 
 // Function to generate static paths and fetch data for each path
 export async function getStaticPaths() {
-    console.log('[getStaticPaths] Starting generation...');
-    const paramsPath = path.resolve(process.cwd(), 'public/assets/prerender-params.json');
-    const paramsData = await fs.readFile(paramsPath, 'utf-8');
+    console.log("[getStaticPaths] Starting generation...");
+    const paramsPath = path.resolve(
+        process.cwd(),
+        "public/assets/prerender-params.json",
+    );
+    const paramsData = await fs.readFile(paramsPath, "utf-8");
     const prerenderParams = JSON.parse(paramsData);
     console.log(`[getStaticPaths] Loaded ${prerenderParams.length} slugs.`);
 
     const allDistricts = await loadDistrictData();
     const allSchools = await loadSchoolsData();
-    console.log('[getStaticPaths] Loaded all district and school data.');
+    console.log("[getStaticPaths] Loaded all district and school data.");
 
-    const paths = prerenderParams.map((param) => {
-        const districtSlug = param.districtSlug;
-        const districtData = Object.values(allDistricts).find(d => d.slug === districtSlug);
+    const paths = prerenderParams
+        .map((param: PrerenderParam) => {
+            const districtSlug = param.districtSlug;
+            const districtData = Object.values(allDistricts).find(
+                (d) => d.slug === districtSlug,
+            );
 
-        if (!districtData) {
-            console.warn(`[getStaticPaths] District not found for slug: ${districtSlug}. Skipping page.`);
-            return null;
-        }
+            if (!districtData) {
+                console.warn(
+                    `[getStaticPaths] District not found for slug: ${districtSlug}. Skipping page.`,
+                );
+                return null;
+            }
 
-        const districtCdsCode = districtData['CDS Code'];
-        const rawSchoolsData = districtCdsCode ? (allSchools[districtCdsCode.substring(0, 7)] || []) : [];
-        const filteredSchools = rawSchoolsData.filter(school =>
-            school.Status === 'Active' &&
-            String(school['Public Yes/No']).trim().toUpperCase() === 'Y' &&
-            isValidCoordinate(school.Latitude, school.Longitude)
-        );
+            const districtCdsCode = districtData["CDS Code"];
+            const rawSchoolsData = districtCdsCode
+                ? allSchools[districtCdsCode.substring(0, 7)] || []
+                : [];
+            const filteredSchools = rawSchoolsData.filter(
+                (school) =>
+                    school.Status === "Active" &&
+                    String(school["Public Yes/No"]).trim().toUpperCase() ===
+                        "Y" &&
+                    isValidCoordinate(school.Latitude, school.Longitude),
+            );
 
-        return {
-            params: { districtSlug: districtSlug },
-            props: {
-                district: districtData,
-                schools: filteredSchools,
-            },
-        };
-    }).filter(Boolean);
+            return {
+                params: { districtSlug: districtSlug },
+                props: {
+                    district: districtData,
+                    schools: filteredSchools,
+                },
+            };
+        })
+        .filter(Boolean);
 
     console.log(`[getStaticPaths] Generated ${paths.length} valid paths.`);
     return paths;
 }
 
+// Define Props interface based on getStaticPaths return
+interface Props {
+    district: DistrictDetails;
+    schools: SchoolDetails[];
+}
+
 // Get props passed from getStaticPaths for this specific page instance
-const { district, schools } = Astro.props;
+const { district, schools } = Astro.props as Props;
 
 // Prepare variables needed for the template
-const districtName = district.District || 'Unknown District';
+const districtName = district.District || "Unknown District";
 const pageTitle = `${districtName} - District Details`;
-const pageDescription = `Information and schools for ${districtName} in ${district.County || 'California'}. View address, website, grades, and map.`;
+const pageDescription = `Information and schools for ${districtName} in ${district.County || "California"}. View address, website, grades, and map.`;
 const districtHtml = renderDistrictInfoHtml(district, schools);
+
+// Define breadcrumbs for this page
+const pageBreadcrumbs = [
+    { text: "Home", href: "/" },
+    // Add intermediate levels if desired, e.g., a link to a districts list page
+    // { text: 'Districts', href: '/districts/' },
+    { text: districtName }, // Current page, no href
+];
 
 // --- FRONTMATTER END ---
 ---
 
 {/* --- TEMPLATE START --- */}
-<BaseLayout title={pageTitle} description={pageDescription}>
+<BaseLayout
+    title={pageTitle}
+    description={pageDescription}
+    breadcrumbs={pageBreadcrumbs}
+>
     {/* Render the HTML string directly into a div */}
-    <div set:html={districtHtml}></div>
+    <div set:html={districtHtml} />
 
-    {/* Client-side script now just calls the initializer function */}
-    <script type="module" define:vars={{ districtData: district, schoolsData: schools }}>
-        // Import the initialization function using root-relative source path
-        import { initializeDistrictMapOnClient } from '/src/scripts/initializeDistrictMap.ts';
+    {/* Remove the component usage */}
+    {/* <DistrictMapInitializer district={district} schools={schools} /> */}
 
-        // Call the function, passing the data received from the server
-        initializeDistrictMapOnClient(districtData, schoolsData);
+    {/* Inlined script tag */}
+    <script>
+        import proj4 from "proj4";
+        import L from "leaflet";
+        import { OpenStreetMapProvider } from "leaflet-geosearch";
+        import "leaflet.markercluster"; // Import for side effects
+
+        // --- Extend Leaflet namespace for MarkerCluster ---
+        // This assumes leaflet.markercluster.js is loaded globally (e.g., via CDN)
+        // and attaches its functionality to the L object.
+        declare module "leaflet" {
+            interface MarkerClusterGroupOptions {}
+            export function markerClusterGroup(
+                options?: MarkerClusterGroupOptions,
+            ): MarkerClusterGroup;
+            export class MarkerClusterGroup extends LayerGroup {
+                addLayer(layer: Layer): this;
+                removeLayer(layer: Layer): this;
+                getBounds(): LatLngBounds;
+                getLayers(): Layer[];
+            }
+        }
+        // --- End Namespace Extension ---
+
+        // --- Instantiate Geosearch Provider ---
+        const geoSearchProvider = new OpenStreetMapProvider();
+
+        // --- Inlined Helper Functions ---
+        const formatAddress = (street, city, state, zip) => {
+            const parts = [street, city, state, zip].filter(
+                (p) => p && p !== "No Data",
+            );
+            if (parts.length >= 3)
+                return `${parts[0]}, ${parts[1]}, ${parts[2]} ${parts[3] || ""}`.trim();
+            if (parts.length === 2) return `${parts[0]}, ${parts[1]}`;
+            return parts[0] || "Address Not Available";
+        };
+
+        const isValidCoordinate = (lat, lon) => {
+            if (lat == null || lon == null) return false;
+            const latNum = parseFloat(String(lat));
+            const lonNum = parseFloat(String(lon));
+            return (
+                !isNaN(latNum) &&
+                !isNaN(lonNum) &&
+                latNum >= -90 &&
+                latNum <= 90 &&
+                lonNum >= -180 &&
+                lonNum <= 180
+            );
+        };
+
+        // Keep track of map instances (simple global scope version for inline script)
+        const mapInstances = {};
+        const layerGroups = {};
+
+        const initializeMap = (mapElementId) => {
+            if (mapInstances[mapElementId]) {
+                return mapInstances[mapElementId];
+            }
+            const mapElement = document.getElementById(mapElementId);
+            if (!mapElement)
+                throw new Error(`Map element #${mapElementId} not found.`);
+            mapElement.innerHTML = "";
+            mapElement.style.height = "400px";
+            mapElement.style.width = "100%";
+
+            // Assume L is globally available from CDN
+            const map = L.map(mapElementId).setView([36.7783, -119.4179], 6); // Default view
+            L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+                attribution:
+                    '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+            }).addTo(map);
+
+            mapInstances[mapElementId] = map;
+            layerGroups[mapElementId] = {};
+            console.log(`Initialized map on #${mapElementId}`);
+            return map;
+        };
+
+        const clearMapLayers = (mapId) => {
+            const groups = layerGroups[mapId];
+            const map = mapInstances[mapId];
+            if (groups && map) {
+                if (groups.boundary) {
+                    map.removeLayer(groups.boundary);
+                }
+                if (groups.districtMarker) {
+                    map.removeLayer(groups.districtMarker);
+                }
+                if (groups.schoolCluster) {
+                    map.removeLayer(groups.schoolCluster);
+                }
+                layerGroups[mapId] = {};
+            }
+        };
+
+        const reprojectFeatureCoordinates = (feature) => {
+            // Assume proj4 is globally available from CDN
+            const SOURCE_PROJECTION = "EPSG:3857";
+            const TARGET_PROJECTION = "EPSG:4326";
+            // Ensure proj4 defs are loaded (might need to be explicitly called if CDN doesn't auto-define)
+            try {
+                if (
+                    typeof proj4 !== "undefined" &&
+                    !proj4.defs[SOURCE_PROJECTION]
+                ) {
+                    proj4.defs(
+                        SOURCE_PROJECTION,
+                        "+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext +no_defs",
+                    );
+                    proj4.defs(
+                        TARGET_PROJECTION,
+                        "+proj=longlat +datum=WGS84 +no_defs",
+                    );
+                }
+            } catch (e) {
+                console.error("Error defining Proj4 projections:", e);
+            }
+
+            if (
+                !feature ||
+                !feature.geometry ||
+                !["Polygon", "MultiPolygon"].includes(feature.geometry.type)
+            ) {
+                console.warn(
+                    `Skipping reprojection: Invalid feature or unsupported geometry type (${feature?.geometry?.type || "N/A"}).`,
+                );
+                return feature;
+            }
+
+            const reprojectRing = (ring) => {
+                ring.forEach((point) => {
+                    const [lon, lat] = point;
+                    try {
+                        if (typeof proj4 === "undefined")
+                            throw new Error("proj4 is not defined");
+                        const reprojected = proj4(
+                            SOURCE_PROJECTION,
+                            TARGET_PROJECTION,
+                        ).forward([lon, lat]);
+                        point[0] = reprojected[0];
+                        point[1] = reprojected[1];
+                    } catch (e) {
+                        console.error(
+                            `Error reprojecting point [${lon}, ${lat}]:`,
+                            e,
+                        );
+                    }
+                });
+            };
+
+            if (feature.geometry.type === "Polygon") {
+                feature.geometry.coordinates.forEach(reprojectRing);
+            } else if (feature.geometry.type === "MultiPolygon") {
+                feature.geometry.coordinates.forEach((polygon) => {
+                    polygon.forEach(reprojectRing);
+                });
+            }
+            return feature;
+        };
+
+        const updateMapForDistrict = async (
+            mapElementId,
+            districtData,
+            schoolsData,
+        ) => {
+            console.log(
+                `Updating map #${mapElementId} for ${districtData.District}`,
+            );
+            let map;
+            try {
+                map = initializeMap(mapElementId);
+            } catch (error) {
+                console.error(
+                    `Failed to get or create map for ${mapElementId}:`,
+                    error,
+                );
+                const mapElement = document.getElementById(mapElementId);
+                if (mapElement)
+                    mapElement.innerHTML =
+                        '<p class="error">Could not initialize map.</p>';
+                return;
+            }
+
+            clearMapLayers(mapElementId);
+
+            // Assume L is global
+            const boundaryLayerGroup = L.layerGroup();
+            const districtMarkerLayerGroup = L.layerGroup();
+            // Assume L.markerClusterGroup exists globally or via Leaflet CDN
+            // Initialize MarkerClusterGroup directly, assuming plugin is loaded
+            const schoolClusterGroup = L.markerClusterGroup();
+
+            layerGroups[mapElementId] = {
+                boundary: boundaryLayerGroup,
+                districtMarker: districtMarkerLayerGroup,
+                schoolCluster: schoolClusterGroup,
+            };
+            boundaryLayerGroup.addTo(map);
+            districtMarkerLayerGroup.addTo(map);
+            schoolClusterGroup.addTo(map);
+
+            let bounds = L.latLngBounds([]);
+
+            // 1. Fetch and add boundary
+            const cdsCode = districtData["CDS Code"];
+            const boundaryUrl = `/assets/boundaries/${cdsCode}.geojson`;
+            try {
+                const response = await fetch(boundaryUrl);
+                if (!response.ok)
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                let geojsonData = await response.json();
+                geojsonData = reprojectFeatureCoordinates(geojsonData); // Reproject
+
+                const boundaryLayer = L.geoJSON(geojsonData, {
+                    style: {
+                        color: "#007bff",
+                        weight: 2,
+                        opacity: 0.8,
+                        fillOpacity: 0.1,
+                    },
+                });
+                boundaryLayerGroup.addLayer(boundaryLayer);
+                bounds = boundaryLayer.getBounds();
+                console.log(`Boundary loaded for ${cdsCode}`);
+            } catch (error) {
+                console.error(
+                    `Failed to load boundary GeoJSON for ${cdsCode}:`,
+                    error,
+                );
+                const mapElement = document.getElementById(mapElementId);
+                if (mapElement && mapElement.innerHTML === "")
+                    mapElement.innerHTML =
+                        '<p class="warning">Could not load district boundary.</p>';
+            }
+
+            // 2. Add District Office Marker
+            let districtMarkerCoords = null;
+            const latString = districtData.Latitude; // Use direct access
+            const lonString = districtData.Longitude; // Use direct access
+
+            // --- DEBUGGING LOGS (Keep for now) ---
+            console.log(`[Debug] District Data for Marker:`, {
+                Latitude: latString,
+                Longitude: lonString,
+                StreetAddress: districtData["Street Address"],
+                StreetCity: districtData["Street City"],
+                StreetState: districtData["Street State"],
+                StreetZip: districtData["Street Zip"],
+            });
+            // ---
+
+            if (isValidCoordinate(latString, lonString)) {
+                const lat = parseFloat(String(latString));
+                const lon = parseFloat(String(lonString));
+                districtMarkerCoords = [lat, lon];
+                console.log(
+                    `[Map] Using Lat/Lon for district marker: [${lat}, ${lon}]`,
+                );
+            }
+
+            const address = formatAddress(
+                // Use helper for consistency
+                districtData["Street Address"],
+                districtData["Street City"],
+                districtData["Street State"],
+                districtData["Street Zip"],
+            );
+
+            // --- DEBUGGING LOGS (Keep for now) ---
+            console.log(`[Debug] Computed Address for Geosearch: "${address}"`);
+            // ---
+
+            if (!districtMarkerCoords && address !== "Address Not Available") {
+                // Check against helper's default
+                console.log(
+                    `[Map] District Lat/Lon invalid, attempting geosearch for: "${address}"`,
+                );
+                try {
+                    // Ensure provider is available
+                    if (!geoSearchProvider)
+                        throw new Error("GeoSearch provider not initialized");
+                    const results = await geoSearchProvider.search({
+                        query: address,
+                    });
+                    if (results && results.length > 0) {
+                        districtMarkerCoords = [results[0].y, results[0].x];
+                        console.log(
+                            `[Map] Geosearch successful for district office: [${results[0].y}, ${results[0].x}]`,
+                        );
+                    } else {
+                        console.log(
+                            `[Map] Geosearch for district office returned no results for: "${address}"`,
+                        );
+                    }
+                } catch (error) {
+                    console.warn(
+                        `[Map] Geosearch failed for district address "${address}":`,
+                        error,
+                    );
+                }
+            }
+
+            // Add marker if coordinates were found
+            if (districtMarkerCoords) {
+                const marker = L.marker(districtMarkerCoords).bindPopup(
+                    // Use formatted address in popup
+                    `<b>${districtData.District} Office</b><br>${address}`,
+                );
+                districtMarkerLayerGroup.addLayer(marker);
+                if (!bounds.isValid()) {
+                    // If boundary failed, extend bounds with marker
+                    bounds.extend(districtMarkerCoords);
+                } else {
+                    bounds.extend(districtMarkerCoords); // Always extend bounds
+                }
+                console.log("District office marker added.");
+            } else {
+                console.log(
+                    "[Map] Could not determine district office coordinates.",
+                ); // Log if no coords found
+            }
+
+            // 3. Add School Markers
+            const schoolIcon = L.divIcon({
+                html: "🏫",
+                className: "school-marker-icon",
+                iconAnchor: [12, 12],
+            });
+
+            // --- Define Grade Span formatting ---
+            const formatGradeSpan = (lowGrade, highGrade) => {
+                if (
+                    lowGrade &&
+                    highGrade &&
+                    lowGrade !== "No Data" &&
+                    highGrade !== "No Data"
+                ) {
+                    // Handle common cases like 'K'
+                    const low =
+                        String(lowGrade).toUpperCase() === "K" ? "K" : lowGrade;
+                    const high =
+                        String(highGrade).toUpperCase() === "K"
+                            ? "K"
+                            : highGrade;
+                    return `Grades: ${low} - ${high}`;
+                }
+                return "Grades: N/A"; // Fallback
+            };
+            // ---
+
+            schoolsData.forEach((school) => {
+                // Use direct property access assuming structure matches SchoolDetails
+                if (isValidCoordinate(school.Latitude, school.Longitude)) {
+                    const lat = parseFloat(String(school.Latitude));
+                    const lon = parseFloat(String(school.Longitude));
+
+                    // Use the formatAddress helper for school address
+                    const schoolAddress = formatAddress(
+                        school["Street Address"], // Assuming this is the correct field name
+                        school["Street City"], // Assuming this is the correct field name
+                        school["Street State"], // Assuming this is the correct field name
+                        school["Street Zip"], // Assuming this is the correct field name
+                    );
+
+                    // Use the formatGradeSpan helper
+                    const gradeInfo = formatGradeSpan(
+                        school["Low Grade"],
+                        school["High Grade"],
+                    ); // Assuming these field names
+
+                    const popupContent = `<b>${school.School || "Unknown School"}</b><br>${schoolAddress}<br>${gradeInfo}`;
+
+                    const marker = L.marker([lat, lon], {
+                        icon: schoolIcon,
+                    }).bindPopup(popupContent);
+
+                    schoolClusterGroup.addLayer(marker);
+                    if (bounds.isValid()) {
+                        // Only extend if bounds are valid
+                        bounds.extend([lat, lon]);
+                    } else if (!bounds.isValid() && districtMarkerCoords) {
+                        // If bounds invalid but district marker exists, extend from there
+                        bounds.extend([lat, lon]);
+                    } // Otherwise, don't extend invalid bounds
+                } else {
+                    console.warn(
+                        `[Map] Invalid coordinates for school: ${school.School || "Unknown School"}`,
+                    );
+                }
+            });
+            console.log(
+                `Added ${schoolClusterGroup.getLayers().length} school markers.`,
+            );
+
+            // 4. Fit map view
+            if (bounds.isValid()) {
+                map.fitBounds(bounds, { padding: [20, 20] });
+                console.log("Fitting map to bounds:", bounds.toBBoxString());
+            } else if (schoolClusterGroup.getLayers().length > 0) {
+                // Fallback if only schools loaded
+                // Now correctly typed, getBounds should exist
+                map.fitBounds(schoolClusterGroup.getBounds(), {
+                    padding: [20, 20],
+                });
+                console.log("Fitting map to school cluster bounds.");
+            } else if (districtMarkerCoords) {
+                // Fallback if only district office loaded
+                map.setView(districtMarkerCoords, 14); // Zoom in more
+                console.log("Setting map view to district office.");
+            } else {
+                console.log(
+                    "No valid bounds or markers found, using default map view.",
+                );
+                // Keep default view if nothing loaded
+            }
+        };
+
+        // --- Main Initialization Logic (Inline) ---
+        const initializeDistrictMapOnClient = (districtData, schoolsData) => {
+            console.log(
+                "Inline initializeDistrictMapOnClient started for:",
+                districtData.District,
+            );
+            const mapElementId = `info-map-${districtData && districtData["CDS Code"] ? districtData["CDS Code"] : "default"}`;
+            const mapElement = document.getElementById(mapElementId);
+
+            if (mapElement && districtData) {
+                console.log(
+                    `Initializing map via inline script for ${districtData.District} on element #${mapElementId}`,
+                );
+                try {
+                    updateMapForDistrict(
+                        mapElementId,
+                        districtData,
+                        schoolsData,
+                    );
+                } catch (error) {
+                    console.error(
+                        `Error calling updateMapForDistrict for ${mapElementId}:`,
+                        error,
+                    );
+                    mapElement.innerHTML =
+                        '<p class="error">Failed to update map.</p>';
+                }
+            } else {
+                if (!mapElement)
+                    console.error(
+                        `Map element #${mapElementId} not found for inline script init.`,
+                    );
+                if (!districtData)
+                    console.error(
+                        `District data missing for inline script map initialization.`,
+                    );
+            }
+        };
+
+        // Function to get data from JSON script tags and run init
+        function runMapInit() {
+            const districtDataElement =
+                document.getElementById("district-data");
+            const schoolsDataElement = document.getElementById("schools-data");
+
+            if (
+                districtDataElement?.textContent &&
+                schoolsDataElement?.textContent
+            ) {
+                try {
+                    const districtData = JSON.parse(
+                        districtDataElement.textContent,
+                    );
+                    const schoolsData = JSON.parse(
+                        schoolsDataElement.textContent,
+                    );
+                    // Call the inlined initializer
+                    initializeDistrictMapOnClient(districtData, schoolsData);
+                } catch (e) {
+                    console.error("Failed to parse district/schools data:", e);
+                }
+            } else {
+                console.error(
+                    "Could not find district or schools data script tags.",
+                );
+            }
+        }
+
+        // Ensure the DOM is ready before trying to access elements and run init
+        if (document.readyState === "loading") {
+            // Loading hasn't finished yet
+            document.addEventListener("DOMContentLoaded", runMapInit);
+        } else {
+            // `DOMContentLoaded` has already fired
+            runMapInit();
+        }
     </script>
+
+    {/* Hidden script tags to store data as JSON */}
+    <script
+        id="district-data"
+        type="application/json"
+        set:html={JSON.stringify(district)}
+    />
+    <script
+        id="schools-data"
+        type="application/json"
+        set:html={JSON.stringify(schools)}
+    />
 </BaseLayout>
 {/* --- TEMPLATE END --- */}

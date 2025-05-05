@@ -2,14 +2,38 @@
 
 import type { DistrictDetails, SchoolDetails } from './types';
 import L from 'leaflet';
-// CSS Imports removed - will be handled in layout or Astro component
-// import 'leaflet/dist/leaflet.css';
 import proj4 from 'proj4';
 import type { Feature, Polygon, MultiPolygon } from 'geojson';
-import { OpenStreetMapProvider } from 'leaflet-geosearch';
-// import 'leaflet.markercluster/dist/MarkerCluster.css'; // Import cluster CSS
-// import 'leaflet.markercluster/dist/MarkerCluster.Default.css'; // Import default cluster theme
-import 'leaflet.markercluster'; // Import cluster JS (adds L.markerClusterGroup)
+import { OpenStreetMapProvider } from 'leaflet-geosearch'; // Keep geosearch import
+// import 'leaflet.markercluster';
+
+// --- Extend Leaflet namespace for MarkerCluster ---
+// This assumes leaflet.markercluster.js is loaded globally (e.g., via CDN)
+// and attaches its functionality to the L object.
+declare module 'leaflet' {
+    // Define options interface if needed, or use L.MarkerClusterGroupOptions if provided by types
+    interface MarkerClusterGroupOptions {
+        // Add specific options here if you use them, e.g.:
+        // showCoverageOnHover?: boolean;
+        // zoomToBoundsOnClick?: boolean;
+        // spiderfyOnMaxZoom?: boolean;
+    }
+
+    // Declare the function
+    export function markerClusterGroup(options?: MarkerClusterGroupOptions): MarkerClusterGroup;
+
+    // Declare the class extending LayerGroup
+    export class MarkerClusterGroup extends LayerGroup {
+        // Add methods used in the code if needed for stricter type checking
+        addLayer(layer: Layer): this;
+        // addLayers(layers: Layer[]): this;
+        removeLayer(layer: Layer): this;
+        // clearLayers(): this;
+        getBounds(): LatLngBounds;
+        getLayers(): Layer[]; // Added based on usage in console.log
+    }
+}
+// --- End Namespace Extension ---
 
 console.log('map.ts loaded'); // Add a log to confirm loading
 
@@ -227,8 +251,31 @@ export async function updateMapForDistrict(
     }
 
     // 2. Add District Office Marker
+
+    // --- DEBUGGING: Log district data used for marker --- 
+
+    console.log(`[Debug] District Data for Marker:`, {
+
+        Latitude: districtData.Latitude,
+
+        Longitude: districtData.Longitude,
+
+        StreetAddress: districtData['Street Address'],
+
+        StreetCity: districtData['Street City'],
+
+        StreetState: districtData['Street State'],
+
+        StreetZip: districtData['Street Zip']
+
+    });
+
+    // --- END DEBUGGING ---
+
     let districtMarkerCoords: L.LatLngTuple | null = null;
+
     const latString = districtData.Latitude as string;
+
     const lonString = districtData.Longitude as string;
 
     // Try parsing Lat/Lon first
@@ -239,14 +286,26 @@ export async function updateMapForDistrict(
     }
 
     // If Lat/Lon invalid, try geocoding address
+
     const address = [districtData['Street Address'], districtData['Street City'], districtData['Street State'], districtData['Street Zip']].filter(p => p && p !== 'No Data').join(', ');
+
+    // --- DEBUGGING: Log computed address --- 
+
+    console.log(`[Debug] Computed Address for Geosearch: "${address}"`);
+
+    // --- END DEBUGGING ---
+
     if (!districtMarkerCoords && address) {
+
         console.log(`[Map] District Lat/Lon invalid, attempting geosearch for: "${address}"`);
+
         try {
             const results = await geoSearchProvider.search({ query: address });
             if (results && results.length > 0) {
                 districtMarkerCoords = [results[0].y, results[0].x];
                 console.log(`[Map] Geosearch successful for district office.`);
+            } else { // Add else block for logging when no results found
+                console.log(`[Map] Geosearch for district office returned no results for: "${address}"`);
             }
         } catch (error) {
             console.warn(`[Map] Geosearch failed for district address "${address}":`, error);

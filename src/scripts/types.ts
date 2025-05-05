@@ -11,14 +11,19 @@ export interface DistrictDetails {
     // Ensure specific keys exist
     'CDS Code': string;
     'District': string;
+    'County': string;
     'Status': string;
     'Street Address': string;
     'Street City': string;
     'Street State': string;
     'Street Zip': string;
+    'Phone': string;
+    'Low Grade': string;
+    'High Grade': string;
     'Latitude': string;
     'Longitude': string;
     'Website': string;
+    'slug': string;
     // Add other relevant fields from districts.json
 }
 
@@ -35,8 +40,11 @@ export interface SchoolDetails {
     'Street City': string;
     'Street State': string;
     'Street Zip': string;
+    'Phone': string;
     'Latitude': string;
     'Longitude': string;
+    'Low Grade': string;
+    'High Grade': string;
     'Website': string;
     // Add other relevant fields from schools.json
 }
