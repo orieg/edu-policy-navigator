@@ -13,7 +13,7 @@
 
 - [x] **1.1: Install Astro:**
     - Run `pnpm add astro`.
-- [ ] **1.2: Create Astro Configuration:**
+- [x] **1.2: Create Astro Configuration:**
     - Create `astro.config.mjs` at the project root.
     - Add basic configuration (refer to Astro docs, likely minimal to start). Consider potential Vite config integrations if needed later.
       ```javascript
@@ -25,13 +25,13 @@
           // vite: { ... }
       });
       ```
-- [ ] **1.3: Update `package.json` Scripts:**
+- [x] **1.3: Update `package.json` Scripts:**
     - Modify `scripts` for Astro:
         - `dev`: `"astro dev"` (or keep `pnpm run prepare && astro dev` if data prep is needed)
         - `build`: `"astro build"` (or `pnpm run clean && pnpm run prepare && astro build`)
         - `preview`: `"astro preview"`
     - Remove old Vike-specific script parts if they are replaced by Astro commands.
-- [ ] **1.4: Add Astro TypeScript Config:**
+- [x] **1.4: Add Astro TypeScript Config:**
     - Create `src/env.d.ts` for Astro's environment types:
       ```typescript
       /// <reference types="astro/client" />
@@ -42,7 +42,7 @@
 
 ## Phase 2: Project Restructuring
 
-- [ ] **2.1: Create Astro Directories:**
+- [x] **2.1: Create Astro Directories:**
     - Create `src/pages/`
     - Create `src/layouts/`
     - Create `src/components/` (for reusable UI parts, if any)
@@ -56,7 +56,7 @@
 
 ## Phase 3: Core Layout & Index Page
 
-- [ ] **3.1: Create Base Layout:**
+- [x] **3.1: Create Base Layout:**
     - Create `src/layouts/BaseLayout.astro`.
     - Replicate the HTML structure from `renderer/+onRenderHtml.ts` (doctype, html, head, body, header, footer, disclaimer).
     - Use Astro's `<slot />` component where the main page content should go.
@@ -105,7 +105,7 @@
       </body>
       </html>
       ```
-- [ ] **3.2: Migrate Index Page:**
+- [x] **3.2: Migrate Index Page:**
     - Create `src/pages/index.astro`.
     - Use the `BaseLayout`.
     - Fetch any necessary data (like for search initialization) in the frontmatter (similar logic to `pages/index/+onBeforeRender.ts`).
@@ -148,13 +148,13 @@
 
 ## Phase 4: District Page Generation (SSG)
 
-- [ ] **4.1: Create Dynamic District Page:**
+- [x] **4.1: Create Dynamic District Page:**
     - Create `src/pages/districts/[districtSlug].astro`. (The `[...]` denotes a dynamic route parameter).
 - [x] **4.2: Implement `getStaticPaths`:**
     - In the frontmatter of `src/pages/districts/[districtSlug].astro`, define and export `getStaticPaths`.
     - This function will replace `+onBeforePrerenderStart.ts`.
     - Load the district slugs from `public/assets/prerender-params.json`.
-- [ ] **4.3: Implement `getStaticProps`:**
+- [x] **4.3: Implement Data Loading & Prop Passing (via `getStaticPaths`):**
     - In the frontmatter of `src/pages/districts/[districtSlug].astro`, define and export `getStaticProps`.
     - This function will replace `+onBeforeRender.ts`.
     - Load the data for the specific district based on the `districtSlug` parameter.
