@@ -10,15 +10,42 @@ The goal is to improve the accessibility and findability of policy information f
 
 ## Getting Started
 
-(Add instructions on how to install dependencies and run the project here)
+This project uses [pnpm](https://pnpm.io/) for package management.
+
+1.  **Install Dependencies:**
+    ```bash
+    pnpm install
+    ```
+2.  **(Optional) Prepare/Update Data:**
+    If you need to refresh the district or school data from the source files (e.g., `CDESchoolDirectoryExport.xlsx`), run the data preparation script:
+    ```bash
+    pnpm run prepare:data
+    ```
+    *(Note: The necessary data JSON files are usually pre-committed in `public/assets/`)*
+3.  **Run Development Server:**
+    Starts a local development server with hot reloading.
+    ```bash
+    pnpm run dev
+    ```
+4.  **Build for Production:**
+    Generates the static site in the `dist/` directory.
+    ```bash
+    pnpm run build
+    ```
+5.  **Preview Production Build:**
+    Serves the contents of the `dist/` directory locally. Use this to test the final build before deployment.
+    ```bash
+    pnpm run preview
+    ```
 
 ## Technology Stack
 
-*   **Frontend:** HTML, CSS, JavaScript (ES Modules)
+*   **Frontend Framework:** [Astro](https://astro.build/) (using Vite for bundling)
+*   **Mapping Libraries:** [Leaflet](https://leafletjs.com/), [Proj4js](https://proj4js.org/), [Leaflet.markercluster](https://github.com/Leaflet/Leaflet.markercluster), [leaflet-geosearch](https://github.com/smeijer/leaflet-geosearch)
 *   **LLM (In-Browser):** WebLLM (mlc-ai)
 *   **Graph DB (In-Browser):** KuzuDB WASM
-*   **Data Pipeline:** Python 3.x, KuzuDB Python Client, GitHub Actions
-*   **LLM (Synthesis - Build Time):** External LLM API (e.g., Google Gemini, OpenAI)
+*   **Data Pipeline:** TypeScript, GitHub Actions
+*   **LLM (Synthesis - Build Time):** External LLM API
 *   **Hosting:** GitHub Pages
 
 ## License
