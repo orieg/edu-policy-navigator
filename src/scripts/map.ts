@@ -7,6 +7,12 @@ import type { Feature, Polygon, MultiPolygon } from 'geojson';
 import { OpenStreetMapProvider } from 'leaflet-geosearch'; // Keep geosearch import
 import 'leaflet.markercluster'; // Import the marker cluster library
 
+// Set Leaflet's default icon path
+// Ensure this path is correct relative to your deployment's public root
+// If using a base path (like for GitHub Pages), ensure it's included.
+const BASE_URL = import.meta.env.BASE_URL;
+L.Icon.Default.imagePath = `${BASE_URL}images/leaflet/`;
+
 // --- Extend Leaflet namespace for MarkerCluster ---
 // This ensures TypeScript knows about L.markerClusterGroup
 declare module 'leaflet' {
