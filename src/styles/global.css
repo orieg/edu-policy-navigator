@@ -1,3 +1,23 @@
+:root {
+    --color-primary: #17a2b8;
+    /* Calmer Teal */
+    --color-primary-darker: #138496;
+    /* Darker Teal for hovers */
+    --color-text-body: #343a40;
+    /* Dark Gray for body text */
+    --color-text-light: #ffffff;
+    --color-background-dark: #2c3e50;
+    /* Dark Desaturated Blue/Slate for header/footer */
+    --color-background-light: #f8f9fa;
+    /* Very Light Gray for cards/backgrounds */
+    --color-background-page: #f4f4f4;
+    /* Page background */
+    --color-border-light: #dee2e6;
+    /* Light border */
+    --color-border-medium: #ced4da;
+    /* Medium border */
+}
+
 /* pages/style.css */
 
 html {
@@ -6,11 +26,13 @@ html {
 }
 
 body {
-    font-family: sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+    /* Updated font stack */
     line-height: 1.6;
     margin: 0;
     padding: 0;
-    background-color: #f4f4f4;
+    background-color: var(--color-background-page);
+    color: var(--color-text-body);
     display: flex;
     /* Use flexbox */
     flex-direction: column;
@@ -20,8 +42,8 @@ body {
 }
 
 header {
-    background: #333;
-    color: #fff;
+    background: var(--color-background-dark);
+    color: var(--color-text-light);
     padding: 1rem 0;
     text-align: center;
     width: 100%;
@@ -31,12 +53,12 @@ header {
 }
 
 header h1 a {
-    color: #fff;
+    color: var(--color-text-light);
     text-decoration: none;
 }
 
 nav a {
-    color: #fff;
+    color: var(--color-text-light);
     margin: 0 10px;
     text-decoration: none;
 }
@@ -44,39 +66,57 @@ nav a {
 main {
     padding: 20px;
     max-width: 1200px;
-    margin: 5px auto;
-    /* Keep horizontal centering */
+    margin: 10px auto 20px auto;
     width: 100%;
-    /* Ensure main takes up width within flex */
     box-sizing: border-box;
-    /* Include padding and border in the element's total width and height */
-    background: #fff;
-    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-    /* min-height: 60vh; */
-    /* Remove fixed min-height */
+    background: var(--color-text-light);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     flex-grow: 1;
-    /* Allow main to grow and fill space */
-    /* Ensure main takes up some space */
     counter-reset: guide-h2-counter;
 }
 
 footer {
     text-align: center;
     margin-top: 20px;
-    padding: 10px;
-    background: #333;
-    color: #fff;
+    padding: 1.5rem;
+    /* Increased padding */
+    background: var(--color-background-dark);
+    color: var(--color-text-light);
 }
 
 /* Component styles (move relevant styles from old src/style.css here) */
 
 .info-card {
-    background-color: #f8f9fa;
-    border: 1px solid #dee2e6;
+    background-color: var(--color-background-light);
+    border: 1px solid var(--color-border-light);
     padding: 1.5rem;
     margin-bottom: 20px;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+/* Style links within the .info-card */
+.info-card a {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.info-card a:hover,
+.info-card a:focus {
+    color: var(--color-primary-darker);
+    text-decoration: underline;
+}
+
+/* Styles for icons within links */
+.link-icon {
+    width: 1em;
+    /* Relative to parent font-size for scalability */
+    height: 1em;
+    margin-right: 0.3em;
+    vertical-align: -0.125em;
+    /* Fine-tune vertical alignment with text */
+    stroke-width: 2.5;
+    /* Tabler icons often look good a bit bolder when small */
 }
 
 .school-list {
@@ -88,11 +128,23 @@ footer {
 }
 
 .school-list li {
-    background-color: #fff;
+    background-color: var(--color-text-light);
     padding: 1.5rem;
-    border: 1px solid #e9ecef;
+    border: 1px solid var(--color-border-light);
     border-radius: 8px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+}
+
+/* Style links within .school-list li cards */
+.school-list li a {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+.school-list li a:hover,
+.school-list li a:focus {
+    color: var(--color-primary-darker);
+    text-decoration: underline;
 }
 
 .school-list li:last-child {
@@ -114,6 +166,7 @@ footer {
     font-size: 1rem;
     box-sizing: border-box;
     /* Include padding in width */
+    border: 1px solid var(--color-border-medium);
 }
 
 #district-results {
@@ -125,8 +178,8 @@ footer {
     /* Make width match the container (and the input) */
     box-sizing: border-box;
     /* Include padding/border in the width calculation */
-    background-color: #fff;
-    border: 1px solid #ccc;
+    background-color: var(--color-text-light);
+    border: 1px solid var(--color-border-medium);
     border-top: none;
     /* Avoid double border */
     max-height: 200px;
@@ -144,7 +197,7 @@ footer {
 
 #district-results div[role="option"]:hover,
 #district-results div[role="option"].highlighted {
-    background-color: #f0f0f0;
+    background-color: var(--color-background-page);
 }
 
 /* Map placeholder style */
@@ -152,7 +205,7 @@ footer {
     height: 400px;
     /* Default height - can be overridden by container */
     width: 100%;
-    background-color: #eee;
+    background-color: var(--color-background-light);
     /* Changed background slightly */
     margin-bottom: 0;
     /* Remove bottom margin if inside flex/grid */
@@ -219,8 +272,8 @@ footer {
 /* Breadcrumb Styles */
 .breadcrumbs {
     font-size: 0.9em;
-    margin: 10px 0;
-    color: #555;
+    margin-bottom: 1rem;
+    color: var(--color-text-body);
 }
 
 .breadcrumbs ol {
@@ -242,20 +295,27 @@ footer {
 }
 
 .breadcrumbs li a {
-    color: #007bff;
+    color: var(--color-primary);
     text-decoration: none;
 }
 
 .breadcrumbs li a:hover {
     text-decoration: underline;
+    color: var(--color-primary-darker);
 }
 
 .breadcrumbs li[aria-current="page"] {
     font-weight: bold;
     /* color: #333; */
     /* Change color to be visible on dark header */
-    color: #f0f0f0;
-    /* Light grey, adjust as needed */
+    color: inherit;
+    /* Inherit from .breadcrumbs color */
+}
+
+/* Current page breadcrumb for header is light, for main it should be dark */
+.breadcrumbs li[aria-current="page"] {
+    color: var(--color-text-light);
+    /* If breadcrumbs were in header */
 }
 
 /* Custom Marker Styling */
@@ -272,23 +332,21 @@ footer {
 
 /* Disclaimer Block Styles */
 .disclaimer {
-    font-size: 0.9em;
-    margin: 5px auto;
-    /* Top/bottom margin, horizontal auto centering */
-    background-color: #e3fcfedd;
-    border: 1px solid #eee;
-    padding: 10px;
+    font-size: 0.85em;
+    margin: 10px auto 0 auto;
+    background-color: transparent;
+    border: none;
+    color: #6c757d;
+    padding: 0.5rem 1rem;
     max-width: 1200px;
-    /* Match main content width */
     text-align: center;
     box-sizing: border-box;
-    /* Include padding/border in width calculation */
 }
 
 /* Guide Page Specific Styles */
 .toc {
-    background-color: #f8f9fa;
-    border: 1px solid #e9ecef;
+    background-color: var(--color-background-light);
+    border: 1px solid var(--color-border-light);
     border-radius: 0.375rem;
     padding: 1rem 1.25rem;
     margin-bottom: 1.5rem;
@@ -314,7 +372,7 @@ footer {
     margin-top: 0;
     margin-bottom: 0;
     /* Handled by toc-header now */
-    color: #343a40;
+    color: var(--color-text-body);
     width: 100%;
 }
 
@@ -323,7 +381,7 @@ footer {
     border: none;
     padding: 0.25rem;
     cursor: pointer;
-    color: #0056b3;
+    color: var(--color-primary);
     display: inline-flex;
     /* Align icon nicely */
     align-items: center;
@@ -386,8 +444,7 @@ footer {
 .toc ul.toc-list li a {
     /* Targeting links within ul.toc-list */
     text-decoration: none;
-    color: #0056b3 !important;
-    /* Default link color - added important for debugging */
+    color: var(--color-primary);
     display: block;
     /* Make the whole area clickable and helps with styling */
 }
@@ -395,8 +452,7 @@ footer {
 .toc ul.toc-list li a:hover,
 .toc ul.toc-list li a:focus {
     text-decoration: underline;
-    color: #004085 !important;
-    /* Darker blue on hover/focus - added important for debugging */
+    color: var(--color-primary-darker);
 }
 
 /* Media Query for wider screens (tablets and up) */
@@ -421,12 +477,12 @@ footer {
 
 main blockquote {
     font-style: italic;
-    color: #495057;
+    color: var(--color-text-body);
     /* Darker gray for better readability */
-    background-color: #e9ecef;
-    /* Subtle background color */
+    background-color: #f0f3f5;
+    /* Slightly different light blue/gray for distinction */
     padding: 0.75em 1.25em;
-    border-left: 4px solid #007bff;
+    border-left: 4px solid var(--color-primary);
     /* Accent color, matches primary link */
     margin-top: 0.5em;
     margin-bottom: 1.75em;
@@ -438,7 +494,7 @@ main blockquote {
 main blockquote strong {
     font-style: normal;
     /* Keep "Why this is important:" not italic */
-    color: #343a40;
+    color: var(--color-text-body);
     /* Slightly darker for the strong part */
 }
 
@@ -451,7 +507,7 @@ main h2[id]:not(.toc-title)::before {
     /* Make number bold like a heading part */
     margin-right: 0.4em;
     /* Space after number */
-    color: #343a40;
+    color: var(--color-text-body);
     /* Match heading color or make distinct */
 }
 
@@ -460,7 +516,7 @@ main h2 {
     /* More space above questions */
     margin-bottom: 1rem;
     padding-bottom: 0.5rem;
-    border-bottom: 1px solid #dee2e6;
+    border-bottom: 1px solid var(--color-border-light);
     /* Subtle separator line */
 }
 
@@ -491,11 +547,11 @@ main>h2[id]:first-of-type
     /* Flex properties for responsiveness */
     display: block;
     padding: 1.5rem;
-    border: 1px solid #ccc;
+    border: 1px solid var(--color-border-medium);
     border-radius: 8px;
     text-decoration: none;
     color: inherit;
-    background-color: #f9f9f9;
+    background-color: var(--color-background-light);
     transition:
         transform 0.2s ease-in-out,
         box-shadow 0.2s ease-in-out;
@@ -511,7 +567,7 @@ main>h2[id]:first-of-type
 .guide-card h2 {
     margin-top: 0;
     font-size: 1.35rem;
-    color: #0056b3;
+    color: var(--color-primary);
     display: flex;
     align-items: center;
     overflow-wrap: break-word;
@@ -529,7 +585,7 @@ main>h2[id]:first-of-type
     /* Control size of SVG */
     stroke-width: 2;
     /* Ensure stroke width is consistent if not set in SVG */
-    color: #007bff;
+    color: var(--color-primary);
     /* Example color - can be same as h2 or different */
 }
 
@@ -541,7 +597,7 @@ main>h2[id]:first-of-type
 
 .guide-card p {
     font-size: 0.9rem;
-    color: #333;
+    color: var(--color-text-body);
     margin-bottom: 0;
     /* Remove default bottom margin if not needed */
 }

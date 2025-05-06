@@ -54,6 +54,11 @@ export const formatWebsiteLink = (url: string): string => {
     return href;
 }
 
+// Define SVG icons as constants
+const ICON_DASHBOARD = '<svg xmlns="http://www.w3.org/2000/svg" class="link-icon" width="16" height="16" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M3 12m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" /><path d="M9 8m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v10a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" /><path d="M15 4m0 1a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v14a1 1 0 0 1 -1 1h-4a1 1 0 0 1 -1 -1z" /><path d="M4 20l14 0" /></svg>';
+const ICON_FILE_TEXT = '<svg xmlns="http://www.w3.org/2000/svg" class="link-icon" width="16" height="16" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M14 3v4a1 1 0 0 0 1 1h4" /><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z" /><path d="M9 9l1 0" /><path d="M9 13l6 0" /><path d="M9 17l6 0" /></svg>';
+const ICON_EXTERNAL_LINK = '<svg xmlns="http://www.w3.org/2000/svg" class="link-icon" width="16" height="16" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" fill="none" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M12 6h-6a2 2 0 0 0 -2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2 -2v-6" /><path d="M11 13l9 -9" /><path d="M15 4h5v5" /></svg>';
+
 // --- HTML Rendering Helper (If complex, consider an Astro Component) ---
 export function renderDistrictInfoHtml(district: DistrictDetails, schools: SchoolDetails[]): string {
     const cdsCode = district['CDS Code'] || 'unknown';
@@ -84,9 +89,9 @@ export function renderDistrictInfoHtml(district: DistrictDetails, schools: Schoo
                     <strong>${school.School || 'Unknown School'}</strong> ${schoolGradeSpan}
                 </div>
                 <div class="school-links">
-                    <a href="${schoolDashboardLink}" target="_blank" rel="noopener noreferrer">Dashboard</a> |
-                    <a href="${schoolCdeLink}" target="_blank" rel="noopener noreferrer">CDE Profile</a> |
-                    ${school.Website !== 'No Data' ? `<a href="${schoolWebsiteHref}" target="_blank" rel="noopener noreferrer">${school.Website}</a>` : 'Website Not Available'}
+                    <a href="${schoolDashboardLink}" target="_blank" rel="noopener noreferrer">${ICON_DASHBOARD}Dashboard</a>&nbsp;|&nbsp;
+                    <a href="${schoolCdeLink}" target="_blank" rel="noopener noreferrer">${ICON_FILE_TEXT}CDE Profile</a>&nbsp;|&nbsp;
+                    ${school.Website !== 'No Data' ? `<a href="${schoolWebsiteHref}" target="_blank" rel="noopener noreferrer">${ICON_EXTERNAL_LINK}Website</a>` : 'Website Not Available'}
                 </div>
                 <div class="school-address">
                     ${schoolAddress}
@@ -103,9 +108,9 @@ export function renderDistrictInfoHtml(district: DistrictDetails, schools: Schoo
         <div class="info-card">
             <h2>${district.District || 'Unknown District'}</h2>
             <div class="district-links">
-                <a href="${dashboardLink}" target="_blank" rel="noopener noreferrer">Dashboard</a> |
-                <a href="${cdeProfileLink}" target="_blank" rel="noopener noreferrer">CDE Profile</a> |
-                ${district.Website !== 'No Data' ? `<a href="${districtWebsiteHref}" target="_blank" rel="noopener noreferrer">${district.Website}</a>` : 'Website Not Available'}
+                <a href="${dashboardLink}" target="_blank" rel="noopener noreferrer">${ICON_DASHBOARD}Dashboard</a>&nbsp;|&nbsp;
+                <a href="${cdeProfileLink}" target="_blank" rel="noopener noreferrer">${ICON_FILE_TEXT}CDE Profile</a>&nbsp;|&nbsp;
+                ${district.Website !== 'No Data' ? `<a href="${districtWebsiteHref}" target="_blank" rel="noopener noreferrer">${ICON_EXTERNAL_LINK}Website</a>` : 'Website Not Available'}
             </div>
             <p><strong>Status:</strong> ${district.Status || 'N/A'}</p>
             <p><strong>Type:</strong> ${district['Entity Type'] || 'N/A'}</p>
