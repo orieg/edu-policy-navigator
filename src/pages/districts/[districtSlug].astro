@@ -51,14 +51,15 @@ export async function getStaticPaths() {
 
             const districtCdsCode = districtData["CDS Code"];
             const rawSchoolsData = districtCdsCode
-                ? allSchools[districtCdsCode.substring(0, 7)] || []
+                ? allSchools[districtCdsCode] || []
                 : [];
+
+            // Filter schools: Active and Public. REMOVE coordinate check here.
             const filteredSchools = rawSchoolsData.filter(
                 (school) =>
                     school.Status === "Active" &&
                     String(school["Public Yes/No"]).trim().toUpperCase() ===
-                        "Y" &&
-                    isValidCoordinate(school.Latitude, school.Longitude),
+                        "Y",
             );
 
             return {

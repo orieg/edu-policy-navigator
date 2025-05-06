@@ -8,6 +8,7 @@
     "preinstall": "npx only-allow pnpm && git config core.hooksPath .githooks",
     "test": "echo \"Error: no test specified\" && exit 1",
     "convert:xlsx": "tsc pipeline/scripts/convertXlsxToCsv.ts --module nodenext --outDir dist/pipeline/scripts && node dist/pipeline/scripts/convertXlsxToCsv.js",
+    "build:docs": "echo \"Error: no build:docs specified\"",
     "build:data": "tsc pipeline/scripts/generateDistrictJson.ts --module nodenext --outDir dist/pipeline/scripts && node dist/pipeline/scripts/generateDistrictJson.js",
     "build:boundaries": "tsc pipeline/scripts/splitBoundaries.ts --module nodenext --outDir dist/pipeline/scripts && node dist/pipeline/scripts/splitBoundaries.js",
     "prepare": "pnpm run convert:xlsx && pnpm run build:data && pnpm run build:boundaries",

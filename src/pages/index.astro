@@ -1,14 +1,20 @@
 ---
 // src/pages/index.astro
-import BaseLayout from '../layouts/BaseLayout.astro';
+import BaseLayout from "../layouts/BaseLayout.astro";
 // Fetch initial data if needed (currently none needed for index based on old Vike structure)
 const pageTitle = "Unofficial California Education Policies Navigator";
-const pageDescription = "Explore California K-12 school district data and policies.";
+const pageDescription =
+    "Explore California K-12 school district data and policies.";
 ---
+
 <BaseLayout title={pageTitle} description={pageDescription}>
     <h1>Welcome!</h1>
     <div class="search-container">
-        <input type="search" id="district-search" placeholder="Search districts..." />
+        <input
+            type="search"
+            id="district-search"
+            placeholder="Search districts..."
+        />
         <ul id="search-results" hidden></ul>
     </div>
     <div id="info-display">
@@ -20,58 +26,150 @@ const pageDescription = "Explore California K-12 school district data and polici
     </div>
 </BaseLayout>
 
+<style>
+    /* Style the search container to position the results list */
+    .search-container {
+        position: relative; /* Needed for absolute positioning of children */
+        margin-bottom: 1rem; /* Add some space below the search box */
+    }
+
+    /* Style the search input */
+    #district-search {
+        width: 100%;
+        padding: 0.5rem;
+        font-size: 1rem;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+    }
+
+    /* Style the search results list */
+    #search-results {
+        position: absolute;
+        top: 100%; /* Position below the search input */
+        left: 0;
+        right: 0;
+        background-color: white;
+        border: 1px solid #ccc;
+        border-top: none; /* Avoid double border with input */
+        border-radius: 0 0 4px 4px;
+        max-height: 200px; /* Limit height and add scroll if needed */
+        overflow-y: auto;
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        z-index: 10; /* Ensure it appears above other content */
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Add subtle shadow */
+    }
+
+    /* Style individual result items */
+    #search-results li {
+        padding: 0.5rem;
+        cursor: pointer;
+    }
+
+    #search-results li:hover {
+        background-color: #f0f0f0;
+    }
+
+    /* Hide the results list when the hidden attribute is present */
+    #search-results[hidden] {
+        display: none;
+    }
+
+    /* Basic map container styling */
+    #map-container {
+        margin-top: 1rem;
+        position: relative; /* Establish stacking context */
+        z-index: 0; /* Ensure it's below the search results */
+    }
+    #map {
+        height: 400px; /* Example height */
+        width: 100%;
+        border: 1px solid #ccc;
+    }
+
+    /* Error message styling */
+    .error {
+        color: red;
+        font-weight: bold;
+    }
+</style>
+
 <script>
-    import { setupSearchHandlers } from '../scripts/search';
-    import { initializeMap } from '../scripts/map';
-    import type { DistrictDataMap, SchoolsByDistrictMap } from '../scripts/types';
+    import { setupSearchHandlers } from "../scripts/search";
+    import { initializeMap, addDistrictMarkersToMap } from "../scripts/map";
+    import type {
+        DistrictDataMap,
+        SchoolsByDistrictMap,
+    } from "../scripts/types";
 
     async function initializeSearch() {
         try {
-            console.log('Fetching data for search...');
+            console.log("Fetching data for search...");
             const [districtsRes, schoolsRes] = await Promise.all([
-                fetch('/assets/districts.json'),
-                fetch('/assets/schools_by_district.json')
+                fetch("/assets/districts.json"),
+                fetch("/assets/schools_by_district.json"),
             ]);
 
             if (!districtsRes.ok) {
-                throw new Error(`Failed to fetch districts: ${districtsRes.statusText}`);
+                throw new Error(
+                    `Failed to fetch districts: ${districtsRes.statusText}`,
+                );
             }
             if (!schoolsRes.ok) {
-                throw new Error(`Failed to fetch schools: ${schoolsRes.statusText}`);
+                throw new Error(
+                    `Failed to fetch schools: ${schoolsRes.statusText}`,
+                );
             }
 
             const districtsData: DistrictDataMap = await districtsRes.json();
             const schoolsData: SchoolsByDistrictMap = await schoolsRes.json();
-            console.log('Data fetched, setting up search handlers...');
+            console.log(
+                "Data fetched, setting up search handlers and adding district markers...",
+            );
+
+            // Add district markers to the map AFTER data is fetched
+            try {
+                await addDistrictMarkersToMap("map", districtsData);
+            } catch (error) {
+                console.error("Failed to add district markers to map:", error);
+                // Optionally show a non-blocking warning
+            }
 
             // Pass element IDs and fetched data
             setupSearchHandlers(
-                'district-search', 
-                'search-results', 
+                "district-search",
+                "search-results",
                 // 'info-display', // Optional info display ID if needed by search handlers
                 districtsData,
-                schoolsData
+                schoolsData,
             );
-
         } catch (error) {
-            console.error('Failed to initialize search:', error);
+            console.error("Failed to initialize search:", error);
             // Optionally display an error message to the user
-            const searchContainer = document.querySelector('.search-container');
-            if(searchContainer) {
-                searchContainer.innerHTML = '<p class="error">Could not load search functionality.</p>';
+            const searchContainer = document.querySelector(".search-container");
+            if (searchContainer) {
+                searchContainer.innerHTML =
+                    '<p class="error">Could not load search functionality.</p>';
             }
         }
     }
 
     // Initialize map and search when the DOM is ready
-    document.addEventListener('DOMContentLoaded', () => {
+    document.addEventListener("DOMContentLoaded", () => {
+        let mapInstance: L.Map | null = null;
         try {
-            initializeMap('map');
+            mapInstance = initializeMap("map"); // Initialize map first
         } catch (error) {
-             console.error('Failed to initialize map:', error);
-             const mapContainer = document.getElementById('map');
-             if(mapContainer) mapContainer.innerHTML = '<p class="error">Could not load map.</p>';
+            console.error("Failed to initialize map:", error);
+            const mapContainer = document.getElementById("map");
+            if (mapContainer)
+                mapContainer.innerHTML =
+                    '<p class="error">Could not load map.</p>';
+            // Don't proceed if map init fails
+            return;
         }
-        initializeSearch();
+        // Fetch data and then add markers/setup search
+        initializeSearch(); // This now also calls addDistrictMarkersToMap
     });
-</script> 
+</script>

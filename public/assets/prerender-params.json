@@ -12,9 +12,6 @@
     "districtSlug": "albany-city-unified-01611270000000"
   },
   {
-    "districtSlug": "amador-valley-joint-union-high-01611350000000"
-  },
-  {
     "districtSlug": "berkeley-unified-01611430000000"
   },
   {
@@ -33,12 +30,6 @@
     "districtSlug": "dublin-unified-01750930000000"
   },
   {
-    "districtSlug": "east-bay-regional-occupational-agency-rop-01740390000000"
-  },
-  {
-    "districtSlug": "east-bay-regional-occupational-agency-joint-powers-authority-01405010000000"
-  },
-  {
     "districtSlug": "eden-area-rop-01740130000000"
   },
   {
@@ -54,16 +45,7 @@
     "districtSlug": "hayward-unified-01611920000000"
   },
   {
-    "districtSlug": "hayward-new-haven-rocp-jpa-01404360000000"
-  },
-  {
-    "districtSlug": "hayward-newhaven-01741870000000"
-  },
-  {
     "districtSlug": "livermore-valley-joint-unified-01612000000000"
-  },
-  {
-    "districtSlug": "mid-alameda-county-selpa-01404930000000"
   },
   {
     "districtSlug": "mission-valley-rocp-01404020000000"
@@ -73,9 +55,6 @@
   },
   {
     "districtSlug": "mountain-house-elementary-01612180000000"
-  },
-  {
-    "districtSlug": "murray-elementary-01612260000000"
   },
   {
     "districtSlug": "new-haven-unified-01612420000000"
@@ -90,9 +69,6 @@
     "districtSlug": "piedmont-city-unified-01612750000000"
   },
   {
-    "districtSlug": "pleasanton-joint-elementary-01612830000000"
-  },
-  {
     "districtSlug": "pleasanton-unified-01751010000000"
   },
   {
@@ -102,37 +78,13 @@
     "districtSlug": "san-lorenzo-unified-01613090000000"
   },
   {
-    "districtSlug": "sbe-kipp-summit-academy-01757050000000"
-  },
-  {
     "districtSlug": "sbe-latitude-378-high-01771800000000"
-  },
-  {
-    "districtSlug": "sbe-leadership-public-schools-hayward-01763800000000"
-  },
-  {
-    "districtSlug": "sbe-livermore-valley-charter-01763720000000"
-  },
-  {
-    "districtSlug": "sbe-livermore-valley-charter-preparatory-high-01766530000000"
-  },
-  {
-    "districtSlug": "school-legal-counsel-01408080000000"
   },
   {
     "districtSlug": "school-project-utility-rate-reduction-01407330000000"
   },
   {
-    "districtSlug": "state-board-of-education-charter-01756220000000"
-  },
-  {
-    "districtSlug": "sunol-glen-elementary-01613250000000"
-  },
-  {
     "districtSlug": "sunol-glen-unified-01751190000000"
-  },
-  {
-    "districtSlug": "tri-valley-selpa-01405190000000"
   },
   {
     "districtSlug": "tri-valley-rop-01740050000000"
@@ -156,15 +108,6 @@
     "districtSlug": "amador-county-unified-03739810000000"
   },
   {
-    "districtSlug": "ione-unified-03613410000000"
-  },
-  {
-    "districtSlug": "jackson-unified-03613580000000"
-  },
-  {
-    "districtSlug": "oro-madre-unified-03613660000000"
-  },
-  {
     "districtSlug": "bangor-union-elementary-04613820000000"
   },
   {
@@ -183,19 +126,10 @@
     "districtSlug": "durham-unified-04614320000000"
   },
   {
-    "districtSlug": "feather-falls-union-elementary-04614400000000"
-  },
-  {
     "districtSlug": "golden-feather-union-elementary-04614570000000"
   },
   {
     "districtSlug": "gridley-unified-04755070000000"
-  },
-  {
-    "districtSlug": "gridley-union-elementary-04614650000000"
-  },
-  {
-    "districtSlug": "gridley-union-high-04614730000000"
   },
   {
     "districtSlug": "manzanita-elementary-04614990000000"
@@ -223,12 +157,6 @@
   },
   {
     "districtSlug": "calaveras-county-office-of-education-05100580000000"
-  },
-  {
-    "districtSlug": "calaveras-county-rop-05748640000000"
-  },
-  {
-    "districtSlug": "calaveras-schools-food-service-jpa-05408650000000"
   },
   {
     "districtSlug": "calaveras-unified-05615640000000"
@@ -276,9 +204,6 @@
     "districtSlug": "contra-costa-county-rop-07743440000000"
   },
   {
-    "districtSlug": "contra-costa-education-center-authority-07405270000000"
-  },
-  {
     "districtSlug": "contra-costa-selpa-07407820000000"
   },
   {
@@ -318,12 +243,6 @@
     "districtSlug": "sbe-john-henry-high-07773540000000"
   },
   {
-    "districtSlug": "sbe-rocketship-futuro-academy-07770240000000"
-  },
-  {
-    "districtSlug": "sbe-synergy-07768100000000"
-  },
-  {
     "districtSlug": "walnut-creek-elementary-07618120000000"
   },
   {
@@ -360,9 +279,6 @@
     "districtSlug": "el-dorado-union-high-09618530000000"
   },
   {
-    "districtSlug": "georgetown-divide-union-elemen-09618610000000"
-  },
-  {
     "districtSlug": "gold-oak-union-elementary-09618790000000"
   },
   {
@@ -381,9 +297,6 @@
     "districtSlug": "mother-lode-union-elementary-09619290000000"
   },
   {
-    "districtSlug": "northside-union-elementary-09619370000000"
-  },
-  {
     "districtSlug": "pioneer-union-09619450000000"
   },
   {
@@ -396,43 +309,19 @@
     "districtSlug": "rescue-union-elementary-09619780000000"
   },
   {
-    "districtSlug": "sbc-aspire-public-schools-09764890000000"
-  },
-  {
-    "districtSlug": "sbc-pacific-technology-09765960000000"
-  },
-  {
     "districtSlug": "silver-fork-elementary-09619860000000"
   },
   {
     "districtSlug": "alvina-elementary-10619940000000"
   },
   {
-    "districtSlug": "american-union-elementary-10620000000000"
-  },
-  {
-    "districtSlug": "auberry-union-elementary-10620180000000"
-  },
-  {
     "districtSlug": "big-creek-elementary-10620260000000"
-  },
-  {
-    "districtSlug": "biola-pershing-union-elementar-10620340000000"
   },
   {
     "districtSlug": "burrel-union-elementary-10620420000000"
   },
   {
-    "districtSlug": "cantua-elementary-10620590000000"
-  },
-  {
     "districtSlug": "caruthers-unified-10755980000000"
-  },
-  {
-    "districtSlug": "caruthers-union-elementary-10620670000000"
-  },
-  {
-    "districtSlug": "caruthers-union-high-10620750000000"
   },
   {
     "districtSlug": "center-for-advanced-research-technology-cart-joint-powers-agency-10765540000000"
@@ -441,16 +330,10 @@
     "districtSlug": "central-unified-10739650000000"
   },
   {
-    "districtSlug": "central-union-high-10620830000000"
-  },
-  {
     "districtSlug": "central-valley-pre-school-jpa-10408160000000"
   },
   {
     "districtSlug": "central-valley-support-services-jpa-10409800000000"
-  },
-  {
-    "districtSlug": "chawanakee-elementary-10620910000000"
   },
   {
     "districtSlug": "clay-joint-elementary-10621090000000"
@@ -468,12 +351,6 @@
     "districtSlug": "education-technology-jpa-10772550000000"
   },
   {
-    "districtSlug": "farm-reserve-jpa-10402380000000"
-  },
-  {
-    "districtSlug": "firebaugh-joint-elementary-10621410000000"
-  },
-  {
     "districtSlug": "firebaugh-las-deltas-unified-10738090000000"
   },
   {
@@ -489,31 +366,10 @@
     "districtSlug": "fresno-unified-10621660000000"
   },
   {
-    "districtSlug": "friant-union-elementary-10621820000000"
-  },
-  {
-    "districtSlug": "golden-hills-elementary-10752260000000"
-  },
-  {
     "districtSlug": "golden-plains-unified-10752340000000"
   },
   {
-    "districtSlug": "helm-elementary-10621900000000"
-  },
-  {
-    "districtSlug": "herndon-elementary-10622080000000"
-  },
-  {
-    "districtSlug": "houghton-kearney-union-element-10622160000000"
-  },
-  {
     "districtSlug": "kerman-unified-10739990000000"
-  },
-  {
-    "districtSlug": "kerman-union-high-10622320000000"
-  },
-  {
-    "districtSlug": "kerman-floyd-union-elementary-10622240000000"
   },
   {
     "districtSlug": "kings-canyon-joint-unified-10622650000000"
@@ -525,31 +381,13 @@
     "districtSlug": "kingsburg-joint-union-high-10622570000000"
   },
   {
-    "districtSlug": "las-deltas-elementary-10622730000000"
-  },
-  {
     "districtSlug": "laton-joint-unified-10622810000000"
-  },
-  {
-    "districtSlug": "madison-elementary-10622990000000"
-  },
-  {
-    "districtSlug": "mckinley-roosevelt-union-eleme-10623070000000"
   },
   {
     "districtSlug": "mendota-unified-10751270000000"
   },
   {
-    "districtSlug": "mendota-union-elementary-10623150000000"
-  },
-  {
-    "districtSlug": "monroe-elementary-10623230000000"
-  },
-  {
     "districtSlug": "orange-center-10623310000000"
-  },
-  {
-    "districtSlug": "oro-loma-elementary-10623490000000"
   },
   {
     "districtSlug": "pacific-union-elementary-10623560000000"
@@ -567,28 +405,13 @@
     "districtSlug": "riverdale-joint-unified-10754080000000"
   },
   {
-    "districtSlug": "riverdale-joint-union-elementary-10623980000000"
-  },
-  {
-    "districtSlug": "riverdale-joint-union-high-10624060000000"
-  },
-  {
-    "districtSlug": "san-joaquin-elementary-10624220000000"
-  },
-  {
     "districtSlug": "sanger-unified-10624140000000"
   },
   {
     "districtSlug": "selma-unified-10624300000000"
   },
   {
-    "districtSlug": "sierra-joint-union-high-10624550000000"
-  },
-  {
     "districtSlug": "sierra-unified-10752750000000"
-  },
-  {
-    "districtSlug": "sierra-union-elementary-10624480000000"
   },
   {
     "districtSlug": "south-county-support-services-agency-10409720000000"
@@ -597,25 +420,7 @@
     "districtSlug": "southwest-transportation-agency-10405350000000"
   },
   {
-    "districtSlug": "sun-empire-union-elementary-10624710000000"
-  },
-  {
-    "districtSlug": "swim-complex-jpa-10402200000000"
-  },
-  {
-    "districtSlug": "teague-elementary-10624890000000"
-  },
-  {
-    "districtSlug": "tranquillity-elementary-10624970000000"
-  },
-  {
-    "districtSlug": "tranquillity-union-high-10625050000000"
-  },
-  {
     "districtSlug": "valley-rop-10741530000000"
-  },
-  {
-    "districtSlug": "valley-rop-jpa-10403450000000"
   },
   {
     "districtSlug": "valley-rop-jpa-10405430000000"
@@ -625,12 +430,6 @@
   },
   {
     "districtSlug": "washington-unified-10767780000000"
-  },
-  {
-    "districtSlug": "washington-union-high-10625210000000"
-  },
-  {
-    "districtSlug": "west-fresno-elementary-10621740000000"
   },
   {
     "districtSlug": "west-park-elementary-10625390000000"
@@ -651,22 +450,10 @@
     "districtSlug": "hamilton-unified-11765620000000"
   },
   {
-    "districtSlug": "hamilton-union-elementary-11625700000000"
-  },
-  {
-    "districtSlug": "hamilton-union-high-11625880000000"
-  },
-  {
     "districtSlug": "lake-elementary-11625960000000"
   },
   {
     "districtSlug": "orland-joint-unified-11754810000000"
-  },
-  {
-    "districtSlug": "orland-joint-union-elementary-11626120000000"
-  },
-  {
-    "districtSlug": "orland-joint-union-high-11626200000000"
   },
   {
     "districtSlug": "plaza-elementary-11626380000000"
@@ -690,9 +477,6 @@
     "districtSlug": "blue-lake-union-elementary-12627030000000"
   },
   {
-    "districtSlug": "bluff-prairie-elementary-12627110000000"
-  },
-  {
     "districtSlug": "bridgeville-elementary-12627290000000"
   },
   {
@@ -702,34 +486,16 @@
     "districtSlug": "cutten-elementary-12627450000000"
   },
   {
-    "districtSlug": "eureka-city-elementary-12627520000000"
-  },
-  {
-    "districtSlug": "eureka-city-elementaryhigh-12409230000000"
-  },
-  {
-    "districtSlug": "eureka-city-high-12627600000000"
-  },
-  {
     "districtSlug": "eureka-city-schools-12755150000000"
   },
   {
-    "districtSlug": "ferndale-elementary-12627780000000"
-  },
-  {
     "districtSlug": "ferndale-unified-12753740000000"
-  },
-  {
-    "districtSlug": "ferndale-union-high-12627860000000"
   },
   {
     "districtSlug": "fieldbrook-elementary-12627940000000"
   },
   {
     "districtSlug": "fortuna-elementary-12768020000000"
-  },
-  {
-    "districtSlug": "fortuna-union-elementary-12628020000000"
   },
   {
     "districtSlug": "fortuna-union-high-12628100000000"
@@ -742,9 +508,6 @@
   },
   {
     "districtSlug": "green-point-elementary-12628510000000"
-  },
-  {
-    "districtSlug": "grizzly-bluff-elementary-12628690000000"
   },
   {
     "districtSlug": "humboldt-county-office-of-education-12101240000000"
@@ -774,9 +537,6 @@
     "districtSlug": "mattole-unified-12753820000000"
   },
   {
-    "districtSlug": "mattole-union-elementary-12629430000000"
-  },
-  {
     "districtSlug": "mckinleyville-union-elementary-12629500000000"
   },
   {
@@ -793,9 +553,6 @@
   },
   {
     "districtSlug": "rio-dell-elementary-12630080000000"
-  },
-  {
-    "districtSlug": "rohnerville-elementary-12630160000000"
   },
   {
     "districtSlug": "scotia-union-elementary-12630240000000"
@@ -870,13 +627,7 @@
     "districtSlug": "big-pine-unified-14632480000000"
   },
   {
-    "districtSlug": "bishop-joint-union-high-14632630000000"
-  },
-  {
     "districtSlug": "bishop-unified-14766870000000"
-  },
-  {
-    "districtSlug": "bishop-union-elementary-14632550000000"
   },
   {
     "districtSlug": "death-valley-unified-14632710000000"
@@ -886,9 +637,6 @@
   },
   {
     "districtSlug": "inyo-county-office-of-education-14101400000000"
-  },
-  {
-    "districtSlug": "inyo-county-rop-14740700000000"
   },
   {
     "districtSlug": "lone-pine-unified-14632890000000"
@@ -909,9 +657,6 @@
     "districtSlug": "beardsley-elementary-15633390000000"
   },
   {
-    "districtSlug": "belridge-elementary-15633470000000"
-  },
-  {
     "districtSlug": "blake-elementary-15633540000000"
   },
   {
@@ -919,9 +664,6 @@
   },
   {
     "districtSlug": "caliente-union-elementary-15633880000000"
-  },
-  {
-    "districtSlug": "china-lake-joint-elementary-15633960000000"
   },
   {
     "districtSlug": "delano-joint-union-high-15634120000000"
@@ -939,9 +681,6 @@
     "districtSlug": "el-tejon-unified-15751680000000"
   },
   {
-    "districtSlug": "el-tejon-union-15634530000000"
-  },
-  {
     "districtSlug": "elk-hills-elementary-15634460000000"
   },
   {
@@ -952,9 +691,6 @@
   },
   {
     "districtSlug": "general-shafter-elementary-15634870000000"
-  },
-  {
-    "districtSlug": "greeley-elementary-15634950000000"
   },
   {
     "districtSlug": "greenfield-union-15635030000000"
@@ -996,9 +732,6 @@
     "districtSlug": "mcfarland-unified-15739080000000"
   },
   {
-    "districtSlug": "mcfarland-unified-15636360000000"
-  },
-  {
     "districtSlug": "mckittrick-elementary-15636510000000"
   },
   {
@@ -1014,40 +747,19 @@
     "districtSlug": "norris-elementary-15636930000000"
   },
   {
-    "districtSlug": "north-kern-vocational-training-center-15747570000000"
-  },
-  {
-    "districtSlug": "north-kern-vocational-training-center-jpa-15401130000000"
-  },
-  {
-    "districtSlug": "panama-union-elementary-15637010000000"
-  },
-  {
     "districtSlug": "panama-buena-vista-union-15633620000000"
   },
   {
     "districtSlug": "pond-union-elementary-15637190000000"
   },
   {
-    "districtSlug": "rand-joint-elementary-15637270000000"
-  },
-  {
-    "districtSlug": "richland-elementary-15637350000000"
-  },
-  {
     "districtSlug": "richland-union-elementary-15635780000000"
-  },
-  {
-    "districtSlug": "rio-bravo-union-elementary-15637430000000"
   },
   {
     "districtSlug": "rio-bravo-greeley-union-elementary-15735440000000"
   },
   {
     "districtSlug": "rosedale-union-elementary-15637500000000"
-  },
-  {
-    "districtSlug": "sbe-ridgecrest-charter-15756300000000"
   },
   {
     "districtSlug": "semitropic-elementary-15637680000000"
@@ -1083,12 +795,6 @@
     "districtSlug": "wasco-union-high-15638590000000"
   },
   {
-    "districtSlug": "west-side-rop-15741610000000"
-  },
-  {
-    "districtSlug": "west-side-rop-jpa-15401210000000"
-  },
-  {
     "districtSlug": "armona-union-elementary-16638750000000"
   },
   {
@@ -1096,9 +802,6 @@
   },
   {
     "districtSlug": "corcoran-joint-unified-16638910000000"
-  },
-  {
-    "districtSlug": "delta-view-joint-union-elementary-16639090000000"
   },
   {
     "districtSlug": "hanford-elementary-16639170000000"
@@ -1149,9 +852,6 @@
     "districtSlug": "lake-county-office-of-education-17101730000000"
   },
   {
-    "districtSlug": "lake-county-rop-17744190000000"
-  },
-  {
     "districtSlug": "lakeport-unified-17640300000000"
   },
   {
@@ -1164,19 +864,10 @@
     "districtSlug": "upper-lake-unified-17769760000000"
   },
   {
-    "districtSlug": "upper-lake-union-elementary-17640630000000"
-  },
-  {
-    "districtSlug": "upper-lake-union-high-17640710000000"
-  },
-  {
     "districtSlug": "big-valley-joint-unified-18640890000000"
   },
   {
     "districtSlug": "fort-sage-unified-18750360000000"
-  },
-  {
-    "districtSlug": "herlong-elementary-18640970000000"
   },
   {
     "districtSlug": "janesville-union-elementary-18641050000000"
@@ -1185,31 +876,19 @@
     "districtSlug": "johnstonville-elementary-18641130000000"
   },
   {
-    "districtSlug": "lake-elementary-18641210000000"
-  },
-  {
     "districtSlug": "lassen-county-office-of-education-18101810000000"
   },
   {
     "districtSlug": "lassen-rop-18747400000000"
   },
   {
-    "districtSlug": "lassen-rop-jpa-18402040000000"
-  },
-  {
     "districtSlug": "lassen-union-high-18641390000000"
-  },
-  {
-    "districtSlug": "long-valley-elementary-18641540000000"
   },
   {
     "districtSlug": "ravendale-termo-elementary-18641620000000"
   },
   {
     "districtSlug": "richmond-elementary-18641700000000"
-  },
-  {
-    "districtSlug": "sbe-long-valley-charter-18767290000000"
   },
   {
     "districtSlug": "shaffer-union-elementary-18641880000000"
@@ -1225,15 +904,6 @@
   },
   {
     "districtSlug": "acton-agua-dulce-unified-19753090000000"
-  },
-  {
-    "districtSlug": "alhambra-city-elementary-19642200000000"
-  },
-  {
-    "districtSlug": "alhambra-city-elementaryhigh-19407250000000"
-  },
-  {
-    "districtSlug": "alhambra-city-high-19642380000000"
   },
   {
     "districtSlug": "alhambra-unified-19757130000000"
@@ -1293,16 +963,10 @@
     "districtSlug": "claremont-unified-19643940000000"
   },
   {
-    "districtSlug": "compton-city-elementary-19644020000000"
-  },
-  {
     "districtSlug": "compton-unified-19734370000000"
   },
   {
     "districtSlug": "compton-unified-rop-19748310000000"
-  },
-  {
-    "districtSlug": "compton-union-high-19644100000000"
   },
   {
     "districtSlug": "covina-valley-unified-19644360000000"
@@ -1338,16 +1002,10 @@
     "districtSlug": "el-segundo-unified-19645350000000"
   },
   {
-    "districtSlug": "enterprise-city-elementary-19645430000000"
-  },
-  {
     "districtSlug": "garvey-elementary-19645500000000"
   },
   {
     "districtSlug": "glendale-unified-19645680000000"
-  },
-  {
-    "districtSlug": "glendale-burbank-telecommunications-agency-19406340000000"
   },
   {
     "districtSlug": "glendora-unified-19645760000000"
@@ -1368,9 +1026,6 @@
     "districtSlug": "hermosa-beach-city-elementary-19646000000000"
   },
   {
-    "districtSlug": "hudson-elementary-19646180000000"
-  },
-  {
     "districtSlug": "hughes-elizabeth-lakes-union-elementary-19646260000000"
   },
   {
@@ -1383,16 +1038,7 @@
     "districtSlug": "la-canada-unified-19646590000000"
   },
   {
-    "districtSlug": "la-puente-valley-rop-19740880000000"
-  },
-  {
-    "districtSlug": "la-puente-valley-rop-19401880000000"
-  },
-  {
     "districtSlug": "lancaster-elementary-19646670000000"
-  },
-  {
-    "districtSlug": "lapuente-union-high-19646750000000"
   },
   {
     "districtSlug": "las-virgenes-unified-19646830000000"
@@ -1419,12 +1065,6 @@
     "districtSlug": "los-angeles-county-rop-19744430000000"
   },
   {
-    "districtSlug": "los-angeles-county-special-ed-19111970000000"
-  },
-  {
-    "districtSlug": "los-angeles-county-superintendent-19191900000000"
-  },
-  {
     "districtSlug": "los-angeles-unified-19647330000000"
   },
   {
@@ -1437,13 +1077,7 @@
     "districtSlug": "lynwood-unified-19647740000000"
   },
   {
-    "districtSlug": "manhattan-beach-city-elementar-19647820000000"
-  },
-  {
     "districtSlug": "manhattan-beach-unified-19753330000000"
-  },
-  {
-    "districtSlug": "merge-risk-mgmt-jpa-19409560000000"
   },
   {
     "districtSlug": "monrovia-unified-19647900000000"
@@ -1452,16 +1086,10 @@
     "districtSlug": "montebello-unified-19648080000000"
   },
   {
-    "districtSlug": "mountain-conservation-and-educ-authority-19405500000000"
-  },
-  {
     "districtSlug": "mountain-view-elementary-19648160000000"
   },
   {
     "districtSlug": "newhall-19648320000000"
-  },
-  {
-    "districtSlug": "north-san-gabriel-valley-data-proc-consort-19406750000000"
   },
   {
     "districtSlug": "norwalk-la-mirada-unified-19648400000000"
@@ -1488,16 +1116,10 @@
     "districtSlug": "pupil-transportation-co-op-jpa-19401390000000"
   },
   {
-    "districtSlug": "redondo-beach-city-elementary-19649150000000"
-  },
-  {
     "districtSlug": "redondo-beach-unified-19753410000000"
   },
   {
     "districtSlug": "rosemead-elementary-19649310000000"
-  },
-  {
-    "districtSlug": "rowland-elementary-19649490000000"
   },
   {
     "districtSlug": "rowland-unified-19734520000000"
@@ -1507,9 +1129,6 @@
   },
   {
     "districtSlug": "san-antonio-rop-19406910000000"
-  },
-  {
-    "districtSlug": "san-gabriel-elementary-19649560000000"
   },
   {
     "districtSlug": "san-gabriel-unified-19752910000000"
@@ -1524,9 +1143,6 @@
     "districtSlug": "san-marino-unified-19649640000000"
   },
   {
-    "districtSlug": "santa-clarita-valley-school-food-svs-agency-19406670000000"
-  },
-  {
     "districtSlug": "santa-clarita-vlly-sch-food-svs-agency-jpa-19407090000000"
   },
   {
@@ -1536,73 +1152,16 @@
     "districtSlug": "saugus-union-19649980000000"
   },
   {
-    "districtSlug": "sbe-animo-inglewood-charter-19756710000000"
-  },
-  {
     "districtSlug": "sbe-academia-avance-charter-19769680000000"
   },
   {
-    "districtSlug": "sbe-academy-of-culture-and-technology-act-19763310000000"
-  },
-  {
-    "districtSlug": "sbe-anahuacalmecac-international-university-preparatory-of-north-america-19768850000000"
-  },
-  {
-    "districtSlug": "sbe-barack-obama-charter-19765470000000"
-  },
-  {
-    "districtSlug": "sbe-celerity-himalia-19770810000000"
-  },
-  {
-    "districtSlug": "sbe-celerity-rolas-19770730000000"
-  },
-  {
-    "districtSlug": "sbe-doris-topsy-elvord-academy-19765210000000"
-  },
-  {
-    "districtSlug": "sbe-eagle-collegiate-academy-19773620000000"
-  },
-  {
-    "districtSlug": "sbe-ingenium-charter-19766790000000"
-  },
-  {
-    "districtSlug": "sbe-lifeline-education-charter-19764970000000"
-  },
-  {
-    "districtSlug": "sbe-los-angeles-college-prep-academy-19772890000000"
-  },
-  {
     "districtSlug": "sbe-new-west-charter-19756630000000"
-  },
-  {
-    "districtSlug": "sbe-prepa-tec-los-angeles-high-19769920000000"
-  },
-  {
-    "districtSlug": "sbe-time-community-19773700000000"
-  },
-  {
-    "districtSlug": "sbe-the-school-of-arts-and-enterprise-19756970000000"
-  },
-  {
-    "districtSlug": "sbe-todays-fresh-start-charter-19767370000000"
-  },
-  {
-    "districtSlug": "soledad-agua-dulce-union-eleme-19650030000000"
-  },
-  {
-    "districtSlug": "south-bay-union-high-19650110000000"
   },
   {
     "districtSlug": "south-pasadena-unified-19650290000000"
   },
   {
     "districtSlug": "south-whittier-elementary-19650370000000"
-  },
-  {
-    "districtSlug": "southeast-rop-19401700000000"
-  },
-  {
-    "districtSlug": "southeast-rop-19740960000000"
   },
   {
     "districtSlug": "southern-california-roc-19743360000000"
@@ -1629,9 +1188,6 @@
     "districtSlug": "valle-lindo-elementary-19650780000000"
   },
   {
-    "districtSlug": "walnut-elem-19650860000000"
-  },
-  {
     "districtSlug": "walnut-valley-unified-19734600000000"
   },
   {
@@ -1650,13 +1206,7 @@
     "districtSlug": "william-s-hart-union-high-19651360000000"
   },
   {
-    "districtSlug": "willowbrook-elem-19651440000000"
-  },
-  {
     "districtSlug": "wilsona-elementary-19651510000000"
-  },
-  {
-    "districtSlug": "wiseburn-elementary-19651690000000"
   },
   {
     "districtSlug": "wiseburn-unified-19768690000000"
@@ -1668,9 +1218,6 @@
     "districtSlug": "bass-lake-joint-union-elementary-20651850000000"
   },
   {
-    "districtSlug": "chawanakee-jt-elementary-20751350000000"
-  },
-  {
     "districtSlug": "chawanakee-unified-20756060000000"
   },
   {
@@ -1678,12 +1225,6 @@
   },
   {
     "districtSlug": "chowchilla-union-high-20652010000000"
-  },
-  {
-    "districtSlug": "coarsegold-union-elementary-20652190000000"
-  },
-  {
-    "districtSlug": "dairyland-union-elementary-20652270000000"
   },
   {
     "districtSlug": "golden-valley-unified-20755800000000"
@@ -1695,37 +1236,13 @@
     "districtSlug": "madera-unified-20652430000000"
   },
   {
-    "districtSlug": "minarets-jt-union-high-20754240000000"
-  },
-  {
-    "districtSlug": "north-fork-union-elementary-20652500000000"
-  },
-  {
-    "districtSlug": "oakhurst-union-elementary-20652680000000"
-  },
-  {
     "districtSlug": "raymond-knowles-union-elementary-20652760000000"
-  },
-  {
-    "districtSlug": "sierra-jt-union-high-20624550000000"
-  },
-  {
-    "districtSlug": "spring-valley-elementary-20652840000000"
-  },
-  {
-    "districtSlug": "wasuma-union-elementary-20652920000000"
-  },
-  {
-    "districtSlug": "yosemite-joint-union-high-20737340000000"
   },
   {
     "districtSlug": "yosemite-unified-20764140000000"
   },
   {
     "districtSlug": "bolinas-stinson-union-21653000000000"
-  },
-  {
-    "districtSlug": "fairfax-elementary-21653260000000"
   },
   {
     "districtSlug": "kentfield-elementary-21653340000000"
@@ -1738,9 +1255,6 @@
   },
   {
     "districtSlug": "larkspur-corte-madera-21653670000000"
-  },
-  {
-    "districtSlug": "lincoln-elementary-21653750000000"
   },
   {
     "districtSlug": "marin-county-office-of-education-21102150000000"
@@ -1773,9 +1287,6 @@
     "districtSlug": "ross-valley-elementary-21750020000000"
   },
   {
-    "districtSlug": "san-anselmo-elementary-21654410000000"
-  },
-  {
     "districtSlug": "san-rafael-city-elementary-21654580000000"
   },
   {
@@ -1785,16 +1296,10 @@
     "districtSlug": "sausalito-marin-city-21654740000000"
   },
   {
-    "districtSlug": "sbe-ross-valley-elementary-21770650000000"
-  },
-  {
     "districtSlug": "shoreline-unified-21733610000000"
   },
   {
     "districtSlug": "tamalpais-union-high-21654820000000"
-  },
-  {
-    "districtSlug": "union-joint-elementary-21655160000000"
   },
   {
     "districtSlug": "mariposa-county-office-of-education-22102230000000"
@@ -1822,9 +1327,6 @@
   },
   {
     "districtSlug": "manchester-union-elementary-23655730000000"
-  },
-  {
-    "districtSlug": "mendocino-county-jpa-23405680000000"
   },
   {
     "districtSlug": "mendocino-county-office-of-education-23102310000000"
@@ -1857,16 +1359,7 @@
     "districtSlug": "ballico-cressey-elementary-24656490000000"
   },
   {
-    "districtSlug": "delhi-elementary-24656560000000"
-  },
-  {
     "districtSlug": "delhi-unified-24753660000000"
-  },
-  {
-    "districtSlug": "dos-palos-joint-union-elementa-24656640000000"
-  },
-  {
-    "districtSlug": "dos-palos-joint-union-high-24656720000000"
   },
   {
     "districtSlug": "dos-palos-oro-loma-joint-unified-24753170000000"
@@ -1882,9 +1375,6 @@
   },
   {
     "districtSlug": "hilmar-unified-24656980000000"
-  },
-  {
-    "districtSlug": "hopeton-elementary-24657060000000"
   },
   {
     "districtSlug": "le-grand-union-elementary-24657220000000"
@@ -1917,9 +1407,6 @@
     "districtSlug": "merced-union-high-24657890000000"
   },
   {
-    "districtSlug": "newman-gustine-jt-unified-24658050000000"
-  },
-  {
     "districtSlug": "plainsburg-union-elementary-24658130000000"
   },
   {
@@ -1927,9 +1414,6 @@
   },
   {
     "districtSlug": "snelling-merced-falls-union-elementary-24658390000000"
-  },
-  {
-    "districtSlug": "washington-elementary-24658540000000"
   },
   {
     "districtSlug": "weaver-union-24658620000000"
@@ -1947,46 +1431,19 @@
     "districtSlug": "modoc-joint-unified-25735850000000"
   },
   {
-    "districtSlug": "modoc-tulelake-jt-unified-25658880000000"
-  },
-  {
     "districtSlug": "surprise-valley-joint-unified-25658960000000"
   },
   {
     "districtSlug": "tulelake-basin-joint-unified-25735930000000"
   },
   {
-    "districtSlug": "antelope-union-elementary-26659040000000"
-  },
-  {
-    "districtSlug": "benton-elementary-26659120000000"
-  },
-  {
-    "districtSlug": "bridgeport-elementary-26659200000000"
-  },
-  {
     "districtSlug": "eastern-sierra-unified-26736680000000"
-  },
-  {
-    "districtSlug": "lee-vining-union-elementary-26659380000000"
-  },
-  {
-    "districtSlug": "mammoth-elementary-26659460000000"
   },
   {
     "districtSlug": "mammoth-unified-26736920000000"
   },
   {
-    "districtSlug": "mono-county-high-26659530000000"
-  },
-  {
-    "districtSlug": "mono-county-library-authority-jpa-26407410000000"
-  },
-  {
     "districtSlug": "mono-county-office-of-education-26102640000000"
-  },
-  {
-    "districtSlug": "mono-county-rocp-26748980000000"
   },
   {
     "districtSlug": "alisal-union-27659610000000"
@@ -2005,12 +1462,6 @@
   },
   {
     "districtSlug": "gonzales-unified-27754730000000"
-  },
-  {
-    "districtSlug": "gonzales-union-elementary-27660010000000"
-  },
-  {
-    "districtSlug": "gonzales-union-high-27660190000000"
   },
   {
     "districtSlug": "graves-elementary-27660270000000"
@@ -2037,16 +1488,10 @@
     "districtSlug": "monterey-county-office-of-education-27102720000000"
   },
   {
-    "districtSlug": "monterey-county-special-education-local-plan-area-27405760000000"
-  },
-  {
     "districtSlug": "monterey-peninsula-unified-27660920000000"
   },
   {
     "districtSlug": "north-monterey-county-unified-27738250000000"
-  },
-  {
-    "districtSlug": "pacific-elementary-27661260000000"
   },
   {
     "districtSlug": "pacific-grove-unified-27661340000000"
@@ -2071,9 +1516,6 @@
   },
   {
     "districtSlug": "soledad-unified-27754400000000"
-  },
-  {
-    "districtSlug": "soledad-union-elementary-27662090000000"
   },
   {
     "districtSlug": "south-monterey-county-joint-union-high-27660680000000"
@@ -2106,16 +1548,10 @@
     "districtSlug": "saint-helena-unified-28662900000000"
   },
   {
-    "districtSlug": "cherokee-elementary-29663080000000"
-  },
-  {
     "districtSlug": "chicago-park-elementary-29663160000000"
   },
   {
     "districtSlug": "clear-creek-elementary-29663240000000"
-  },
-  {
-    "districtSlug": "community-day-school-joint-powers-agency-29756550000000"
   },
   {
     "districtSlug": "community-roots-school-food-services-agency-29774040000000"
@@ -2139,22 +1575,10 @@
     "districtSlug": "nevada-joint-union-high-29663570000000"
   },
   {
-    "districtSlug": "north-san-juan-elementary-29663650000000"
-  },
-  {
     "districtSlug": "penn-valley-union-elementary-29768770000000"
   },
   {
     "districtSlug": "pleasant-ridge-union-elementary-29663730000000"
-  },
-  {
-    "districtSlug": "pleasant-valley-elementary-29663810000000"
-  },
-  {
-    "districtSlug": "ready-springs-union-elementary-29663990000000"
-  },
-  {
-    "districtSlug": "san-juan-ridge-union-elementar-29736270000000"
   },
   {
     "districtSlug": "twin-ridges-elementary-29664150000000"
@@ -2253,9 +1677,6 @@
     "districtSlug": "orange-county-department-of-education-30103060000000"
   },
   {
-    "districtSlug": "orange-county-school-dist-financing-authority-30405840000000"
-  },
-  {
     "districtSlug": "orange-unified-30666210000000"
   },
   {
@@ -2263,9 +1684,6 @@
   },
   {
     "districtSlug": "saddleback-valley-unified-30736350000000"
-  },
-  {
-    "districtSlug": "san-joaquin-elementary-30666620000000"
   },
   {
     "districtSlug": "santa-ana-unified-30666700000000"
@@ -2277,22 +1695,10 @@
     "districtSlug": "sbe-magnolia-science-academy-santa-ana-30768930000000"
   },
   {
-    "districtSlug": "seal-beach-elementary-30667040000000"
-  },
-  {
-    "districtSlug": "trabuco-elementary-30667120000000"
-  },
-  {
     "districtSlug": "tustin-unified-30736430000000"
   },
   {
-    "districtSlug": "tustin-union-high-30667380000000"
-  },
-  {
     "districtSlug": "westminster-30667460000000"
-  },
-  {
-    "districtSlug": "yorba-linda-30667530000000"
   },
   {
     "districtSlug": "out-of-state-non-public-non-sectarian-77764220000000"
@@ -2313,16 +1719,10 @@
     "districtSlug": "dry-creek-joint-elementary-31668030000000"
   },
   {
-    "districtSlug": "emigrant-gap-elementary-31668110000000"
-  },
-  {
     "districtSlug": "eureka-union-31668290000000"
   },
   {
     "districtSlug": "foresthill-union-elementary-31668370000000"
-  },
-  {
-    "districtSlug": "forty-niner-rop-31747320000000"
   },
   {
     "districtSlug": "loomis-union-elementary-31668450000000"
@@ -2334,12 +1734,6 @@
     "districtSlug": "newcastle-elementary-31668520000000"
   },
   {
-    "districtSlug": "ophir-elementary-31668600000000"
-  },
-  {
-    "districtSlug": "penryn-elementary-31668780000000"
-  },
-  {
     "districtSlug": "placer-county-office-of-education-31103140000000"
   },
   {
@@ -2349,9 +1743,6 @@
     "districtSlug": "placer-union-high-31668940000000"
   },
   {
-    "districtSlug": "rocklin-elementary-31669020000000"
-  },
-  {
     "districtSlug": "rocklin-unified-31750850000000"
   },
   {
@@ -2359,15 +1750,6 @@
   },
   {
     "districtSlug": "roseville-joint-union-high-31669280000000"
-  },
-  {
-    "districtSlug": "sbe-western-sierra-collegiate-academy-31765700000000"
-  },
-  {
-    "districtSlug": "schools-mandate-group-jpa-31763230000000"
-  },
-  {
-    "districtSlug": "southern-placer-schools-transportation-authority-31406590000000"
   },
   {
     "districtSlug": "tahoe-truckee-unified-31669440000000"
@@ -2397,12 +1779,6 @@
     "districtSlug": "california-school-for-the-deaf-riverside-state-special-schl-33316250000000"
   },
   {
-    "districtSlug": "coachella-elementary-33670090000000"
-  },
-  {
-    "districtSlug": "coachella-valley-jt-union-hig-33670170000000"
-  },
-  {
     "districtSlug": "coachella-valley-unified-33736760000000"
   },
   {
@@ -2415,13 +1791,7 @@
     "districtSlug": "desert-sands-unified-33670580000000"
   },
   {
-    "districtSlug": "elsinore-union-high-33670740000000"
-  },
-  {
     "districtSlug": "hemet-unified-33670820000000"
-  },
-  {
-    "districtSlug": "joint-educational-transit-33406420000000"
   },
   {
     "districtSlug": "jurupa-unified-33670900000000"
@@ -2430,28 +1800,16 @@
     "districtSlug": "lake-elsinore-unified-33751760000000"
   },
   {
-    "districtSlug": "lake-elsinore-union-33670660000000"
-  },
-  {
-    "districtSlug": "mecca-elementary-33671080000000"
-  },
-  {
     "districtSlug": "menifee-union-33671160000000"
   },
   {
     "districtSlug": "moreno-valley-unified-33671240000000"
   },
   {
-    "districtSlug": "murrieta-elementary-33671400000000"
-  },
-  {
     "districtSlug": "murrieta-valley-unified-33752000000000"
   },
   {
     "districtSlug": "nuview-union-33671570000000"
-  },
-  {
-    "districtSlug": "oasis-joint-elementary-33671650000000"
   },
   {
     "districtSlug": "palm-springs-unified-33671730000000"
@@ -2481,19 +1839,7 @@
     "districtSlug": "san-jacinto-unified-33672490000000"
   },
   {
-    "districtSlug": "sbe-baypoint-preparatory-academy-33769430000000"
-  },
-  {
-    "districtSlug": "temecula-union-elementary-33672560000000"
-  },
-  {
     "districtSlug": "temecula-valley-unified-33751920000000"
-  },
-  {
-    "districtSlug": "thermal-union-elementary-33672640000000"
-  },
-  {
-    "districtSlug": "val-verde-elementary-33672720000000"
   },
   {
     "districtSlug": "val-verde-unified-33752420000000"
@@ -2508,16 +1854,7 @@
     "districtSlug": "california-department-of-state-hospitals-cdsh-34770570000000"
   },
   {
-    "districtSlug": "california-education-authority-cea-headquarters-34322760000000"
-  },
-  {
-    "districtSlug": "center-joint-elementary-34672980000000"
-  },
-  {
     "districtSlug": "center-joint-unified-34739730000000"
-  },
-  {
-    "districtSlug": "del-paso-heights-elementary-34673060000000"
   },
   {
     "districtSlug": "elk-grove-unified-34673140000000"
@@ -2535,25 +1872,7 @@
     "districtSlug": "galt-joint-union-high-34673550000000"
   },
   {
-    "districtSlug": "grant-joint-union-high-34673630000000"
-  },
-  {
-    "districtSlug": "marconi-technical-center-ropc-34748230000000"
-  },
-  {
     "districtSlug": "natomas-unified-34752830000000"
-  },
-  {
-    "districtSlug": "natomas-union-elementary-34673890000000"
-  },
-  {
-    "districtSlug": "north-sacramento-elementary-34673970000000"
-  },
-  {
-    "districtSlug": "retiree-health-benefits-jpa-34403940000000"
-  },
-  {
-    "districtSlug": "rio-linda-union-elementary-34674050000000"
   },
   {
     "districtSlug": "river-delta-joint-unified-34674130000000"
@@ -2574,12 +1893,6 @@
     "districtSlug": "san-juan-unified-34674470000000"
   },
   {
-    "districtSlug": "sbe-paramount-collegiate-academy-34769350000000"
-  },
-  {
-    "districtSlug": "school-projects-financing-corp-34405920000000"
-  },
-  {
     "districtSlug": "twin-rivers-unified-34765050000000"
   },
   {
@@ -2598,13 +1911,7 @@
     "districtSlug": "jefferson-elementary-35674880000000"
   },
   {
-    "districtSlug": "new-idria-elementary-35674960000000"
-  },
-  {
     "districtSlug": "north-county-joint-union-elementary-35675040000000"
-  },
-  {
-    "districtSlug": "olympia-elementary-35675120000000"
   },
   {
     "districtSlug": "panoche-elementary-35675200000000"
@@ -2614,12 +1921,6 @@
   },
   {
     "districtSlug": "san-benito-high-35675380000000"
-  },
-  {
-    "districtSlug": "san-benito-selpa-35408240000000"
-  },
-  {
-    "districtSlug": "san-juan-union-elementary-35675460000000"
   },
   {
     "districtSlug": "southside-elementary-35675530000000"
@@ -2635,9 +1936,6 @@
   },
   {
     "districtSlug": "alta-loma-elementary-36675950000000"
-  },
-  {
-    "districtSlug": "apple-valley-elementary-36676030000000"
   },
   {
     "districtSlug": "apple-valley-unified-36750770000000"
@@ -2667,9 +1965,6 @@
     "districtSlug": "chino-valley-unified-36676780000000"
   },
   {
-    "districtSlug": "classroom-structures-authority-jpa-36400300000000"
-  },
-  {
     "districtSlug": "colton-joint-unified-36676860000000"
   },
   {
@@ -2688,25 +1983,13 @@
     "districtSlug": "fontana-unified-36677100000000"
   },
   {
-    "districtSlug": "guasti-elementary-36677280000000"
-  },
-  {
     "districtSlug": "helendale-elementary-36677360000000"
-  },
-  {
-    "districtSlug": "hesperia-elementary-36677440000000"
   },
   {
     "districtSlug": "hesperia-unified-36750440000000"
   },
   {
-    "districtSlug": "los-flores-elementary-36677510000000"
-  },
-  {
     "districtSlug": "lucerne-valley-unified-36750510000000"
-  },
-  {
-    "districtSlug": "lucerne-valley-union-elementary-36677690000000"
   },
   {
     "districtSlug": "morongo-unified-36677770000000"
@@ -2727,9 +2010,6 @@
     "districtSlug": "oro-grande-36678270000000"
   },
   {
-    "districtSlug": "phelan-elementary-36678350000000"
-  },
-  {
     "districtSlug": "redlands-unified-36678430000000"
   },
   {
@@ -2748,9 +2028,6 @@
     "districtSlug": "san-bernardino-county-rop-36745180000000"
   },
   {
-    "districtSlug": "sbe-nova-meridian-academy-36767110000000"
-  },
-  {
     "districtSlug": "silver-valley-unified-36738900000000"
   },
   {
@@ -2758,9 +2035,6 @@
   },
   {
     "districtSlug": "trona-joint-unified-36678920000000"
-  },
-  {
-    "districtSlug": "upland-elementary-36679000000000"
   },
   {
     "districtSlug": "upland-unified-36750690000000"
@@ -2772,22 +2046,13 @@
     "districtSlug": "victor-valley-union-high-36679340000000"
   },
   {
-    "districtSlug": "wrightwood-joint-elementary-36679420000000"
-  },
-  {
     "districtSlug": "yucaipa-calimesa-joint-unified-36679590000000"
   },
   {
     "districtSlug": "alpine-union-elementary-37679670000000"
   },
   {
-    "districtSlug": "asbestos-hazard-emergency-response-act-jpa-37400220000000"
-  },
-  {
     "districtSlug": "bonsall-unified-37768510000000"
-  },
-  {
-    "districtSlug": "bonsall-union-elementary-37679750000000"
   },
   {
     "districtSlug": "borrego-springs-unified-37679830000000"
@@ -2856,31 +2121,16 @@
     "districtSlug": "national-elementary-37682210000000"
   },
   {
-    "districtSlug": "north-county-purchasing-consortium-37406000000000"
-  },
-  {
     "districtSlug": "oceanside-unified-37735690000000"
   },
   {
-    "districtSlug": "pauma-elementary-37682880000000"
-  },
-  {
     "districtSlug": "poway-unified-37682960000000"
-  },
-  {
-    "districtSlug": "psychological-services-jpa-37400140000000"
   },
   {
     "districtSlug": "ramona-city-unified-37683040000000"
   },
   {
     "districtSlug": "rancho-santa-fe-elementary-37683120000000"
-  },
-  {
-    "districtSlug": "retiree-dental-benefits-jpa-37400060000000"
-  },
-  {
-    "districtSlug": "rich-mar-union-elementary-37683200000000"
   },
   {
     "districtSlug": "san-diego-county-office-of-education-37103710000000"
@@ -2916,16 +2166,10 @@
     "districtSlug": "sbe-altus-schools-south-bay-37771070000000"
   },
   {
-    "districtSlug": "sbe-audeo-charter-ii-37770320000000"
-  },
-  {
     "districtSlug": "sbe-baypoint-preparatory-academy-san-diego-37771720000000"
   },
   {
     "districtSlug": "sbe-college-preparatory-middle-37771640000000"
-  },
-  {
-    "districtSlug": "sbe-thrive-public-37769010000000"
   },
   {
     "districtSlug": "sbe-vista-springs-charter-37771560000000"
@@ -2946,9 +2190,6 @@
     "districtSlug": "vallecitos-elementary-37684370000000"
   },
   {
-    "districtSlug": "valley-center-union-elementary-37684450000000"
-  },
-  {
     "districtSlug": "valley-center-pauma-unified-37756140000000"
   },
   {
@@ -2956,12 +2197,6 @@
   },
   {
     "districtSlug": "warner-unified-37754160000000"
-  },
-  {
-    "districtSlug": "warner-union-elementary-37684600000000"
-  },
-  {
-    "districtSlug": "diagnostic-school-for-nh-38316330000000"
   },
   {
     "districtSlug": "san-francisco-county-office-of-education-38103890000000"
@@ -2973,46 +2208,19 @@
     "districtSlug": "san-francisco-unified-38684780000000"
   },
   {
-    "districtSlug": "sbe-edison-charter-academy-38756480000000"
-  },
-  {
     "districtSlug": "sbe-kipp-bayview-elementary-38771310000000"
-  },
-  {
-    "districtSlug": "sbe-mary-l-booker-leadership-academy-38772300000000"
-  },
-  {
-    "districtSlug": "sbe-mission-preparatory-38767520000000"
-  },
-  {
-    "districtSlug": "sbe-onepurpose-38769190000000"
-  },
-  {
-    "districtSlug": "sbe-san-francisco-flex-academy-38767030000000"
   },
   {
     "districtSlug": "sbe-the-new-school-of-san-francisco-38769270000000"
   },
   {
-    "districtSlug": "banta-elementary-39684860000000"
-  },
-  {
     "districtSlug": "banta-unified-39773880000000"
-  },
-  {
-    "districtSlug": "delta-island-union-elementary-39734780000000"
   },
   {
     "districtSlug": "escalon-unified-39685020000000"
   },
   {
-    "districtSlug": "holt-union-elementary-39685360000000"
-  },
-  {
     "districtSlug": "jefferson-elementary-39685440000000"
-  },
-  {
-    "districtSlug": "lammersville-elementary-39685510000000"
   },
   {
     "districtSlug": "lammersville-joint-unified-39767600000000"
@@ -3039,9 +2247,6 @@
     "districtSlug": "oak-view-union-elementary-39686350000000"
   },
   {
-    "districtSlug": "rindge-elementary-39686430000000"
-  },
-  {
     "districtSlug": "ripon-unified-39686500000000"
   },
   {
@@ -3054,25 +2259,13 @@
     "districtSlug": "san-joaquin-data-processing-jpa-39403860000000"
   },
   {
-    "districtSlug": "san-joaquin-legal-services-jpa-39408810000000"
-  },
-  {
     "districtSlug": "stockton-unified-39686760000000"
-  },
-  {
-    "districtSlug": "tracy-elementary-39686840000000"
   },
   {
     "districtSlug": "tracy-joint-unified-39754990000000"
   },
   {
-    "districtSlug": "tracy-joint-union-high-39686920000000"
-  },
-  {
     "districtSlug": "atascadero-unified-40687000000000"
-  },
-  {
-    "districtSlug": "cambria-union-elementary-40687180000000"
   },
   {
     "districtSlug": "cayucos-elementary-40687260000000"
@@ -3084,25 +2277,10 @@
     "districtSlug": "coast-unified-40754650000000"
   },
   {
-    "districtSlug": "coast-union-high-40687340000000"
-  },
-  {
-    "districtSlug": "fairview-elementary-40687420000000"
-  },
-  {
     "districtSlug": "lucia-mar-unified-40687590000000"
   },
   {
     "districtSlug": "paso-robles-joint-unified-40754570000000"
-  },
-  {
-    "districtSlug": "paso-robles-joint-union-high-40687750000000"
-  },
-  {
-    "districtSlug": "paso-robles-union-elementary-40687670000000"
-  },
-  {
-    "districtSlug": "phillips-elementary-40687830000000"
   },
   {
     "districtSlug": "pleasant-valley-joint-union-elementary-40687910000000"
@@ -3115,12 +2293,6 @@
   },
   {
     "districtSlug": "san-miguel-joint-union-40688250000000"
-  },
-  {
-    "districtSlug": "santa-lucia-rop-40406180000000"
-  },
-  {
-    "districtSlug": "santa-lucia-rop-40747240000000"
   },
   {
     "districtSlug": "shandon-joint-unified-40688330000000"
@@ -3186,19 +2358,10 @@
     "districtSlug": "san-mateo-county-office-of-education-41104130000000"
   },
   {
-    "districtSlug": "san-mateo-county-rop-41745590000000"
-  },
-  {
     "districtSlug": "san-mateo-union-high-41690470000000"
   },
   {
     "districtSlug": "san-mateo-foster-city-41690390000000"
-  },
-  {
-    "districtSlug": "sbe-everest-public-high-41765880000000"
-  },
-  {
-    "districtSlug": "sbe-high-tech-high-bayshore-41764300000000"
   },
   {
     "districtSlug": "sequoia-union-high-41690620000000"
@@ -3222,15 +2385,6 @@
     "districtSlug": "carpinteria-unified-42691460000000"
   },
   {
-    "districtSlug": "casmalia-elementary-42691530000000"
-  },
-  {
-    "districtSlug": "central-coast-computing-authority-42404510000000"
-  },
-  {
-    "districtSlug": "central-coast-computing-authority-42406260000000"
-  },
-  {
     "districtSlug": "cold-spring-elementary-42691610000000"
   },
   {
@@ -3238,9 +2392,6 @@
   },
   {
     "districtSlug": "cuyama-joint-unified-42750100000000"
-  },
-  {
-    "districtSlug": "cuyama-joint-union-elementary-42691870000000"
   },
   {
     "districtSlug": "goleta-union-elementary-42691950000000"
@@ -3253,9 +2404,6 @@
   },
   {
     "districtSlug": "lompoc-unified-42692290000000"
-  },
-  {
-    "districtSlug": "los-alamos-elementary-42692370000000"
   },
   {
     "districtSlug": "los-olivos-elementary-42692450000000"
@@ -3276,19 +2424,7 @@
     "districtSlug": "santa-barbara-county-selpa-jpa-42403780000000"
   },
   {
-    "districtSlug": "santa-barbara-elementary-42692780000000"
-  },
-  {
-    "districtSlug": "santa-barbara-school-districts-42764060000000"
-  },
-  {
-    "districtSlug": "santa-barbara-secondary-42692860000000"
-  },
-  {
     "districtSlug": "santa-barbara-unified-42767860000000"
-  },
-  {
-    "districtSlug": "santa-maria-elementary-42693020000000"
   },
   {
     "districtSlug": "santa-maria-joint-union-high-42693100000000"
@@ -3298,9 +2434,6 @@
   },
   {
     "districtSlug": "santa-ynez-valley-union-high-42693280000000"
-  },
-  {
-    "districtSlug": "sbe-olive-grove-charter-42769500000000"
   },
   {
     "districtSlug": "sbe-olive-grove-charter-buellton-42772140000000"
@@ -3336,9 +2469,6 @@
     "districtSlug": "campbell-union-high-43694010000000"
   },
   {
-    "districtSlug": "central-santa-clara-county-rop-agency-43408570000000"
-  },
-  {
     "districtSlug": "cupertino-union-43694190000000"
   },
   {
@@ -3358,12 +2488,6 @@
   },
   {
     "districtSlug": "gilroy-unified-43694840000000"
-  },
-  {
-    "districtSlug": "institute-of-computer-technology-joint-powers-43410040000000"
-  },
-  {
-    "districtSlug": "institute-of-computer-technology-jpa-43403370000000"
   },
   {
     "districtSlug": "lakeside-joint-43694920000000"
@@ -3393,9 +2517,6 @@
     "districtSlug": "milpitas-unified-43733870000000"
   },
   {
-    "districtSlug": "montebello-elementary-43695670000000"
-  },
-  {
     "districtSlug": "moreland-43695750000000"
   },
   {
@@ -3409,12 +2530,6 @@
   },
   {
     "districtSlug": "mountain-view-los-altos-union-high-43696090000000"
-  },
-  {
-    "districtSlug": "north-county-regional-occupational-centerprogram-rocp-43766200000000"
-  },
-  {
-    "districtSlug": "north-county-regional-occupational-program-joint-powers-agency-43766120000000"
   },
   {
     "districtSlug": "oak-grove-elementary-43696250000000"
@@ -3444,15 +2559,6 @@
     "districtSlug": "sbe-kipp-navigate-college-prep-43771490000000"
   },
   {
-    "districtSlug": "sbe-perseverance-preparatory-43771150000000"
-  },
-  {
-    "districtSlug": "sbe-promise-academy-43771230000000"
-  },
-  {
-    "districtSlug": "sbe-wei-yu-international-charter-43769840000000"
-  },
-  {
     "districtSlug": "silicon-valley-joint-powers-transportation-agency-43756890000000"
   },
   {
@@ -3466,9 +2572,6 @@
   },
   {
     "districtSlug": "west-valley-schools-transportation-agency-jpa-43408990000000"
-  },
-  {
-    "districtSlug": "whisman-elementary-43697240000000"
   },
   {
     "districtSlug": "bonny-doon-union-elementary-44697320000000"
@@ -3492,12 +2595,6 @@
     "districtSlug": "pajaro-valley-unified-44697990000000"
   },
   {
-    "districtSlug": "pajaro-valley-unified-selpa-44408400000000"
-  },
-  {
-    "districtSlug": "san-benitosanta-cruz-counties-selpa-jpa-44404850000000"
-  },
-  {
     "districtSlug": "san-lorenzo-valley-unified-44698070000000"
   },
   {
@@ -3516,16 +2613,10 @@
     "districtSlug": "santa-cruz-county-rop-44745750000000"
   },
   {
-    "districtSlug": "santa-cruzsan-benito-selpa-jpa-44403520000000"
-  },
-  {
     "districtSlug": "sbe-watsonville-prep-44772480000000"
   },
   {
     "districtSlug": "scotts-valley-unified-44754320000000"
-  },
-  {
-    "districtSlug": "scotts-valley-union-elementary-44698310000000"
   },
   {
     "districtSlug": "soquel-union-elementary-44698490000000"
@@ -3534,19 +2625,10 @@
     "districtSlug": "anderson-union-high-45698560000000"
   },
   {
-    "districtSlug": "bass-elementary-45698640000000"
-  },
-  {
     "districtSlug": "bella-vista-elementary-45698720000000"
   },
   {
     "districtSlug": "black-butte-union-elementary-45698800000000"
-  },
-  {
-    "districtSlug": "buckeye-elementary-45698980000000"
-  },
-  {
-    "districtSlug": "canyon-union-elementary-45699060000000"
   },
   {
     "districtSlug": "cascade-union-elementary-45699140000000"
@@ -3582,9 +2664,6 @@
     "districtSlug": "igo-ono-platina-union-elementary-45700290000000"
   },
   {
-    "districtSlug": "indian-springs-elementary-45700370000000"
-  },
-  {
     "districtSlug": "junction-elementary-45700450000000"
   },
   {
@@ -3610,9 +2689,6 @@
   },
   {
     "districtSlug": "shasta-county-office-of-education-45104540000000"
-  },
-  {
-    "districtSlug": "shasta-lake-union-elementary-45701510000000"
   },
   {
     "districtSlug": "shasta-union-elementary-45701280000000"
@@ -3651,34 +2727,13 @@
     "districtSlug": "butteville-union-elementary-47702010000000"
   },
   {
-    "districtSlug": "callahan-east-fork-union-eleme-47702190000000"
-  },
-  {
     "districtSlug": "delphic-elementary-47702270000000"
-  },
-  {
-    "districtSlug": "dorris-elementary-47702350000000"
   },
   {
     "districtSlug": "dunsmuir-elementary-47702430000000"
   },
   {
     "districtSlug": "dunsmuir-joint-union-high-47702500000000"
-  },
-  {
-    "districtSlug": "etna-union-elementary-47702680000000"
-  },
-  {
-    "districtSlug": "etna-union-high-47702760000000"
-  },
-  {
-    "districtSlug": "fall-creek-elementary-47702840000000"
-  },
-  {
-    "districtSlug": "forks-of-salmon-elementary-47702920000000"
-  },
-  {
-    "districtSlug": "fort-jones-union-elementary-47703000000000"
   },
   {
     "districtSlug": "gazelle-union-elementary-47703180000000"
@@ -3688,9 +2743,6 @@
   },
   {
     "districtSlug": "happy-camp-union-elementary-47703340000000"
-  },
-  {
-    "districtSlug": "hilt-elementary-47703420000000"
   },
   {
     "districtSlug": "hornbrook-elementary-47703590000000"
@@ -3714,12 +2766,6 @@
     "districtSlug": "mt-shasta-union-elementary-47704250000000"
   },
   {
-    "districtSlug": "quartz-valley-elementary-47704330000000"
-  },
-  {
-    "districtSlug": "sawyers-bar-elementary-47704410000000"
-  },
-  {
     "districtSlug": "scott-valley-unified-47764550000000"
   },
   {
@@ -3727,12 +2773,6 @@
   },
   {
     "districtSlug": "siskiyou-county-office-of-education-47104700000000"
-  },
-  {
-    "districtSlug": "siskiyou-county-rop-47746900000000"
-  },
-  {
-    "districtSlug": "siskiyou-regional-occupational-program-joint-powers-authorit-47409980000000"
   },
   {
     "districtSlug": "siskiyou-rop-47748720000000"
@@ -3756,22 +2796,13 @@
     "districtSlug": "benicia-unified-48705240000000"
   },
   {
-    "districtSlug": "calif-maritime-academy-48316580000000"
-  },
-  {
     "districtSlug": "dixon-unified-48705320000000"
   },
   {
     "districtSlug": "fairfield-suisun-unified-48705400000000"
   },
   {
-    "districtSlug": "sbe-dixon-montessori-charter-48766610000000"
-  },
-  {
     "districtSlug": "solano-county-office-of-education-48104880000000"
-  },
-  {
-    "districtSlug": "solano-county-rop-48746740000000"
   },
   {
     "districtSlug": "travis-unified-48705650000000"
@@ -3796,9 +2827,6 @@
   },
   {
     "districtSlug": "cloverdale-unified-49706560000000"
-  },
-  {
-    "districtSlug": "cotati-rohnert-park-elementary-49706640000000"
   },
   {
     "districtSlug": "cotati-rohnert-park-unified-49738820000000"
@@ -3826,12 +2854,6 @@
   },
   {
     "districtSlug": "healdsburg-unified-49753900000000"
-  },
-  {
-    "districtSlug": "healdsburg-union-elementary-49707480000000"
-  },
-  {
-    "districtSlug": "healdsburg-union-high-49707550000000"
   },
   {
     "districtSlug": "horicon-elementary-49707630000000"
@@ -3888,9 +2910,6 @@
     "districtSlug": "santa-rosa-high-49709200000000"
   },
   {
-    "districtSlug": "sbe-river-montessori-elementary-charter-49766040000000"
-  },
-  {
     "districtSlug": "sebastopol-union-elementary-49709380000000"
   },
   {
@@ -3927,9 +2946,6 @@
     "districtSlug": "windsor-unified-49753580000000"
   },
   {
-    "districtSlug": "windsor-union-elementary-49710270000000"
-  },
-  {
     "districtSlug": "wright-elementary-49710350000000"
   },
   {
@@ -3951,9 +2967,6 @@
     "districtSlug": "gratton-elementary-50710840000000"
   },
   {
-    "districtSlug": "greater-modesto-relocatable-administration-agency-50404690000000"
-  },
-  {
     "districtSlug": "hart-ransom-union-elementary-50710920000000"
   },
   {
@@ -3963,19 +2976,10 @@
     "districtSlug": "hughson-unified-50755490000000"
   },
   {
-    "districtSlug": "hughson-union-elementary-50711180000000"
-  },
-  {
-    "districtSlug": "hughson-union-high-50711260000000"
-  },
-  {
     "districtSlug": "keyes-union-50711340000000"
   },
   {
     "districtSlug": "knights-ferry-elementary-50711420000000"
-  },
-  {
-    "districtSlug": "la-grange-elementary-50711590000000"
   },
   {
     "districtSlug": "modesto-city-elementary-50711670000000"
@@ -3990,25 +2994,13 @@
     "districtSlug": "newman-crows-landing-unified-50736010000000"
   },
   {
-    "districtSlug": "northern-calif-medi-cal-admin-services-jpa-50763980000000"
-  },
-  {
     "districtSlug": "oakdale-joint-unified-50755640000000"
-  },
-  {
-    "districtSlug": "oakdale-joint-union-high-50711910000000"
-  },
-  {
-    "districtSlug": "oakdale-union-elementary-50711830000000"
   },
   {
     "districtSlug": "paradise-elementary-50712090000000"
   },
   {
     "districtSlug": "patterson-joint-unified-50712170000000"
-  },
-  {
-    "districtSlug": "riverbank-elementary-50712250000000"
   },
   {
     "districtSlug": "riverbank-unified-50755560000000"
@@ -4020,13 +3012,7 @@
     "districtSlug": "salida-union-elementary-50712660000000"
   },
   {
-    "districtSlug": "sbe-aspire-vanguard-college-preparatory-academy-50766380000000"
-  },
-  {
     "districtSlug": "shiloh-elementary-50712740000000"
-  },
-  {
-    "districtSlug": "stanislaus-area-data-processing-agency-50404770000000"
   },
   {
     "districtSlug": "stanislaus-county-office-of-education-50105040000000"
@@ -4038,22 +3024,10 @@
     "districtSlug": "sylvan-union-elementary-50712900000000"
   },
   {
-    "districtSlug": "turlock-joint-elementary-50713080000000"
-  },
-  {
-    "districtSlug": "turlock-joint-union-high-50713160000000"
-  },
-  {
-    "districtSlug": "turlock-public-schools-financing-agency-50407660000000"
-  },
-  {
     "districtSlug": "turlock-unified-50757390000000"
   },
   {
     "districtSlug": "valley-home-joint-elementary-50713240000000"
-  },
-  {
-    "districtSlug": "waterford-elementary-50713320000000"
   },
   {
     "districtSlug": "waterford-unified-50755720000000"
@@ -4107,16 +3081,10 @@
     "districtSlug": "antelope-elementary-52714720000000"
   },
   {
-    "districtSlug": "bend-elementary-52714800000000"
-  },
-  {
     "districtSlug": "corning-union-elementary-52714980000000"
   },
   {
     "districtSlug": "corning-union-high-52715060000000"
-  },
-  {
-    "districtSlug": "elkins-elementary-52715140000000"
   },
   {
     "districtSlug": "evergreen-union-52715220000000"
@@ -4137,15 +3105,6 @@
     "districtSlug": "los-molinos-unified-52715710000000"
   },
   {
-    "districtSlug": "manton-joint-union-elementary-52715890000000"
-  },
-  {
-    "districtSlug": "mineral-elementary-52716050000000"
-  },
-  {
-    "districtSlug": "plum-valley-elementary-52716130000000"
-  },
-  {
     "districtSlug": "red-bluff-joint-union-high-52716390000000"
   },
   {
@@ -4161,37 +3120,19 @@
     "districtSlug": "tehama-county-department-of-education-52105200000000"
   },
   {
-    "districtSlug": "tehama-county-rop-52743100000000"
-  },
-  {
     "districtSlug": "burnt-ranch-elementary-53716620000000"
   },
   {
     "districtSlug": "coffee-creek-elementary-53716700000000"
   },
   {
-    "districtSlug": "cox-bar-elementary-53716880000000"
-  },
-  {
     "districtSlug": "douglas-city-elementary-53716960000000"
-  },
-  {
-    "districtSlug": "hayfork-valley-union-elementary-53717040000000"
-  },
-  {
-    "districtSlug": "hoaglin-zenia-union-elementary-53717120000000"
-  },
-  {
-    "districtSlug": "hyampom-elementary-53717200000000"
   },
   {
     "districtSlug": "junction-city-elementary-53717380000000"
   },
   {
     "districtSlug": "lewiston-elementary-53717460000000"
-  },
-  {
-    "districtSlug": "mad-river-joint-elementary-53717530000000"
   },
   {
     "districtSlug": "mountain-valley-unified-53750280000000"
@@ -4209,12 +3150,6 @@
     "districtSlug": "trinity-county-office-of-education-53105380000000"
   },
   {
-    "districtSlug": "trinity-union-high-53717790000000"
-  },
-  {
-    "districtSlug": "weaverville-elementary-53717870000000"
-  },
-  {
     "districtSlug": "allensworth-elementary-54717950000000"
   },
   {
@@ -4230,19 +3165,10 @@
     "districtSlug": "burton-elementary-54718370000000"
   },
   {
-    "districtSlug": "citrus-south-tule-elementary-54718450000000"
-  },
-  {
     "districtSlug": "columbine-elementary-54718520000000"
   },
   {
     "districtSlug": "cutler-orosi-joint-unified-54718600000000"
-  },
-  {
-    "districtSlug": "dinuba-elementary-54718780000000"
-  },
-  {
-    "districtSlug": "dinuba-joint-union-high-54718860000000"
   },
   {
     "districtSlug": "dinuba-unified-54755310000000"
@@ -4255,15 +3181,6 @@
   },
   {
     "districtSlug": "exeter-unified-54768360000000"
-  },
-  {
-    "districtSlug": "exeter-union-elementary-54719100000000"
-  },
-  {
-    "districtSlug": "exeter-union-high-54719280000000"
-  },
-  {
-    "districtSlug": "farmersville-elementary-54719360000000"
   },
   {
     "districtSlug": "farmersville-unified-54753250000000"
@@ -4302,13 +3219,7 @@
     "districtSlug": "pleasant-view-elementary-54720580000000"
   },
   {
-    "districtSlug": "porterville-elementary-54720660000000"
-  },
-  {
     "districtSlug": "porterville-unified-54755230000000"
-  },
-  {
-    "districtSlug": "porterville-union-high-54720740000000"
   },
   {
     "districtSlug": "richgrove-elementary-54720820000000"
@@ -4330,9 +3241,6 @@
   },
   {
     "districtSlug": "strathmore-union-elementary-54721570000000"
-  },
-  {
-    "districtSlug": "strathmore-union-high-54721650000000"
   },
   {
     "districtSlug": "sundale-union-elementary-54721730000000"
@@ -4359,19 +3267,7 @@
     "districtSlug": "tulare-county-office-of-education-54105460000000"
   },
   {
-    "districtSlug": "tulare-county-organization-for-voc-ed-jpa-54403030000000"
-  },
-  {
-    "districtSlug": "tulare-county-organization-for-vocational-education-54741790000000"
-  },
-  {
-    "districtSlug": "tulare-county-schools-financing-authority-jpa-54409150000000"
-  },
-  {
     "districtSlug": "tulare-joint-union-high-54722490000000"
-  },
-  {
-    "districtSlug": "tulare-porterville-schools-financ-auth-jpa-54409070000000"
   },
   {
     "districtSlug": "visalia-unified-54722560000000"
@@ -4383,12 +3279,6 @@
     "districtSlug": "woodlake-unified-54767940000000"
   },
   {
-    "districtSlug": "woodlake-union-elementary-54722720000000"
-  },
-  {
-    "districtSlug": "woodlake-union-high-54722800000000"
-  },
-  {
     "districtSlug": "woodville-union-elementary-54722980000000"
   },
   {
@@ -4396,12 +3286,6 @@
   },
   {
     "districtSlug": "big-oak-flat-groveland-unified-55751840000000"
-  },
-  {
-    "districtSlug": "big-oak-flat-groveland-union-elementary-55723140000000"
-  },
-  {
-    "districtSlug": "chinese-camp-elementary-55723300000000"
   },
   {
     "districtSlug": "columbia-union-55723480000000"
@@ -4449,13 +3333,7 @@
     "districtSlug": "mesa-union-elementary-56724700000000"
   },
   {
-    "districtSlug": "moorpark-memorial-union-high-56724960000000"
-  },
-  {
     "districtSlug": "moorpark-unified-56739400000000"
-  },
-  {
-    "districtSlug": "moorpark-union-elementary-56724880000000"
   },
   {
     "districtSlug": "mupu-elementary-56725040000000"
@@ -4473,9 +3351,6 @@
     "districtSlug": "oxnard-56725380000000"
   },
   {
-    "districtSlug": "oxnard-area-public-school-tv-consortium-56407580000000"
-  },
-  {
     "districtSlug": "oxnard-union-high-56725460000000"
   },
   {
@@ -4488,22 +3363,13 @@
     "districtSlug": "santa-clara-elementary-56725790000000"
   },
   {
-    "districtSlug": "santa-paula-elementary-56725870000000"
-  },
-  {
     "districtSlug": "santa-paula-unified-56768280000000"
-  },
-  {
-    "districtSlug": "santa-paula-union-high-56725950000000"
   },
   {
     "districtSlug": "simi-valley-unified-56726030000000"
   },
   {
     "districtSlug": "somis-union-56726110000000"
-  },
-  {
-    "districtSlug": "valley-oaks-union-elementary-56726450000000"
   },
   {
     "districtSlug": "ventura-county-office-of-education-56105610000000"
@@ -4522,9 +3388,6 @@
   },
   {
     "districtSlug": "esparto-unified-57726860000000"
-  },
-  {
-    "districtSlug": "sbe-california-college-career-technical-education-center-57766950000000"
   },
   {
     "districtSlug": "washington-unified-57726940000000"

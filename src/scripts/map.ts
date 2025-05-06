@@ -1,37 +1,23 @@
 // src/map.ts
 
-import type { DistrictDetails, SchoolDetails } from './types';
+import type { DistrictDataMap, DistrictDetails, SchoolDetails } from './types';
 import L from 'leaflet';
 import proj4 from 'proj4';
 import type { Feature, Polygon, MultiPolygon } from 'geojson';
 import { OpenStreetMapProvider } from 'leaflet-geosearch'; // Keep geosearch import
-// import 'leaflet.markercluster';
+import 'leaflet.markercluster'; // Import the marker cluster library
 
 // --- Extend Leaflet namespace for MarkerCluster ---
-// This assumes leaflet.markercluster.js is loaded globally (e.g., via CDN)
-// and attaches its functionality to the L object.
+// This ensures TypeScript knows about L.markerClusterGroup
 declare module 'leaflet' {
-    // Define options interface if needed, or use L.MarkerClusterGroupOptions if provided by types
     interface MarkerClusterGroupOptions {
-        // Add specific options here if you use them, e.g.:
-        // showCoverageOnHover?: boolean;
-        // zoomToBoundsOnClick?: boolean;
-        // spiderfyOnMaxZoom?: boolean;
+        showCoverageOnHover?: boolean;
+        zoomToBoundsOnClick?: boolean;
+        spiderfyOnMaxZoom?: boolean;
+        // Add other options as needed
     }
 
-    // Declare the function
     export function markerClusterGroup(options?: MarkerClusterGroupOptions): MarkerClusterGroup;
-
-    // Declare the class extending LayerGroup
-    export class MarkerClusterGroup extends LayerGroup {
-        // Add methods used in the code if needed for stricter type checking
-        addLayer(layer: Layer): this;
-        // addLayers(layers: Layer[]): this;
-        removeLayer(layer: Layer): this;
-        // clearLayers(): this;
-        getBounds(): LatLngBounds;
-        getLayers(): Layer[]; // Added based on usage in console.log
-    }
 }
 // --- End Namespace Extension ---
 
@@ -63,10 +49,14 @@ const DEFAULT_MAP_CENTER: L.LatLngTuple = [36.7783, -119.4179]; // Center of Cal
 const DEFAULT_MAP_ZOOM = 6;
 
 // --- State (Module Level) ---
-// Keep track of map instances to avoid re-initialization
 const mapInstances = new Map<string, L.Map>();
-// Adjust state to track marker layers and cluster group separately
-const layerGroups = new Map<string, { boundary?: L.LayerGroup, districtMarker?: L.LayerGroup, schoolCluster?: L.MarkerClusterGroup }>();
+// Adjust state to track different layer types, including the new district cluster
+const layerGroups = new Map<string, {
+    boundary?: L.LayerGroup,
+    districtOfficeMarker?: L.LayerGroup, // Keep for specific office marker if needed later
+    schoolCluster?: L.MarkerClusterGroup, // For schools within a district
+    districtCluster?: L.MarkerClusterGroup // NEW: For district markers on index page
+}>();
 
 // --- Helper Functions ---
 
@@ -91,8 +81,9 @@ function clearMapLayers(mapId: string) {
     const map = mapInstances.get(mapId);
     if (groups && map) {
         if (groups.boundary) { map.removeLayer(groups.boundary); }
-        if (groups.districtMarker) { map.removeLayer(groups.districtMarker); }
-        if (groups.schoolCluster) { map.removeLayer(groups.schoolCluster); } // Remove cluster group
+        if (groups.districtOfficeMarker) { map.removeLayer(groups.districtOfficeMarker); }
+        if (groups.schoolCluster) { map.removeLayer(groups.schoolCluster); }
+        if (groups.districtCluster) { map.removeLayer(groups.districtCluster); } // Clear new district cluster
         layerGroups.set(mapId, {}); // Clear stored groups
     }
 }
@@ -101,11 +92,12 @@ function clearMapLayers(mapId: string) {
 
 /**
  * Initializes a Leaflet map on the given element ID if it doesn't exist.
+ * Sets default view and tile layer.
  * Returns the existing or new map instance.
- * Renamed from getOrCreateMap for clarity.
  */
 export function initializeMap(mapElementId: string): L.Map {
     if (mapInstances.has(mapElementId)) {
+        console.log(`Returning existing map instance for #${mapElementId}`);
         return mapInstances.get(mapElementId)!;
     }
 
@@ -113,18 +105,92 @@ export function initializeMap(mapElementId: string): L.Map {
     if (!mapElement) {
         throw new Error(`Map element #${mapElementId} not found.`);
     }
-    // Ensure the container isn't empty or just placeholder text
-    mapElement.innerHTML = ''; // Clear any placeholder
-    mapElement.style.height = '400px'; // Ensure container has height
+    mapElement.innerHTML = '';
+    mapElement.style.height = '400px';
     mapElement.style.width = '100%';
 
     const map = L.map(mapElementId).setView(DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM);
     L.tileLayer(TILE_LAYER_URL, { attribution: TILE_LAYER_ATTRIBUTION }).addTo(map);
 
     mapInstances.set(mapElementId, map);
-    layerGroups.set(mapElementId, {}); // Initialize layer groups for this map
+    layerGroups.set(mapElementId, {}); // Initialize empty layer groups for this map
     console.log(`Initialized map on #${mapElementId}`);
     return map;
+}
+
+/**
+ * NEW: Adds clustered markers for multiple districts to the map.
+ * Used on the index page. Attempts geocoding if Lat/Lon are missing.
+ */
+export function addDistrictMarkersToMap(
+    mapElementId: string,
+    districtsData: DistrictDataMap
+) {
+    const map = mapInstances.get(mapElementId);
+    if (!map) {
+        console.error(`Map instance #${mapElementId} not found for adding district markers.`);
+        return;
+    }
+
+    const groups = layerGroups.get(mapElementId) || {};
+
+    // Clear previous district cluster if it exists
+    if (groups.districtCluster) {
+        map.removeLayer(groups.districtCluster);
+    }
+
+    const districtClusterGroup = L.markerClusterGroup({
+        // Optional: configure marker cluster options here
+        // showCoverageOnHover: false,
+        // zoomToBoundsOnClick: true,
+    });
+
+    let validMarkers = 0;
+    const createdMarkers: L.Marker[] = []; // Initialize an array to collect markers
+
+    // Process districts sequentially to avoid rate-limiting during geocoding
+    for (const cdsCode of Object.keys(districtsData)) {
+        const district = districtsData[cdsCode];
+        let marker: L.Marker | null = null;
+
+        // Try Lat/Lon first
+        if (isValidCoordinate(district.Latitude, district.Longitude)) {
+            const lat = parseFloat(String(district.Latitude));
+            const lon = parseFloat(String(district.Longitude));
+            marker = L.marker([lat, lon]);
+            validMarkers++;
+        } else {
+            // Geocoding is now done server-side during data generation.
+            // If coordinates are STILL invalid here, log a warning.
+            console.warn(`[Map Index] Skipping marker for ${district.District} (${cdsCode}) due to missing/invalid coordinates in pre-processed data.`);
+        }
+
+        // If marker was created, add popup and add to our collection
+        if (marker) {
+            // Use the slug from the district data for the link
+            const slug = district.slug || cdsCode; // Fallback to cdsCode if slug is somehow missing
+            // Ensure the path matches the actual page route: /districts/ not /district/
+            const popupContent = `<b>${district.District}</b><br><a href="/districts/${slug}/">View Details</a>`;
+            marker.bindPopup(popupContent);
+            createdMarkers.push(marker); // Add the created marker to the array
+        }
+        // No need to return null anymore
+    } // End of for loop
+
+    // Now add all collected markers to the cluster group
+    if (createdMarkers.length > 0) {
+        districtClusterGroup.addLayers(createdMarkers); // Use addLayers for efficiency
+        map.addLayer(districtClusterGroup);
+        groups.districtCluster = districtClusterGroup;
+        layerGroups.set(mapElementId, groups);
+        console.log(`Added ${createdMarkers.length} district markers (incl. geocoded) to cluster group on map #${mapElementId}.`);
+        // Optional: Fit map bounds to the cluster group
+        // map.fitBounds(districtClusterGroup.getBounds());
+    } else {
+        console.warn(`No valid district markers found (incl. geocoded) to add to map #${mapElementId}.`);
+        groups.districtCluster = undefined;
+        layerGroups.set(mapElementId, groups);
+    }
 }
 
 /**
@@ -170,10 +236,10 @@ export function reprojectFeatureCoordinates(feature: Feature<Polygon | MultiPoly
 }
 
 /**
- * Updates an existing map instance for a specific district:
- * - Clears previous layers.
+ * Updates an existing map instance for a specific district view:
+ * - Clears previous layers (including general district clusters).
  * - Fetches and displays the district boundary.
- * - Adds markers for the district office and schools.
+ * - Adds markers for the district office and schools (clustered).
  * - Fits the map view to the boundary/markers.
  */
 export async function updateMapForDistrict(
@@ -181,178 +247,132 @@ export async function updateMapForDistrict(
     districtData: DistrictDetails,
     schoolsData: SchoolDetails[]
 ): Promise<void> {
-    console.log(`Updating map #${mapElementId} for ${districtData.District}`);
+    console.log(`Updating map #${mapElementId} for specific district: ${districtData.District}`);
 
     let map: L.Map;
     try {
-        // Use the newly renamed initializeMap function
-        map = initializeMap(mapElementId);
+        map = initializeMap(mapElementId); // Ensures map exists
     } catch (error) {
         console.error(`Failed to get or create map for ${mapElementId}:`, error);
-        const mapElement = document.getElementById(mapElementId);
-        if (mapElement) {
-            mapElement.innerHTML = '<p class="error">Could not initialize map.</p>';
-        }
+        // Handle error display if needed
         return;
     }
 
-    clearMapLayers(mapElementId);
+    clearMapLayers(mapElementId); // Clear ALL previous layers
 
     const boundaryLayerGroup = L.layerGroup();
-    const districtMarkerLayerGroup = L.layerGroup();
-    const schoolClusterGroup = L.markerClusterGroup();
+    const districtOfficeMarkerLayerGroup = L.layerGroup(); // Renamed from districtMarkerLayerGroup
+    const schoolClusterGroup = L.markerClusterGroup(); // Cluster schools
 
+    // Store the specific layers for this district view
     layerGroups.set(mapElementId, {
         boundary: boundaryLayerGroup,
-        districtMarker: districtMarkerLayerGroup,
+        districtOfficeMarker: districtOfficeMarkerLayerGroup,
         schoolCluster: schoolClusterGroup
     });
 
     boundaryLayerGroup.addTo(map);
-    districtMarkerLayerGroup.addTo(map);
-    schoolClusterGroup.addTo(map);
+    districtOfficeMarkerLayerGroup.addTo(map); // Add office marker layer
+    schoolClusterGroup.addTo(map); // Add school cluster layer
 
-    let bounds = L.latLngBounds([]); // Initialize empty bounds
+    let bounds = L.latLngBounds([]);
+    let hasValidLayers = false; // Track if we add anything valid to fit bounds
 
     // 1. Fetch and add boundary
     const cdsCode = districtData['CDS Code'];
     const boundaryUrl = `/assets/boundaries/${cdsCode}.geojson`;
     try {
         const response = await fetch(boundaryUrl);
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
-        // Fetch as any first to inspect it
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         let geojsonData: any = await response.json();
-        console.log(`[Debug] Fetched GeoJSON type: ${geojsonData?.type}, Geometry type: ${geojsonData?.geometry?.type}`); // Log type
-
-        // Type assertion after checking/logging if needed, or pass directly to reproject which now handles types
-        geojsonData = reprojectFeatureCoordinates(geojsonData as Feature<Polygon | MultiPolygon>); // Reproject here
+        geojsonData = reprojectFeatureCoordinates(geojsonData as Feature<Polygon | MultiPolygon>);
 
         const boundaryLayer = L.geoJSON(geojsonData, {
-            style: {
-                color: "#007bff", // Blue
-                weight: 2,
-                opacity: 0.8,
-                fillOpacity: 0.1
-            }
+            style: { color: "#007bff", weight: 2, opacity: 0.8, fillOpacity: 0.1 }
         });
         boundaryLayerGroup.addLayer(boundaryLayer);
-        bounds = boundaryLayer.getBounds(); // Set bounds to the boundary
+        bounds.extend(boundaryLayer.getBounds()); // Extend bounds
+        hasValidLayers = true;
         console.log(`Boundary loaded for ${cdsCode}`);
-
     } catch (error) {
-        console.error(`Failed to load boundary GeoJSON for ${cdsCode} from ${boundaryUrl}:`, error);
-        // Optionally display an error on the map element
-        const mapElement = document.getElementById(mapElementId);
-        if (mapElement && mapElement.innerHTML === '') { // Avoid overwriting map if it partially loaded
-            mapElement.innerHTML = '<p class="warning">Could not load district boundary.</p>';
-        }
+        console.error(`Failed to load boundary GeoJSON for ${cdsCode}:`, error);
     }
 
-    // 2. Add District Office Marker
-
-    // --- DEBUGGING: Log district data used for marker --- 
-
-    console.log(`[Debug] District Data for Marker:`, {
-
-        Latitude: districtData.Latitude,
-
-        Longitude: districtData.Longitude,
-
-        StreetAddress: districtData['Street Address'],
-
-        StreetCity: districtData['Street City'],
-
-        StreetState: districtData['Street State'],
-
-        StreetZip: districtData['Street Zip']
-
-    });
-
-    // --- END DEBUGGING ---
-
-    let districtMarkerCoords: L.LatLngTuple | null = null;
-
-    const latString = districtData.Latitude as string;
-
-    const lonString = districtData.Longitude as string;
-
-    // Try parsing Lat/Lon first
-    if (isValidCoordinate(latString, lonString)) {
+    // 2. Add District Office Marker (if coordinates are valid)
+    if (isValidCoordinate(districtData.Latitude, districtData.Longitude)) {
         const lat = parseFloat(String(districtData.Latitude));
         const lon = parseFloat(String(districtData.Longitude));
-        districtMarkerCoords = [lat, lon];
+        const officeMarker = L.marker([lat, lon]);
+        const officePopupContent = `<b>${districtData.District} (Office)</b><br>${formatAddress(
+            String(districtData.Street ?? ''),
+            String(districtData.City ?? ''),
+            String(districtData.State ?? ''),
+            String(districtData.Zip ?? '')
+        )}`;
+        officeMarker.bindPopup(officePopupContent);
+        districtOfficeMarkerLayerGroup.addLayer(officeMarker); // Add to specific layer
+        bounds.extend(officeMarker.getLatLng()); // Extend bounds
+        hasValidLayers = true;
     }
 
-    // If Lat/Lon invalid, try geocoding address
-
-    const address = [districtData['Street Address'], districtData['Street City'], districtData['Street State'], districtData['Street Zip']].filter(p => p && p !== 'No Data').join(', ');
-
-    // --- DEBUGGING: Log computed address --- 
-
-    console.log(`[Debug] Computed Address for Geosearch: "${address}"`);
-
-    // --- END DEBUGGING ---
-
-    if (!districtMarkerCoords && address) {
-
-        console.log(`[Map] District Lat/Lon invalid, attempting geosearch for: "${address}"`);
-
-        try {
-            const results = await geoSearchProvider.search({ query: address });
-            if (results && results.length > 0) {
-                districtMarkerCoords = [results[0].y, results[0].x];
-                console.log(`[Map] Geosearch successful for district office.`);
-            } else { // Add else block for logging when no results found
-                console.log(`[Map] Geosearch for district office returned no results for: "${address}"`);
-            }
-        } catch (error) {
-            console.warn(`[Map] Geosearch failed for district address "${address}":`, error);
+    // 3. Add School Markers (clustered)
+    let validSchoolMarkers = 0;
+    schoolsData.forEach(school => {
+        if (isValidCoordinate(school.Latitude, school.Longitude)) {
+            const lat = parseFloat(String(school.Latitude));
+            const lon = parseFloat(String(school.Longitude));
+            const schoolMarker = L.marker([lat, lon], { icon: schoolIcon });
+            const schoolPopupContent = `<b>${school.School}</b><br>${formatAddress(
+                String(school.Street ?? ''),
+                String(school.City ?? ''),
+                String(school.State ?? ''),
+                String(school.Zip ?? '')
+            )}`;
+            schoolMarker.bindPopup(schoolPopupContent);
+            schoolClusterGroup.addLayer(schoolMarker); // Add to cluster group
+            validSchoolMarkers++;
         }
-    }
+    });
 
-    // Add marker if coordinates were found (either from data or geocoding)
-    if (districtMarkerCoords) {
-        const marker = L.marker(districtMarkerCoords, { // Use default icon
-        }).bindPopup(`<b>${districtData.District} (Office)</b><br>${address || 'Address not available'}`);
-        districtMarkerLayerGroup.addLayer(marker);
-        if (!bounds.isValid()) { // If boundary failed, extend bounds with marker
-            bounds.extend(districtMarkerCoords);
-        } else {
-            bounds.extend(districtMarkerCoords); // Always extend bounds
-        }
-        console.log("District office marker added.");
-    }
-
-    // 3. Add School Markers (using MarkerClusterGroup)
-    if (schoolsData && schoolsData.length > 0) {
-        schoolsData.forEach(school => {
-            if (isValidCoordinate(school.Latitude, school.Longitude)) {
-                const lat = parseFloat(String(school.Latitude));
-                const lon = parseFloat(String(school.Longitude));
-                // Format the school address using the helper function
-                const schoolAddress = formatAddress(school['Street Address'], school['Street City'], school['Street State'], school['Street Zip']);
-                const schoolMarker = L.marker([lat, lon], { icon: schoolIcon })
-                    .bindPopup(`<b>${school.School || 'Unknown School'}</b><br>${schoolAddress}`); // Use address here
-                schoolClusterGroup.addLayer(schoolMarker); // Add to cluster group
-                bounds.extend([lat, lon]); // Extend bounds for each school
-            }
-        });
-        console.log(`Added ${schoolClusterGroup.getLayers().length} school markers to cluster group.`);
+    if (validSchoolMarkers > 0) {
+        console.log(`Added ${validSchoolMarkers} school markers to cluster group.`);
+        bounds.extend(schoolClusterGroup.getBounds()); // Extend bounds based on cluster
+        hasValidLayers = true;
     } else {
-        console.log("No valid school data to add to map.");
+        console.log(`No valid school markers found for ${districtData.District}.`);
     }
 
     // 4. Fit map view
-    if (bounds.isValid()) {
-        map.fitBounds(bounds, { padding: [50, 50] }); // Add padding
-        console.log("Map view fitted to bounds.");
+    if (hasValidLayers && bounds.isValid()) {
+        map.fitBounds(bounds, { padding: [20, 20] }); // Add some padding
+    } else if (isValidCoordinate(districtData.Latitude, districtData.Longitude)) {
+        // Fallback: Center on district office if boundary failed but office coords are valid
+        map.setView([parseFloat(String(districtData.Latitude)), parseFloat(String(districtData.Longitude))], 12); // Zoom in a bit
     } else {
-        // Fallback if no bounds could be determined (e.g., no boundary, no valid markers)
-        map.setView(DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM);
-        console.log("No valid bounds found, using default map view.");
+        // Fallback: Geocode district name if no boundary or valid coordinates found
+        console.warn(`No valid boundary or coordinates for ${districtData.District}. Attempting geocode.`);
+        try {
+            const results = await geoSearchProvider.search({ query: `${districtData.District}, California` });
+            if (results && results.length > 0) {
+                map.setView([results[0].y, results[0].x], 10); // Use geocoded location
+            } else {
+                console.warn(`Geocoding failed for ${districtData.District}. Keeping default view.`);
+                // Keep default map view if geocoding fails
+            }
+        } catch (geoError) {
+            console.error('Geocoding error:', geoError);
+            // Keep default map view on geocoding error
+        }
     }
+}
+
+// Optional: Add a function to explicitly clear the map if needed externally
+export function clearMap(mapElementId: string) {
+    console.log(`Explicitly clearing map #${mapElementId}`);
+    clearMapLayers(mapElementId);
+    // Maybe reset view?
+    // const map = mapInstances.get(mapElementId);
+    // if (map) { map.setView(DEFAULT_MAP_CENTER, DEFAULT_MAP_ZOOM); }
 }
 
 // Potentially add other map-related utility functions here
