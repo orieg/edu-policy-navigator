@@ -12,6 +12,8 @@
     "build:data": "tsc pipeline/scripts/generateDistrictJson.ts --module nodenext --outDir dist/pipeline/scripts && node dist/pipeline/scripts/generateDistrictJson.js",
     "build:boundaries": "tsc pipeline/scripts/splitBoundaries.ts --module nodenext --outDir dist/pipeline/scripts && node dist/pipeline/scripts/splitBoundaries.js",
     "prepare": "pnpm run convert:xlsx && pnpm run build:data && pnpm run build:boundaries",
+    "download:osm": "mkdir -p pipeline/data && curl -L -o pipeline/data/california-latest.osm.pbf https://download.geofabrik.de/north-america/us/california-latest.osm.pbf",
+    "docker:nominatim": "docker run -it --rm -v ./pipeline/data:/data -v nominatim-data:/var/lib/postgresql/16/main -e PBF_PATH=/data/california-latest.osm.pbf -p 8080:8080 --shm-size=1g --name nominatim mediagis/nominatim:5.1",
     "clean": "rm -rf dist .vike/ public/assets/boundaries public/assets/districts.json public/assets/schools_by_district.json public/assets/prerender-slugs.json",
     "dev": "pnpm run prepare && astro dev",
     "build": "pnpm run clean && pnpm run prepare && astro build",

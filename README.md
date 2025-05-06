@@ -16,14 +16,23 @@ This project uses [pnpm](https://pnpm.io/) for package management.
     ```bash
     pnpm install
     ```
-2.  **(Optional) Prepare/Update Data:**
-    If you need to refresh the district or school data from the source files (e.g., `CDESchoolDirectoryExport.xlsx`), run the data preparation script:
-    ```bash
-    pnpm run prepare:data
-    ```
-    *(Note: The necessary data JSON files are usually pre-committed in `public/assets/`)*
+2.  **Data Preparation & Geocoding (Required for `pnpm run prepare` or `pnpm run build:data`)**
+
+    The data preparation step (`pnpm run prepare` or `pnpm run build:data`) requires a local geocoding service (Nominatim) running via Docker to find coordinates for districts and schools.
+
+    *   **Install Docker:** Ensure you have Docker installed and running on your system.
+    *   **Download California OSM Data:** Run the following command to download the required `california-latest.osm.pbf` file into the `./pipeline/data/` directory:
+        ```bash
+        pnpm run download:osm
+        ```
+    *   **Run the Nominatim Container:** Open a terminal and run the following command. This will download the `mediagis/nominatim` image (if not already present), start a container named `nominatim`, import the California data from `./pipeline/data` (this might take a while the first time), and expose the geocoding service on port 8080.
+        ```bash
+        pnpm run docker:nominatim
+        ```
+        Keep this terminal running while you execute the data preparation scripts (`pnpm run prepare` or `pnpm run build:data`).
+
 3.  **Run Development Server:**
-    Starts a local development server with hot reloading.
+    Starts a local development server with hot reloading. Requires data to be prepared first (see step 2 or use pre-committed data).
     ```bash
     pnpm run dev
     ```
