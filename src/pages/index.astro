@@ -8,7 +8,61 @@ const pageDescription =
 ---
 
 <BaseLayout title={pageTitle} description={pageDescription}>
-    <h1>Welcome!</h1>
+    <h2>California Education Hub: Policies, Data & Parent Guides</h2>
+
+    <div class="guides-container">
+        <a href="/guides/school-safety-respect-protocol" class="guide-card">
+            <h2>
+                <span class="guide-icon">
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        ><path stroke="none" d="M0 0h24v24H0z" fill="none"
+                        ></path><path
+                            d="M11.46 20.846a12 12 0 0 1 -7.96 -14.846a12 12 0 0 0 8.5 -3a12 12 0 0 0 8.5 3a12 12 0 0 1 -.09 7.06"
+                        ></path><path d="M15 19l2 2l4 -4"></path></svg
+                    >
+                </span>
+                School Safety & Respect Protocol
+            </h2>
+            <p>Questions to ask about safety, behavior, and school climate.</p>
+        </a>
+        <a href="/guides/academic-curriculum" class="guide-card">
+            <h2>
+                <span class="guide-icon">
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        ><path stroke="none" d="M0 0h24v24H0z" fill="none"
+                        ></path><path d="M3 19a9 9 0 0 1 9 0a9 9 0 0 1 9 0"
+                        ></path><path d="M3 6a9 9 0 0 1 9 0a9 9 0 0 1 9 0"
+                        ></path><path d="M3 6l0 13"></path><path d="M12 6l0 13"
+                        ></path><path d="M21 6l0 13"></path></svg
+                    >
+                </span>
+                Academic Quality & Curriculum
+            </h2>
+            <p>
+                Questions to ask about curriculum, teaching, and student
+                learning.
+            </p>
+        </a>
+    </div>
+
     <div class="search-container">
         <input
             type="search"
@@ -92,6 +146,65 @@ const pageDescription =
     .error {
         color: red;
         font-weight: bold;
+    }
+
+    /* Styles for the new guide cards */
+    .guides-container {
+        display: flex;
+        gap: 1rem; /* Space between cards */
+        margin-bottom: 2rem; /* Space below the container */
+        flex-wrap: wrap; /* Allow cards to wrap on smaller screens */
+    }
+
+    .guide-card {
+        flex: 1 1 300px; /* Flex properties for responsiveness */
+        display: block;
+        padding: 1.5rem;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        text-decoration: none;
+        color: inherit;
+        background-color: #f9f9f9;
+        transition:
+            transform 0.2s ease-in-out,
+            box-shadow 0.2s ease-in-out;
+        min-width: 0; /* Allow card to shrink below its content's min-width */
+    }
+
+    .guide-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .guide-card h2 {
+        margin-top: 0;
+        font-size: 1.35rem;
+        color: #0056b3;
+        display: flex;
+        align-items: center;
+        overflow-wrap: break-word; /* Allow long words in titles to wrap */
+        word-break: break-word; /* More aggressive word breaking if needed */
+    }
+
+    .guide-icon {
+        margin-right: 0.5em;
+        /* Styling for SVG icons */
+        width: 1.5em; /* Control size of SVG */
+        height: 1.5em; /* Control size of SVG */
+        stroke-width: 2; /* Ensure stroke width is consistent if not set in SVG */
+        color: #007bff; /* Example color - can be same as h2 or different */
+    }
+
+    .guide-icon svg {
+        /* Ensure SVG fills the span */
+        width: 100%;
+        height: 100%;
+    }
+
+    .guide-card p {
+        font-size: 0.9rem;
+        color: #333;
+        margin-bottom: 0; /* Remove default bottom margin if not needed */
     }
 </style>
 

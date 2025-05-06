@@ -1,0 +1,307 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+const pageTitle = "Guide: Academic Quality & Curriculum";
+const pageDescription =
+    "Essential questions for parents to understand school curriculum, teaching methodologies, and academic standards.";
+const breadcrumbs = [
+    { text: "Home", href: "/" },
+    { text: "Guides", href: "/guides/" },
+    { text: pageTitle },
+];
+---
+
+<BaseLayout
+    title={pageTitle}
+    description={pageDescription}
+    breadcrumbs={breadcrumbs}
+>
+    <nav class="toc" aria-labelledby="toc-heading">
+        <div class="toc-header">
+            <h2 id="toc-heading" class="toc-title">On this page</h2>
+            <button
+                type="button"
+                class="toc-toggle"
+                aria-expanded="true"
+                aria-controls="toc-list-academic"
+            >
+                <span class="visually-hidden">Toggle table of contents</span>
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="icon-arrow"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    ><path stroke="none" d="M0 0h24v24H0z" fill="none"
+                    ></path><path d="M6 9l6 6l6 -6"></path></svg
+                >
+            </button>
+        </div>
+        <ul id="toc-list-academic" class="toc-list">
+            <li>
+                <a href="#curriculum-overview-standards-alignment"
+                    >1. Curriculum Overview & Standards Alignment</a
+                >
+            </li>
+            <li>
+                <a href="#literacy-instruction"
+                    >2. Literacy Instruction (Reading & Writing)</a
+                >
+            </li>
+            <li>
+                <a href="#mathematics-instruction">3. Mathematics Instruction</a
+                >
+            </li>
+            <li>
+                <a href="#science-social-studies-curriculum"
+                    >4. Science and Social Studies Curriculum</a
+                >
+            </li>
+            <li>
+                <a href="#teaching-methodologies-classroom-environment"
+                    >5. Teaching Methodologies & Classroom Environment</a
+                >
+            </li>
+            <li>
+                <a href="#differentiated-instruction"
+                    >6. Differentiated Instruction</a
+                >
+            </li>
+            <li>
+                <a href="#assessment-feedback">7. Assessment and Feedback</a>
+            </li>
+            <li>
+                <a href="#homework-philosophy">8. Homework Philosophy</a>
+            </li>
+            <li>
+                <a href="#technology-integration">9. Technology Integration</a>
+            </li>
+            <li>
+                <a href="#critical-thinking-problem-solving"
+                    >10. Development of Critical Thinking & Problem-Solving</a
+                >
+            </li>
+            <li>
+                <a href="#preparation-next-steps"
+                    >11. Preparation for Next Steps</a
+                >
+            </li>
+            <li>
+                <a href="#teacher-professional-development"
+                    >12. Teacher Professional Development</a
+                >
+            </li>
+            <li>
+                <a href="#alignment-district-goals"
+                    >13. Alignment with District Goals</a
+                >
+            </li>
+            <li>
+                <a href="#parent-resources-academic-support"
+                    >14. Parent Resources for Academic Support</a
+                >
+            </li>
+            <li>
+                <a href="#measuring-communicating-academic-success"
+                    >15. Measuring & Communicating Academic Success</a
+                >
+            </li>
+        </ul>
+    </nav>
+
+    <p>
+        Here is a candidate list of questions to ask your school principal or
+        administration to understand the school's approach to academic quality,
+        curriculum, and student learning. Each question includes a rationale to
+        help guide your conversation.
+    </p>
+
+    <h2 id="curriculum-overview-standards-alignment">
+        Curriculum Overview & Standards Alignment
+    </h2>
+    <p>
+        Can you provide an overview of the core curriculum used in each grade
+        level, and how it aligns with State Standards (e.g., Common Core for
+        ELA/Math, Next Generation Science Standards, or other relevant state
+        standards)?
+    </p>
+    <p class="rationale">
+        <strong>Why this is important:</strong> Ensures understanding of what your
+        child will be learning and its alignment with state-wide educational goals.
+    </p>
+
+    <h2 id="literacy-instruction">Literacy Instruction (Reading & Writing)</h2>
+    <p>
+        What is the school's approach to teaching reading and writing? What
+        specific programs or methodologies are used (e.g., phonics-based,
+        balanced literacy)? How is foundational reading skill development
+        ensured, especially in early grades?
+    </p>
+    <p class="rationale">
+        <strong>Why this is important:</strong> Literacy is foundational. Understanding
+        the approach helps parents support their child's reading and writing development.
+    </p>
+
+    <h2 id="mathematics-instruction">Mathematics Instruction</h2>
+    <p>
+        How is mathematics taught at the school? Is there an emphasis on
+        conceptual understanding, problem-solving, and procedural fluency? What
+        curriculum or resources are primarily used?
+    </p>
+    <p class="rationale">
+        <strong>Why this is important:</strong> Math skills build sequentially. Knowing
+        the instructional approach helps parents understand how concepts are introduced
+        and reinforced.
+    </p>
+
+    <h2 id="science-social-studies-curriculum">
+        Science and Social Studies Curriculum
+    </h2>
+    <p>
+        How are science and social studies integrated into the curriculum? What
+        is the frequency of instruction, and are there hands-on learning
+        opportunities or project-based activities in these areas?
+    </p>
+    <p class="rationale">
+        <strong>Why this is important:</strong> Provides insight into how students
+        learn about the world around them and develop inquiry skills.
+    </p>
+
+    <h2 id="teaching-methodologies-classroom-environment">
+        Teaching Methodologies & Classroom Environment
+    </h2>
+    <p>
+        What teaching strategies are commonly used to engage students and foster
+        a love of learning? How does the school encourage active participation,
+        collaboration, and critical thinking in the classroom?
+    </p>
+    <p class="rationale">
+        <strong>Why this is important:</strong> The learning environment and teaching
+        methods significantly impact student engagement and depth of understanding.
+    </p>
+
+    <h2 id="differentiated-instruction">Differentiated Instruction</h2>
+    <p>
+        How does the school identify and support the diverse learning needs of
+        students, including those who may need extra help to meet grade-level
+        standards and those who may benefit from more advanced or enriched
+        learning opportunities?
+    </p>
+    <p class="rationale">
+        <strong>Why this is important:</strong> Ensures that all students are appropriately
+        challenged and supported to reach their full potential.
+    </p>
+
+    <h2 id="assessment-feedback">Assessment and Feedback</h2>
+    <p>
+        How is student learning assessed beyond standardized tests (e.g.,
+        classroom assignments, projects, observations)? How and how frequently
+        do teachers provide feedback to students and parents on academic
+        progress and areas for growth?
+    </p>
+    <p class="rationale">
+        <strong>Why this is important:</strong> Understanding assessment methods
+        and feedback loops helps parents track progress and partner with teachers
+        effectively.
+    </p>
+
+    <h2 id="homework-philosophy">Homework Philosophy</h2>
+    <p>
+        What is the school's philosophy on homework for different grade levels?
+        What is the expected purpose and typical amount of homework?
+    </p>
+    <p class="rationale">
+        <strong>Why this is important:</strong> Clarifies expectations regarding
+        homework and its role in reinforcing learning.
+    </p>
+
+    <h2 id="technology-integration">Technology Integration</h2>
+    <p>
+        How is technology integrated into the curriculum to enhance learning?
+        What digital literacy skills are students taught, and how does the
+        school ensure responsible and effective use of technology?
+    </p>
+    <p class="rationale">
+        <strong>Why this is important:</strong> Technology is a key part of modern
+        education, and understanding its role helps assess digital preparedness.
+    </p>
+
+    <h2 id="critical-thinking-problem-solving">
+        Development of Critical Thinking & Problem-Solving
+    </h2>
+    <p>
+        How does the curriculum and teaching approach foster critical thinking,
+        problem-solving skills, and creativity across different subject areas?
+    </p>
+    <p class="rationale">
+        <strong>Why this is important:</strong> These higher-order skills are crucial
+        for future success in academics and beyond.
+    </p>
+
+    <h2 id="preparation-next-steps">Preparation for Next Steps</h2>
+    <p>
+        How does each grade level prepare students for the academic expectations
+        of the next grade? For upper grades, how does the school specifically
+        prepare students for transitions to the next school level (e.g.,
+        elementary to middle, middle to high school)?
+    </p>
+    <p class="rationale">
+        <strong>Why this is important:</strong> Ensures a smooth academic transition
+        and builds student confidence for future challenges.
+    </p>
+
+    <h2 id="teacher-professional-development">
+        Teacher Professional Development
+    </h2>
+    <p>
+        What opportunities do teachers have for ongoing professional
+        development, particularly related to curriculum implementation,
+        instructional best practices, and meeting diverse student needs?
+    </p>
+    <p class="rationale">
+        <strong>Why this is important:</strong> Well-supported and continuously learning
+        teachers are key to a high-quality academic program.
+    </p>
+
+    <h2 id="alignment-district-goals">Alignment with District Goals</h2>
+    <p>
+        How do the school's academic programs and initiatives align with the
+        broader goals and strategic plans of the local school district?
+    </p>
+    <p class="rationale">
+        <strong>Why this is important:</strong> Provides context on how the school
+        fits into the larger district's educational vision and priorities.
+    </p>
+
+    <h2 id="parent-resources-academic-support">
+        Parent Resources for Academic Support
+    </h2>
+    <p>
+        What resources or guidance does the school offer to parents who want to
+        support their child's academic learning at home (e.g., workshops, online
+        resources, recommended reading)?
+    </p>
+    <p class="rationale">
+        <strong>Why this is important:</strong> Empowers parents to be effective
+        partners in their child's education.
+    </p>
+
+    <h2 id="measuring-communicating-academic-success">
+        Measuring & Communicating Academic Success
+    </h2>
+    <p>
+        How does the school, as a whole, measure and evaluate its academic
+        success beyond standardized test scores? How is this information shared
+        with the school community?
+    </p>
+    <p class="rationale">
+        <strong>Why this is important:</strong> Understands the school's broader
+        definition of academic achievement and its commitment to continuous improvement
+        and transparency.
+    </p>
+</BaseLayout>

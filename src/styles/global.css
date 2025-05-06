@@ -24,6 +24,10 @@ header {
     color: #fff;
     padding: 1rem 0;
     text-align: center;
+    width: 100%;
+    /* Ensure header takes full width */
+    box-sizing: border-box;
+    /* Include padding/border in width calculation */
 }
 
 header h1 a {
@@ -44,6 +48,8 @@ main {
     /* Keep horizontal centering */
     width: 100%;
     /* Ensure main takes up width within flex */
+    box-sizing: border-box;
+    /* Include padding and border in the element's total width and height */
     background: #fff;
     box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
     /* min-height: 60vh; */
@@ -51,6 +57,7 @@ main {
     flex-grow: 1;
     /* Allow main to grow and fill space */
     /* Ensure main takes up some space */
+    counter-reset: guide-h2-counter;
 }
 
 footer {
@@ -279,4 +286,194 @@ footer {
     text-align: center;
     box-sizing: border-box;
     /* Include padding/border in width calculation */
+}
+
+/* Guide Page Specific Styles */
+.toc {
+    background-color: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-radius: 0.375rem;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+    /* Mobile-first: block, full width */
+    width: auto;
+    float: none;
+    margin-left: 0;
+    font-size: 0.9em;
+    position: relative;
+}
+
+.toc-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+    /* Matches old .toc-title margin-bottom */
+}
+
+.toc-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-top: 0;
+    margin-bottom: 0;
+    /* Handled by toc-header now */
+    color: #343a40;
+    width: 100%;
+}
+
+.toc-toggle {
+    background: none;
+    border: none;
+    padding: 0.25rem;
+    cursor: pointer;
+    color: #0056b3;
+    display: inline-flex;
+    /* Align icon nicely */
+    align-items: center;
+}
+
+.toc-toggle .icon-arrow {
+    width: 1.15em;
+    /* Slightly larger than text */
+    height: 1.15em;
+    transition: transform 0.2s ease-in-out;
+}
+
+.toc-toggle[aria-expanded="false"] .icon-arrow {
+    transform: rotate(-90deg);
+}
+
+/* Visually hidden class for screen reader text */
+.visually-hidden {
+    border: 0;
+    clip: rect(0 0 0 0);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    width: 1px;
+}
+
+.toc-list {
+    list-style: none;
+    padding-left: 0;
+    margin-bottom: 0;
+    max-height: 300px;
+    /* Max height before scroll */
+    overflow-y: auto;
+    /* transition: opacity 0.3s ease, max-height 0.3s ease; */
+    /* Temporarily disable transition for debugging visibility */
+}
+
+/* Styles for when TOC is collapsed - ensure it's hidden */
+.toc.is-collapsed .toc-list {
+    display: none !important;
+    /* Force display none to ensure it hides */
+    visibility: hidden;
+    /* Additional measure */
+    opacity: 0;
+    /* Ensure fully transparent if somehow still rendered */
+    max-height: 0;
+    /* Ensure no space is taken */
+    overflow: hidden;
+    /* Hide any overflow */
+    margin-bottom: 0;
+}
+
+.toc ul.toc-list li {
+    /* Targeting the ul with class toc-list */
+    margin-bottom: 0.5rem;
+}
+
+.toc ul.toc-list li a {
+    /* Targeting links within ul.toc-list */
+    text-decoration: none;
+    color: #0056b3 !important;
+    /* Default link color - added important for debugging */
+    display: block;
+    /* Make the whole area clickable and helps with styling */
+}
+
+.toc ul.toc-list li a:hover,
+.toc ul.toc-list li a:focus {
+    text-decoration: underline;
+    color: #004085 !important;
+    /* Darker blue on hover/focus - added important for debugging */
+}
+
+/* Media Query for wider screens (tablets and up) */
+@media (min-width: 768px) {
+
+    /* Adjust breakpoint as needed */
+    .toc {
+        float: right;
+        width: 280px;
+        margin-left: 25px;
+        margin-bottom: 1rem;
+        /* Can have a different bottom margin on desktop */
+    }
+
+    /* Optionally, ensure TOC is expanded by default on desktop if JS handles initial collapse on mobile */
+    /* .toc:not(.is-collapsed-by-js-on-mobile) .toc-list {
+        display: block; 
+        max-height: 300px; 
+        opacity: 1;
+    } */
+}
+
+.rationale {
+    font-style: italic;
+    color: #495057;
+    /* Darker gray for better readability */
+    background-color: #e9ecef;
+    /* Subtle background color */
+    padding: 0.75em 1.25em;
+    border-left: 4px solid #007bff;
+    /* Accent color, matches primary link */
+    margin-top: 0.5em;
+    margin-bottom: 1.75em;
+    /* More space after rationale */
+    border-radius: 0 0.25rem 0.25rem 0;
+    /* Slight rounding on right corners */
+}
+
+.rationale strong {
+    font-style: normal;
+    /* Keep "Why this is important:" not italic */
+    color: #343a40;
+    /* Slightly darker for the strong part */
+}
+
+/* Add some spacing and a separator for general H2s in guides */
+/* Also, prepare for numbering */
+main h2[id]:not(.toc-title)::before {
+    counter-increment: guide-h2-counter;
+    content: counter(guide-h2-counter) ". ";
+    font-weight: 600;
+    /* Make number bold like a heading part */
+    margin-right: 0.4em;
+    /* Space after number */
+    color: #343a40;
+    /* Match heading color or make distinct */
+}
+
+main h2 {
+    margin-top: 2.5rem;
+    /* More space above questions */
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid #dee2e6;
+    /* Subtle separator line */
+}
+
+/* Ensure the first H2 (after TOC or H1) doesn't have excessive top margin */
+/* This rule might need adjustment if TOC is always first on mobile */
+.toc+h2[id],
+main h1+h2[id],
+main>h2[id]:first-of-type
+
+/* If no h1 or toc, first h2 */
+    {
+    margin-top: 1.5rem;
 }

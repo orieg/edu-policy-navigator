@@ -1,0 +1,92 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+
+const pageTitle = "Parent & Community Guides";
+const pageDescription =
+    "A collection of guides to help navigate California K-12 education topics.";
+const breadcrumbs = [{ text: "Home", href: "/" }, { text: pageTitle }];
+
+// Data for the guide cards - can be expanded later
+const guides = [
+    {
+        href: "/guides/school-safety-respect-protocol",
+        title: "School Safety & Respect Protocol",
+        description:
+            "Questions to ask about safety, behavior policies, and creating a positive school climate.",
+    },
+    {
+        href: "/guides/academic-curriculum",
+        title: "Academic Quality & Curriculum",
+        description:
+            "Questions to ask about curriculum, teaching methodologies, and student learning.",
+    },
+];
+---
+
+<BaseLayout
+    title={pageTitle}
+    description={pageDescription}
+    breadcrumbs={breadcrumbs}
+>
+    <h1>{pageTitle}</h1>
+    <p>
+        Explore our collection of guides designed to help parents, students, and
+        community members understand and navigate various aspects of California
+        K-12 education.
+    </p>
+
+    <div class="guides-list-container">
+        {
+            guides.map((guide) => (
+                <a href={guide.href} class="guide-card-item">
+                    <h2>{guide.title}</h2>
+                    <p>{guide.description}</p>
+                </a>
+            ))
+        }
+    </div>
+</BaseLayout>
+
+<style>
+    .guides-list-container {
+        display: grid;
+        grid-template-columns: repeat(
+            auto-fit,
+            minmax(300px, 1fr)
+        ); /* Responsive columns */
+        gap: 1.5rem;
+        margin-top: 2rem;
+    }
+
+    .guide-card-item {
+        display: block;
+        padding: 1.5rem;
+        border: 1px solid #ccc;
+        border-radius: 8px;
+        text-decoration: none;
+        color: inherit;
+        background-color: #f9f9f9;
+        transition:
+            transform 0.2s ease-in-out,
+            box-shadow 0.2s ease-in-out;
+    }
+
+    .guide-card-item:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    }
+
+    .guide-card-item h2 {
+        margin-top: 0;
+        font-size: 1.25rem;
+        color: #0056b3; /* Match homepage card titles */
+        margin-bottom: 0.5rem;
+    }
+
+    .guide-card-item p {
+        font-size: 0.9rem;
+        color: #333;
+        margin-bottom: 0;
+    }
+</style>
+

@@ -72,5 +72,43 @@ const {
                 {WEBSITE_NAME}. All rights reserved.
             </p>
         </footer>
+        <script is:inline>
+            document.addEventListener("DOMContentLoaded", () => {
+                const allTocs = document.querySelectorAll("nav.toc");
+                const mobileBreakpoint = 768; // Same as CSS media query
+
+                allTocs.forEach((toc) => {
+                    const toggleButton = toc.querySelector(".toc-toggle");
+                    const listToToggle = toc.querySelector(".toc-list"); // Should be .toc-list now
+
+                    if (toggleButton && listToToggle) {
+                        // Check initial screen width
+                        const isMobile = window.innerWidth < mobileBreakpoint;
+
+                        if (isMobile) {
+                            toc.classList.add("is-collapsed");
+                            toggleButton.setAttribute("aria-expanded", "false");
+                        } else {
+                            // On desktop, ensure it respects HTML or is expanded
+                            // If HTML is aria-expanded="true", it will be expanded.
+                            // If we want to force expand on desktop load, uncomment below:
+                            // toc.classList.remove('is-collapsed');
+                            // toggleButton.setAttribute('aria-expanded', 'true');
+                        }
+
+                        toggleButton.addEventListener("click", () => {
+                            const isExpanded =
+                                toggleButton.getAttribute("aria-expanded") ===
+                                "true";
+                            toggleButton.setAttribute(
+                                "aria-expanded",
+                                String(!isExpanded),
+                            );
+                            toc.classList.toggle("is-collapsed");
+                        });
+                    }
+                });
+            });
+        </script>
     </body>
 </html>
