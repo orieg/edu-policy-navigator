@@ -1,5 +1,6 @@
 ---
 import BaseLayout from "../../layouts/BaseLayout.astro";
+import GuideCard from "../../components/GuideCard.astro";
 
 const pageTitle = "Parent & Community Guides";
 const pageDescription =
@@ -7,7 +8,7 @@ const pageDescription =
 const breadcrumbs = [{ text: "Home", href: "/" }, { text: pageTitle }];
 
 // Data for the guide cards - can be expanded later
-const guides = [
+const guidesData = [
     {
         href: "/guides/school-safety-respect-protocol",
         title: "School Safety & Respect Protocol",
@@ -39,62 +40,16 @@ const guides = [
         K-12 education.
     </p>
 
-    <div class="guides-list-container">
-        {
-            guides.map((guide) => (
-                <a href={guide.href} class="guide-card-item">
-                    <h2>
-                        <span class="guide-icon" set:html={guide.iconSvg} />
-                        {guide.title}
-                    </h2>
-                    <p>{guide.description}</p>
-                </a>
-            ))
-        }
+    <div class="guides-container">
+        {guidesData.map((guide) => <GuideCard {...guide} />)}
     </div>
 </BaseLayout>
 
 <style>
-    .guides-list-container {
-        display: grid;
-        grid-template-columns: repeat(
-            auto-fit,
-            minmax(300px, 1fr)
-        ); /* Responsive columns */
-        gap: 1.5rem;
-        margin-top: 2rem;
-    }
-
-    .guide-card-item {
-        display: block;
-        padding: 1.5rem;
-        border: 1px solid #ccc;
-        border-radius: 8px;
-        text-decoration: none;
-        color: inherit;
-        background-color: #f9f9f9;
-        transition:
-            transform 0.2s ease-in-out,
-            box-shadow 0.2s ease-in-out;
-    }
-
-    .guide-card-item:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
-
-    .guide-card-item h2 {
-        margin-top: 0;
-        font-size: 1.25rem;
-        color: #0056b3; /* Match homepage card titles */
-        margin-bottom: 0.5rem;
-        display: flex; /* For aligning icon and text */
-        align-items: center;
-    }
-
-    .guide-card-item p {
-        font-size: 0.9rem;
-        color: #333;
-        margin-bottom: 0;
-    }
+    /* All card styles are now in global.css */
+    /* .guides-list-container is now .guides-container in global.css */
+    /* .guide-card-item is now .guide-card in global.css */
+    /* h2 styles are in .guide-card h2 in global.css */
+    /* p styles are in .guide-card p in global.css */
+    /* .guide-icon styles are in global.css */
 </style>

@@ -1,0 +1,20 @@
+---
+// src/components/GuideCard.astro
+export interface Props {
+    href: string;
+    title: string;
+    description: string;
+    iconSvg?: string; // Optional, as not all cards might have icons
+}
+
+const { href, title, description, iconSvg } = Astro.props;
+---
+
+<a href={href} class="guide-card">
+    <h2>
+        {iconSvg && <span class="guide-icon" set:html={iconSvg} />}
+        {title}
+    </h2>
+    <p>{description}</p>
+</a>
+

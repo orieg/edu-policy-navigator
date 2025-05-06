@@ -1,66 +1,39 @@
 ---
 // src/pages/index.astro
 import BaseLayout from "../layouts/BaseLayout.astro";
+import GuideCard from "../components/GuideCard.astro"; // Import the new component
+
 // Fetch initial data if needed (currently none needed for index based on old Vike structure)
 const pageTitle = "Unofficial California Education Policies Navigator";
 const pageDescription =
     "Explore California K-12 school district data and policies.";
+
+// Data for the guide cards - matches structure expected by GuideCard.astro
+const homepageGuides = [
+    {
+        href: "/guides/school-safety-respect-protocol",
+        title: "School Safety & Respect Protocol",
+        description:
+            "Questions to ask about safety, behavior, and school climate.",
+        iconSvg:
+            '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M11.46 20.846a12 12 0 0 1 -7.96 -14.846a12 12 0 0 0 8.5 -3a12 12 0 0 0 8.5 3a12 12 0 0 1 -.09 7.06"></path><path d="M15 19l2 2l4 -4"></path></svg>',
+    },
+    {
+        href: "/guides/academic-curriculum",
+        title: "Academic Quality & Curriculum",
+        description:
+            "Questions to ask about curriculum, teaching, and student learning.",
+        iconSvg:
+            '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"></path><path d="M3 19a9 9 0 0 1 9 0a9 9 0 0 1 9 0"></path><path d="M3 6a9 9 0 0 1 9 0a9 9 0 0 1 9 0"></path><path d="M3 6l0 13"></path><path d="M12 6l0 13"></path><path d="M21 6l0 13"></path></svg>',
+    },
+];
 ---
 
 <BaseLayout title={pageTitle} description={pageDescription}>
     <h2>California Education Hub: Policies, Data & Parent Guides</h2>
 
     <div class="guides-container">
-        <a href="/guides/school-safety-respect-protocol" class="guide-card">
-            <h2>
-                <span class="guide-icon">
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        ><path stroke="none" d="M0 0h24v24H0z" fill="none"
-                        ></path><path
-                            d="M11.46 20.846a12 12 0 0 1 -7.96 -14.846a12 12 0 0 0 8.5 -3a12 12 0 0 0 8.5 3a12 12 0 0 1 -.09 7.06"
-                        ></path><path d="M15 19l2 2l4 -4"></path></svg
-                    >
-                </span>
-                School Safety & Respect Protocol
-            </h2>
-            <p>Questions to ask about safety, behavior, and school climate.</p>
-        </a>
-        <a href="/guides/academic-curriculum" class="guide-card">
-            <h2>
-                <span class="guide-icon">
-                    <svg
-                        xmlns="http://www.w3.org/2000/svg"
-                        width="24"
-                        height="24"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        ><path stroke="none" d="M0 0h24v24H0z" fill="none"
-                        ></path><path d="M3 19a9 9 0 0 1 9 0a9 9 0 0 1 9 0"
-                        ></path><path d="M3 6a9 9 0 0 1 9 0a9 9 0 0 1 9 0"
-                        ></path><path d="M3 6l0 13"></path><path d="M12 6l0 13"
-                        ></path><path d="M21 6l0 13"></path></svg
-                    >
-                </span>
-                Academic Quality & Curriculum
-            </h2>
-            <p>
-                Questions to ask about curriculum, teaching, and student
-                learning.
-            </p>
-        </a>
+        {homepageGuides.map((guide) => <GuideCard {...guide} />)}
     </div>
 
     <div class="search-container">
@@ -148,64 +121,14 @@ const pageDescription =
         font-weight: bold;
     }
 
-    /* Styles for the new guide cards */
-    .guides-container {
-        display: flex;
-        gap: 1rem; /* Space between cards */
-        margin-bottom: 2rem; /* Space below the container */
-        flex-wrap: wrap; /* Allow cards to wrap on smaller screens */
-    }
-
-    .guide-card {
-        flex: 1 1 300px; /* Flex properties for responsiveness */
-        display: block;
-        padding: 1.5rem;
-        border: 1px solid #ccc;
-        border-radius: 8px;
-        text-decoration: none;
-        color: inherit;
-        background-color: #f9f9f9;
-        transition:
-            transform 0.2s ease-in-out,
-            box-shadow 0.2s ease-in-out;
-        min-width: 0; /* Allow card to shrink below its content's min-width */
-    }
-
-    .guide-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    }
-
-    .guide-card h2 {
-        margin-top: 0;
-        font-size: 1.35rem;
-        color: #0056b3;
-        display: flex;
-        align-items: center;
-        overflow-wrap: break-word; /* Allow long words in titles to wrap */
-        word-break: break-word; /* More aggressive word breaking if needed */
-    }
-
-    .guide-icon {
-        margin-right: 0.5em;
-        /* Styling for SVG icons */
-        width: 1.5em; /* Control size of SVG */
-        height: 1.5em; /* Control size of SVG */
-        stroke-width: 2; /* Ensure stroke width is consistent if not set in SVG */
-        color: #007bff; /* Example color - can be same as h2 or different */
-    }
-
-    .guide-icon svg {
-        /* Ensure SVG fills the span */
-        width: 100%;
-        height: 100%;
-    }
-
-    .guide-card p {
-        font-size: 0.9rem;
-        color: #333;
-        margin-bottom: 0; /* Remove default bottom margin if not needed */
-    }
+    /* Styles for the new guide cards ARE NOW IN global.css */
+    /* .guides-container IS NOW IN global.css */
+    /* .guide-card IS NOW IN global.css */
+    /* .guide-card:hover IS NOW IN global.css */
+    /* .guide-card h2 IS NOW IN global.css */
+    /* .guide-icon IS NOW IN global.css */
+    /* .guide-icon svg IS NOW IN global.css */
+    /* .guide-card p IS NOW IN global.css */
 </style>
 
 <script>
@@ -218,6 +141,7 @@ const pageDescription =
 
     async function initializeSearch() {
         try {
+            initializeMap("map"); // Initialize the map first
             console.log("Fetching data for search...");
             const [districtsRes, schoolsRes] = await Promise.all([
                 fetch("/assets/districts.json"),
@@ -249,40 +173,35 @@ const pageDescription =
                 // Optionally show a non-blocking warning
             }
 
-            // Pass element IDs and fetched data
             setupSearchHandlers(
                 "district-search",
                 "search-results",
-                // 'info-display', // Optional info display ID if needed by search handlers
                 districtsData,
                 schoolsData,
             );
         } catch (error) {
-            console.error("Failed to initialize search:", error);
-            // Optionally display an error message to the user
-            const searchContainer = document.querySelector(".search-container");
-            if (searchContainer) {
-                searchContainer.innerHTML =
-                    '<p class="error">Could not load search functionality.</p>';
+            console.error("Failed to initialize search or map:", error);
+            const infoDisplay = document.getElementById("info-display");
+            if (infoDisplay) {
+                infoDisplay.innerHTML = `<p class="error">Error loading district data. Please try refreshing the page.</p>`;
+            }
+            // Disable search input if data loading fails
+            const searchInput = document.getElementById(
+                "district-search",
+            ) as HTMLInputElement;
+            if (searchInput) {
+                searchInput.disabled = true;
+                searchInput.placeholder = "Data unavailable, search disabled.";
             }
         }
     }
 
-    // Initialize map and search when the DOM is ready
-    document.addEventListener("DOMContentLoaded", () => {
-        let mapInstance: L.Map | null = null;
-        try {
-            mapInstance = initializeMap("map"); // Initialize map first
-        } catch (error) {
-            console.error("Failed to initialize map:", error);
-            const mapContainer = document.getElementById("map");
-            if (mapContainer)
-                mapContainer.innerHTML =
-                    '<p class="error">Could not load map.</p>';
-            // Don't proceed if map init fails
-            return;
-        }
-        // Fetch data and then add markers/setup search
-        initializeSearch(); // This now also calls addDistrictMarkersToMap
-    });
+    // Initialize map and search functionality when the DOM is ready
+    if (document.readyState === "loading") {
+        // Loading hasn't finished yet
+        document.addEventListener("DOMContentLoaded", initializeSearch);
+    } else {
+        // `DOMContentLoaded` has already fired
+        initializeSearch();
+    }
 </script>

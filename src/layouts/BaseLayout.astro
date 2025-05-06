@@ -1,6 +1,6 @@
 ---
 // src/layouts/BaseLayout.astro
-console.log("BaseLayout Astro.props:", Astro.props);
+// console.log("BaseLayout Astro.props:", Astro.props);
 import "../styles/global.css";
 // Import Leaflet CSS from node_modules
 import "leaflet/dist/leaflet.css";
@@ -12,22 +12,28 @@ import { WEBSITE_NAME, WEBSITE_DESCRIPTION } from "../siteConfig"; // Import sit
 import TableOfContents from "../components/TableOfContents.astro"; // Import the new TOC component
 
 export interface Props {
-    // title?: string; // No longer directly from props, but from frontmatter
-    // description?: string;
-    // breadcrumbs?: { text: string; href?: string }[];
-    // headings?: { depth: number; slug: string; text: string }[];
-    frontmatter: {
+    frontmatter?: {
+        // Make frontmatter itself optional
         title?: string;
         description?: string;
         breadcrumbs?: { text: string; href?: string }[];
     };
-    headings?: { depth: number; slug: string; text: string }[]; // Headings are still top-level
+    // Direct props for .astro pages
+    title?: string;
+    description?: string;
+    breadcrumbs?: { text: string; href?: string }[];
+    headings?: { depth: number; slug: string; text: string }[];
 }
 
-const { frontmatter, headings } = Astro.props;
-const title = frontmatter.title || WEBSITE_NAME;
-const description = frontmatter.description || WEBSITE_DESCRIPTION;
-const breadcrumbs = frontmatter.breadcrumbs;
+const props = Astro.props;
+
+// Determine if props are coming from Markdown frontmatter or direct .astro props
+const source = props.frontmatter || props; // Use frontmatter if it exists, otherwise use props directly
+
+const title = source.title || WEBSITE_NAME;
+const description = source.description || WEBSITE_DESCRIPTION;
+const breadcrumbs = source.breadcrumbs;
+const headings = props.headings; // headings are always top-level from Astro.props for MD
 ---
 
 <!doctype html>
