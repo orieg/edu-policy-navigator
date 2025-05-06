@@ -16,7 +16,7 @@
     "docker:nominatim": "docker run -it --rm -v ./pipeline/data:/data -v nominatim-data:/var/lib/postgresql/16/main -e PBF_PATH=/data/california-latest.osm.pbf -p 8080:8080 --shm-size=1g --name nominatim mediagis/nominatim:5.1",
     "clean": "rm -rf dist public/assets/boundaries public/assets/districts.json public/assets/schools_by_district.json public/assets/prerender-slugs.json",
     "dev": "pnpm run prepare && astro dev",
-    "build": "pnpm run clean && pnpm run prepare && astro build",
+    "build": "pnpm run prepare && astro build",
     "preview": "astro preview"
   },
   "engines": {
