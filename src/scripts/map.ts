@@ -176,7 +176,7 @@ export function addDistrictMarkersToMap(
             // Use the slug from the district data for the link
             const slug = district.slug || cdsCode; // Fallback to cdsCode if slug is somehow missing
             // Ensure the path matches the actual page route: /districts/ not /district/
-            const popupContent = `<b>${district.District}</b><br><a href="/districts/${slug}/">View Details</a>`;
+            const popupContent = `<b>${district.District}</b><br><a href="${BASE_URL}districts/${slug}/">View Details</a>`;
             marker.bindPopup(popupContent);
             createdMarkers.push(marker); // Add the created marker to the array
         }
