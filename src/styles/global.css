@@ -531,6 +531,18 @@ main>h2[id]:first-of-type
     margin-top: 1.5rem;
 }
 
+/* General link styling within main content */
+main a {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+main a:hover,
+main a:focus {
+    color: var(--color-primary-darker);
+    text-decoration: underline;
+}
+
 /* Styles for Guide Cards (used on homepage and guides index) */
 .guides-container {
     display: flex;
@@ -596,8 +608,39 @@ main>h2[id]:first-of-type
 }
 
 .guide-card p {
-    font-size: 0.9rem;
     color: var(--color-text-body);
     margin-bottom: 0;
     /* Remove default bottom margin if not needed */
+}
+
+/* Footer Links */
+.footer-links {
+    margin-top: 0.5rem;
+    font-size: 0.9em;
+}
+
+.footer-links a {
+    color: var(--color-text-light);
+    /* Light color for dark footer */
+    text-decoration: none;
+}
+
+.footer-links a:hover,
+.footer-links a:focus {
+    text-decoration: underline;
+    color: #cad1d8;
+    /* Slightly lighter/different shade on hover for visibility */
+}
+
+.footer-gh-icon {
+    width: 2em;
+    /* Increased size */
+    height: 2em;
+    /* Increased size */
+    margin-right: 0.4em;
+    /* Adjusted margin */
+    vertical-align: -0.5em;
+    /* Adjusted vertical alignment */
+    fill: currentColor;
+    /* Inherits color from parent <a> tag */
 }
