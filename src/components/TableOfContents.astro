@@ -1,0 +1,64 @@
+---
+// src/components/TableOfContents.astro
+export interface Props {
+    headings: { depth: number; slug: string; text: string }[];
+}
+
+const { headings } = Astro.props;
+
+// Filter for h2 headings, as h1 is the page title handled by BaseLayout
+// and deeper headings might make the TOC too cluttered for the main guide TOC.
+const tocHeadings = headings.filter((h) => h.depth === 2);
+
+// We need a unique ID for the list for ARIA controls, even if dynamic
+// For now, let's assume one TOC per page and use a fixed ID for the list.
+// If multiple dynamic TOCs were on one page, this would need to be more unique.
+const tocListId = "toc-list-dynamic";
+---
+
+{
+    tocHeadings && tocHeadings.length > 0 && (
+        <nav class="toc" aria-labelledby="toc-heading">
+            <div class="toc-header">
+                <h2 id="toc-heading" class="toc-title">
+                    On this page
+                </h2>
+                <button
+                    type="button"
+                    class="toc-toggle"
+                    aria-expanded="true"
+                    aria-controls={tocListId}
+                >
+                    <span class="visually-hidden">
+                        Toggle table of contents
+                    </span>
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        class="icon-arrow"
+                        width="20"
+                        height="20"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                    >
+                        <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+                        <path d="M6 9l6 6l6 -6" />
+                    </svg>
+                </button>
+            </div>
+            <ul id={tocListId} class="toc-list">
+                {tocHeadings.map((heading, index) => (
+                    <li>
+                        <a
+                            href={`#${heading.slug}`}
+                        >{`${index + 1}. ${heading.text}`}</a>
+                    </li>
+                ))}
+            </ul>
+        </nav>
+    )
+}
+

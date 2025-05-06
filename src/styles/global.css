@@ -235,6 +235,7 @@ footer {
 
 .breadcrumbs li {
     display: inline;
+    font-weight: bold;
 }
 
 .breadcrumbs li+li::before {
@@ -422,7 +423,7 @@ footer {
     } */
 }
 
-.rationale {
+main blockquote {
     font-style: italic;
     color: #495057;
     /* Darker gray for better readability */
@@ -438,7 +439,7 @@ footer {
     /* Slight rounding on right corners */
 }
 
-.rationale strong {
+main blockquote strong {
     font-style: normal;
     /* Keep "Why this is important:" not italic */
     color: #343a40;
