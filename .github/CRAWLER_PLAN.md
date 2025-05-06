@@ -1,4 +1,85 @@
-# Data Crawling and Pre-processing Plan
+# Web Crawler Plan for Edu Policy Navigator
+
+This document outlines the plan for implementing a web crawler to gather data from school district websites, California educational legislation sites, board websites, and school websites. The primary goal is to obtain clean Markdown content from these pages for later indexing with Kuzu and use in an LLM chat application.
+
+## Key Requirements
+
+*   **Target Sources:** School district websites, CA ed legislation sites, board websites, school websites.
+*   **Output Format:** Clean Markdown files for each crawled page.
+*   **Downstream Use:** Indexing with KuzuDB, powering an LLM chat interface.
+*   **Technical Preferences:**
+    *   Ease of setup and reliability.
+    *   Docker containerization for deployment.
+    *   Leverage existing tools where possible.
+    *   Simplicity in the overall solution.
+
+## Crawler Tool Comparison
+
+| Feature/Aspect         | Scrapy                                  | Heritrix                                  | Crawl4AI                                     | Custom Dev (Python + Libraries)              |
+| :--------------------- | :-------------------------------------- | :---------------------------------------- | :------------------------------------------- | :-------------------------------------------- |
+| **Primary Goal**       | Flexible Web Scraping                   | Web Archiving                             | LLM-Ready Content (Markdown)                 | Bespoke Solution                              |
+| **Markdown Output**    | Via custom pipeline (e.g., +markdownify) | No (WARC output, needs post-processing)   | Core feature, "AI-ready"                     | Manual (e.g., +markdownify)                   |
+| **JavaScript Handling**| Needs `scrapy-playwright`/`splash`      | Good, but part of complex setup           | Built-in (Playwright)                        | Manual integration (Playwright/Selenium)      |
+| **Ease of Setup**      | Moderate                                | Difficult                                 | Easy to Moderate (Docker ready)              | Very Easy (for basic) to Hard (for advanced) |
+| **Learning Curve**     | Moderate to High                        | Very High                                 | Low to Moderate                              | Low (for basic) to High (for features)        |
+| **Docker Friendliness**| Good                                    | Possible, but complex instance            | Excellent (official images, API server)      | Excellent (simple to containerize script)     |
+| **Reliability**        | High (mature)                           | Very High (for archival)                  | Good (active dev, modern stack)              | Depends on implementation                     |
+| **Suitability for Project** | Potentially overkill, needs customization | Massive overkill                          | **Very Good Fit**                            | Good for simple, risky for diverse/complex    |
+
+## Recommended Approach & Plan
+
+Based on the comparison and project requirements, **`Crawl4AI`** is the recommended starting point.
+
+**Reasoning:**
+
+1.  **Directly Addresses Core Need:** `Crawl4AI` is specifically designed for producing Markdown suitable for AI applications, which aligns perfectly with the project's goal of feeding data into Kuzu and an LLM.
+2.  **Modern Web Capabilities:** Its built-in Playwright integration should effectively handle JavaScript-rendered content common on modern websites, reducing the need for complex manual setup.
+3.  **Docker and API:** The availability of official Docker images and a FastAPI server facilitates easy deployment and integration into the project's infrastructure.
+4.  **Balance of Power and Simplicity:** It offers a rich feature set tailored for AI data extraction while aiming for ease of use for its primary function (URL to Markdown).
+5.  **Avoids Reinventing the Wheel:** Provides robust crawling features out-of-the-box, saving development time and effort compared to a custom solution.
+
+**Implementation Plan:**
+
+1.  **Phase 1: Evaluate `Crawl4AI`**
+    *   **Setup:** Pull and run the `Crawl4AI` Docker image.
+        *   `docker pull unclecode/crawl4ai:latest` (or a specific stable version)
+        *   `docker run -d -p 11235:11235 --name crawl4ai --shm-size=1g unclecode/crawl4ai:latest`
+    *   **Initial Testing:**
+        *   Use a small, diverse set of sample URLs from the target website categories (e.g., a school district homepage, a specific legislative bill page, a school board meeting agenda page).
+        *   Utilize `Crawl4AI`'s API (via `localhost:11235`) or CLI (if preferred and simpler for initial tests) to crawl these pages.
+    *   **Output Analysis:**
+        *   Critically examine the generated Markdown.
+        *   Assess its cleanliness, structure, and completeness.
+        *   Verify its suitability for Kuzu indexing (e.g., preservation of headings, lists, tables if important).
+        *   Investigate `Crawl4AI`'s documentation for options to customize Markdown generation or content filtering if the default output is not ideal.
+    *   **Usability Assessment:**
+        *   Evaluate the ease of submitting crawl jobs and retrieving results.
+        *   Determine how to manage lists of URLs and organize the output Markdown files.
+    *   **Decision Point:** Is `Crawl4AI` suitable? Does its Markdown output meet the quality and structural requirements? Is it reliable enough for the target sites?
+
+2.  **Phase 2: Alternative Solutions (If `Crawl4AI` is not suitable)**
+    *   **Option A: Evaluate Scrapy**
+        *   **Setup:** Install Scrapy and `markdownify`. If needed for JavaScript, install `scrapy-playwright`.
+        *   **Develop:** Create a simple Scrapy Spider to fetch pages. Implement an Item Pipeline to convert HTML to Markdown using `markdownify`.
+        *   **Test:** Use the same sample URLs as in Phase 1.
+        *   **Dockerize:** Create a Dockerfile for the Scrapy project.
+        *   **Assess:** Compare complexity, output quality, and effort versus `Crawl4AI`.
+    *   **Option B: Minimal Custom Script (Limited Scope)**
+        *   Consider for very simple, static sites if other options prove too complex for basic needs.
+        *   Use Python with `requests`/`httpx`, `BeautifulSoup`, and `markdownify`.
+        *   This is a fallback and should be approached with caution due to the potential for increasing complexity when handling diverse websites.
+
+3.  **Phase 3: Integration and Deployment**
+    *   Once a crawler solution is chosen and validated:
+        *   Develop scripts or processes to manage the input list of URLs/domains to crawl.
+        *   Define a strategy for storing and organizing the output Markdown files.
+        *   Integrate the crawler (likely its Docker container) into a scheduled workflow (e.g., a cron job, a CI/CD pipeline action, or an orchestrator like Airflow if the project scales).
+        *   Implement logging, monitoring, and error handling for the crawling process.
+
+**Next Immediate Steps:**
+
+*   Proceed with **Phase 1: Evaluate `Crawl4AI`** as detailed above.
+*   Document findings and the decision from the evaluation.
 
 ## Phase 1: California Education Code Crawler
 
