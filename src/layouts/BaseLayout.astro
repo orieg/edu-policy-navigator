@@ -37,6 +37,12 @@ const headings = props.headings; // headings are always top-level from Astro.pro
 
 const showSiteBrand = title !== WEBSITE_NAME; // Condition to show site brand
 
+const lastUpdatedDate = new Date().toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+});
+
 // Use the specific page title for the HTML document title, but site name for header <h1>
 const documentTitle = source.title || WEBSITE_NAME;
 ---
@@ -136,6 +142,9 @@ const documentTitle = source.title || WEBSITE_NAME;
                 >
                 &nbsp;|&nbsp;
                 <a href="/attributions">Data Sources & Attributions</a>
+            </p>
+            <p class="footer-last-updated">
+                Last updated on: {lastUpdatedDate}
             </p>
         </footer>
         <script is:inline>

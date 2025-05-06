@@ -674,3 +674,11 @@ main a:focus {
     fill: currentColor;
     /* Inherits color from parent <a> tag */
 }
+
+.footer-last-updated {
+    margin-top: 0.5rem;
+    font-size: 0.85em;
+    /* Slightly smaller */
+    color: #b0b0b0;
+    /* Lighter than main footer links, but still readable */
+}
