@@ -52,9 +52,39 @@ header {
     /* Include padding/border in width calculation */
 }
 
-header h1 a {
+header h1 {
     color: var(--color-text-light);
+    margin-top: 0;
+    /* Remove default top margin */
+    margin-bottom: 0.5rem;
+    /* Space before breadcrumbs or content */
+    font-size: 1.8em;
+    /* Example size, adjust as needed */
+}
+
+.site-brand {
+    margin-bottom: 0.25rem;
+    /* text-align: center; is inherited from header */
+}
+
+.site-brand-placeholder {
+    height: 1.4375em;
+    /* Roughly 0.9em * 1.6 line-height of .site-name-link */
+    margin-bottom: 0.25rem;
+    /* Matches .site-brand margin-bottom */
+}
+
+.site-name-link {
+    font-size: 0.9em;
+    color: #d0d0d0;
+    /* Slightly less prominent than main header text */
     text-decoration: none;
+    font-weight: normal;
+}
+
+.site-name-link:hover {
+    color: var(--color-text-light);
+    text-decoration: underline;
 }
 
 nav a {

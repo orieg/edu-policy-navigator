@@ -34,6 +34,11 @@ const title = source.title || WEBSITE_NAME;
 const description = source.description || WEBSITE_DESCRIPTION;
 const breadcrumbs = source.breadcrumbs;
 const headings = props.headings; // headings are always top-level from Astro.props for MD
+
+const showSiteBrand = title !== WEBSITE_NAME; // Condition to show site brand
+
+// Use the specific page title for the HTML document title, but site name for header <h1>
+const documentTitle = source.title || WEBSITE_NAME;
 ---
 
 <!doctype html>
@@ -41,12 +46,28 @@ const headings = props.headings; // headings are always top-level from Astro.pro
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta name="description" content={description} />
+        <meta
+            name="description"
+            content={source.description || WEBSITE_DESCRIPTION}
+        />
         <title>{title}</title>
+        {/* Use specific page title here */}
     </head>
     <body>
         <header>
-            <h1><a href="/">{title}</a></h1>
+            {
+                showSiteBrand ? (
+                    <div class="site-brand">
+                        <a href="/" class="site-name-link">
+                            {WEBSITE_NAME}
+                        </a>
+                    </div>
+                ) : (
+                    <div class="site-brand-placeholder" />
+                )
+            }
+            <h1>{title}</h1>
+            {/* This is the page-specific title */}
             {
                 breadcrumbs && breadcrumbs.length > 0 && (
                     <nav aria-label="breadcrumb" class="breadcrumbs">
