@@ -71,32 +71,28 @@ footer {
 /* Component styles (move relevant styles from old src/style.css here) */
 
 .info-card {
-    background-color: #eef;
-    border: 1px solid #ccd;
-    padding: 15px;
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    padding: 1.5rem;
     margin-bottom: 20px;
-    border-radius: 5px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .school-list {
     list-style: none;
     padding: 0;
-    /* column-count: 2; */
-    /* Remove fixed column count */
-    /* column-gap: 20px; */
     display: grid;
-    /* Use Grid for dynamic columns */
     grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-    /* Responsive columns */
     gap: 20px;
-    /* Gap between grid items */
 }
 
 .school-list li {
-    border-bottom: 1px solid #eee;
-    padding: 10px 0;
-    /* break-inside: avoid-column; */
-    /* Remove property related to column-count */
+    background-color: #fff;
+    padding: 1.5rem;
+    border: 1px solid #e9ecef;
+    border-radius: 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
 }
 
 .school-list li:last-child {
