@@ -13,6 +13,7 @@ let resultsListEl: HTMLDivElement | null = null;
 let infoDisplayEl: HTMLElement | null = null; // Keep for potential future use, though navigation is primary
 let allDistricts: DistrictDataMap | null = null;
 let allSchools: SchoolsByDistrictMap | null = null; // Keep for potential future use
+let appBaseUrl: string = '/'; // Default to root, will be updated by setupSearchHandlers
 
 function filterDistricts(searchTerm: string) {
     if (!allDistricts) {
@@ -66,7 +67,7 @@ async function selectDistrict(district: DistrictDetails) {
     const cdsCode = district['CDS Code'];
     const slug = district['slug']; // Get the slug from the district data
 
-    console.log(`District selected: ${district.District}, Slug: ${slug}, CDS: ${cdsCode}`);
+    console.log(`District selected: ${district.District}, Slug: ${slug}, CDS: ${cdsCode}, BaseURL: ${appBaseUrl}`);
 
     if (!slug) {
         console.error("Error: Selected district data is missing the 'slug' property. Cannot navigate.");
@@ -78,8 +79,10 @@ async function selectDistrict(district: DistrictDetails) {
         return;
     }
 
-    // Navigate to the pre-rendered district page using its slug
-    window.location.href = `/districts/${slug}`;
+    // Navigate to the pre-rendered district page using its slug, prepending the base URL
+    // Ensure no double slashes if appBaseUrl is '/' or slug starts with '/' (slug shouldn't)
+    const path = `${appBaseUrl.replace(/\/$/, '')}/districts/${slug}`;
+    window.location.href = path;
 
     // Reset search state after navigation attempt
     searchInputEl.value = '';
@@ -151,7 +154,8 @@ export function setupSearchHandlers(
     resultsElementId: string,
     // infoElementId: string, // Optional: ID for info display if needed
     districts: DistrictDataMap,
-    schools: SchoolsByDistrictMap // Keep schools data if needed for future features
+    schools: SchoolsByDistrictMap, // Keep schools data if needed for future features
+    baseUrl: string // Add baseUrl parameter
 ) {
     // Get elements by ID inside the function
     searchInputEl = document.getElementById(inputElementId) as HTMLInputElement;
@@ -166,6 +170,7 @@ export function setupSearchHandlers(
     // Store data globally within the module
     allDistricts = districts;
     allSchools = schools;
+    appBaseUrl = baseUrl; // Store the base URL
 
     searchInputEl.addEventListener('input', handleInput);
     searchInputEl.addEventListener('blur', handleBlur);

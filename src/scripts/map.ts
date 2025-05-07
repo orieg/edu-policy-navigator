@@ -286,7 +286,7 @@ export async function updateMapForDistrict(
 
     // 1. Fetch and add boundary
     const cdsCode = districtData['CDS Code'];
-    const boundaryUrl = `/assets/boundaries/${cdsCode}.geojson`;
+    const boundaryUrl = `${BASE_URL.replace(/\/$/, '')}/assets/boundaries/${cdsCode}.geojson`;
     try {
         const response = await fetch(boundaryUrl);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);

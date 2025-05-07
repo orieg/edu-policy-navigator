@@ -325,7 +325,7 @@ const pageBreadcrumbs = [
 
             // 1. Fetch and add boundary
             const cdsCode = districtData["CDS Code"];
-            const boundaryUrl = `/assets/boundaries/${cdsCode}.geojson`;
+            const boundaryUrl = `${BASE_URL_DISTRICT_PAGE.replace(/\/$/, "")}/assets/boundaries/${cdsCode}.geojson`;
             try {
                 const response = await fetch(boundaryUrl);
                 if (!response.ok)
