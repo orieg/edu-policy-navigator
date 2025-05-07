@@ -25,16 +25,16 @@
     *   **Sub-task:** Determine and document strategy for `ExpandableChatWidget.astro` to access shared RAG state/services (e.g., `ragController`, `currentDistrictId`, instances of KuzuDB/WebLLM). This likely involves props from `BaseLayout.astro` or a global state store (`src/lib/state.ts`).
     *   **Testing:** Manually verify the basic widget toggle button renders.
 
-2.  **[ ] Task: Prepare `ChatWindow.astro` for RAG-Powered Embedding**
+2.  **[x] Task: Prepare `ChatWindow.astro` for RAG-Powered Embedding**
     *   **File:** `src/components/ChatWindow.astro`
     *   **Action:** Design, review, or refactor `ChatWindow.astro` to:
         *   Be cleanly embeddable within `ExpandableChatWidget.astro`.
-        *   Accept necessary props for RAG functionality (e.g., `ragController` instance or specific methods, `currentDistrictId` or a reactive signal for it, initialized `kuzuDb` and `webLlmEngine` instances if passed directly).
-        *   Define a clear `Props` interface.
+        *   Accept necessary props for RAG functionality (e.g., `ragController` instance or specific methods, `currentDistrictId` or a reactive signal for it, initialized `kuzuDb` and `webLlmEngine` instances if passed directly) OR communicate via events.
+        *   Define a clear `Props` interface (if props are used directly for RAG control).
         *   Internally manage and display UI states for: RAG backend loading/initializing (e.g., "Initializing AI...", "Loading district data..."), RAG backend ready, and errors from KuzuDB/WebLLM. **Crucially, design for potential performance variations of in-browser LLMs by providing clear, non-blocking loading indicators during the multi-step RAG process (Text-to-Cypher, DB query, Answer Generation).**
         *   Handle user input submission gracefully.
         *   Display user messages and AI responses, including visual cues for when the AI is processing.
-    *   **Testing:** Unit/component tests for `ChatWindow.astro` focusing on prop handling and UI state rendering (including loading/error states for RAG) using mocked responses.
+    *   **Testing:** Unit/component tests for `ChatWindow.astro` focusing on prop handling and UI state rendering (including loading/error states for RAG) using mocked responses. (Mock interaction tested and working).
 
 **Phase 2: Widget UI & Basic Interactivity**
 
@@ -44,9 +44,9 @@
     *   **Testing:** Manually test click-to-toggle functionality of the expanded view.
 
 4.  **[x] Task: Style Collapsed & Expanded Widget Shell**
-    *   **File:** `src/components/ExpandableChatWidget.astro` (using plain CSS with global variables)
-    *   **Action:** Style the collapsed state (chat toggle button) and the expanded state (window frame, header, footer placeholders).
-    *   **Testing:** Visually inspect styles and animations. Ensure use of global color palette.
+    *   **File:** `src/components/ExpandableChatWidget.astro`, `src/components/ChatWindow.astro` (using plain CSS with global variables)
+    *   **Action:** Style the collapsed state (chat toggle button) and the expanded state (window frame, including `ChatWindow` content like header, messages, input area).
+    *   **Testing:** Visually inspect styles and animations. Ensure use of global color palette. (Message bubble styling achieved).
 
 5.  **[ ] Task: Add Smooth Transitions for Expand/Collapse**
     *   **File:** `src/components/ExpandableChatWidget.astro` (CSS)
@@ -55,18 +55,19 @@
 
 **Phase 3: RAG Integration & Full `ChatWindow.astro` Functionality**
 
-6.  **[ ] Task: Embed RAG-Ready `ChatWindow.astro` & Pass Dependencies**
+6.  **[x] Task: Embed RAG-Ready `ChatWindow.astro` & Pass Dependencies/Setup Events**
     *   **File:** `src/components/ExpandableChatWidget.astro`
-    *   **Action:** Import and embed the prepared `ChatWindow.astro`, passing required RAG-related props.
-    *   **Testing:** Verify `ChatWindow.astro` renders correctly within the expanded widget. Check for prop passing errors.
+    *   **Action:** Import and embed the prepared `ChatWindow.astro`. Establish communication (e.g., event listeners for queries, methods for responses) for RAG interactions.
+    *   **Testing:** Verify `ChatWindow.astro` renders correctly and mock communication flow works.
 
 7.  **[ ] Task: Implement Core Chat Logic via `ragController`**
-    *   **File:** `src/components/ChatWindow.astro` (script section)
+    *   **File:** `src/components/ChatWindow.astro` (script section) and `src/components/ExpandableChatWidget.astro` (handler for chat events).
     *   **Action:**
-        *   Ensure `ChatWindow.astro` calls `ragController.processQuery(...)` correctly.
-        *   Implement `addMessageCallback` to update UI with user messages and AI responses. **Provide distinct visual feedback during the different stages of `ragController.processQuery` if possible (e.g., "Generating understanding...", "Searching policies...", "Composing answer...").**
+        *   Replace mock processing logic in `ExpandableChatWidget.astro` with calls to the actual `ragController.processQuery(...)`.
+        *   Ensure `ChatWindow.astro` correctly displays AI responses and handles RAG processing states (loading, errors) based on feedback from `ragController`.
+        *   **Provide distinct visual feedback during the different stages of `ragController.processQuery` if possible (e.g., "Generating understanding...", "Searching policies...", "Composing answer...").**
         *   **Implement robust error handling and display user-friendly messages for failures during any RAG step (e.g., invalid Cypher generation, KuzuDB error, LLM answer generation failure).**
-    *   **Testing:** Mock `ragController.processQuery` to test UI updates for messages, multi-stage feedback, and error states. Progress to testing with the actual RAG pipeline.
+    *   **Testing:** Test with the actual RAG pipeline. Verify message display, multi-stage feedback, and error states.
 
 8.  **[ ] Task: Verify Dynamic RAG Backend Initialization and Context Switching**
     *   **Files:** Relevant layout/state files, `ExpandableChatWidget.astro`, `ChatWindow.astro`, RAG handlers.
