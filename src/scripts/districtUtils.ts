@@ -38,11 +38,37 @@ export function isValidCoordinate(lat: string | number | null | undefined, lon: 
 
 // --- Formatting Helpers ---
 export const formatAddress = (street: string, city: string, state: string, zip: string): string => {
-    const parts = [street, city, state, zip].filter(p => p && p !== 'No Data');
-    if (parts.length >= 3) return `${parts[0]}, ${parts[1]}, ${parts[2]} ${parts[3] || ''}`.trim();
-    if (parts.length === 2) return `${parts[0]}, ${parts[1]}`;
-    return parts[0] || 'Address Not Available';
-}
+    const S = street && street.toLowerCase() !== 'no data' && street.trim() !== '' ? street.trim() : null;
+    const C = city && city.toLowerCase() !== 'no data' && city.trim() !== '' ? city.trim() : null;
+    const ST = state && state.toLowerCase() !== 'no data' && state.trim() !== '' ? state.trim() : null;
+    const Z = zip && zip.toLowerCase() !== 'no data' && zip.trim() !== '' ? zip.trim() : null;
+
+    const addressParts: string[] = [];
+    if (S) addressParts.push(S);
+
+    const cityStateZipParts: string[] = [];
+    if (C) cityStateZipParts.push(C);
+    if (ST) cityStateZipParts.push(ST);
+
+    if (Z) {
+        // If state is present and it's the last part of cityStateZipParts, append zip to it.
+        // Otherwise, add zip as a new part if city or state is already there, or if it's the only part.
+        if (ST && cityStateZipParts.length > 0 && cityStateZipParts[cityStateZipParts.length - 1] === ST) {
+            cityStateZipParts[cityStateZipParts.length - 1] = `${ST} ${Z}`;
+        } else if (C || ST) { // Only add Zip as a separate part if City or State exists
+            cityStateZipParts.push(Z);
+        } else { // If only Zip is present from C, ST, Z block
+            cityStateZipParts.push(Z);
+        }
+    }
+
+    if (cityStateZipParts.length > 0) {
+        addressParts.push(cityStateZipParts.join(', '));
+    }
+
+    if (addressParts.length === 0) return 'Address Not Available';
+    return addressParts.join(', ');
+};
 
 export const formatWebsiteLink = (url: string): string => {
     if (!url || url === 'No Data') return 'Website Not Available';

@@ -8,6 +8,7 @@
     "preinstall": "npx only-allow pnpm && git config core.hooksPath .githooks",
     "test": "vitest run --coverage",
     "test:ui": "vitest --ui",
+    "test:e2e": "playwright test",
     "coverage": "vitest run --coverage",
     "convert:xlsx": "tsc pipeline/scripts/convertXlsxToCsv.ts --module nodenext --outDir dist/pipeline/scripts && node dist/pipeline/scripts/convertXlsxToCsv.js",
     "build:docs": "echo \"Error: no build:docs specified\"",
@@ -50,6 +51,7 @@
     "proj4": "^2.15.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.52.0",
     "@types/geojson": "^7946.0.16",
     "@types/leaflet": "^1.9.17",
     "@types/leaflet.markercluster": "^1.5.5",

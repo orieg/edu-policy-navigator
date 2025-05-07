@@ -64,7 +64,10 @@ const documentTitle = source.title || WEBSITE_NAME;
             {
                 showSiteBrand ? (
                     <div class="site-brand">
-                        <a href="/" class="site-name-link">
+                        <a
+                            href={import.meta.env.BASE_URL}
+                            class="site-name-link"
+                        >
                             {WEBSITE_NAME}
                         </a>
                     </div>
