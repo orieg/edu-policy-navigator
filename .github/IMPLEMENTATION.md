@@ -153,11 +153,15 @@ This document outlines the step-by-step process for building the Multi-District 
         * District selector (populates from `/assets/districts.json`).
         * Map display area (integrating Leaflet).
         * Policy browsing section.
-        * Chat interface component.
-    * Develop reusable UI components in `src/components/` (e.g., `DistrictSelector.astro`, `ChatWindow.astro`, `MapDisplay.astro`, `PolicyBrowser.astro`). These components might use client-side scripts (`<script>`) for interactivity.
-* **4.2. Update CSS (`src/styles/`):** Use global CSS or component-scoped styles as preferred.
+        * **NEW**: An expandable chat widget component that, when clicked, reveals the main chat interface.
+    * Develop reusable UI components in `src/components/` (e.g., `DistrictSelector.astro`, `MapDisplay.astro`, `PolicyBrowser.astro`).
+        * **MODIFY**: `ChatWindow.astro`: Ensure this component is suitable for embedding within the expandable widget and handles chat interactions.
+        * **NEW**: `ExpandableChatWidget.astro`: This component will display a small, clickable icon. On click, it will expand to display the `ChatWindow.astro` component. It will manage its own open/closed state.
+    * Integrate the `ExpandableChatWidget.astro` into `MainLayout.astro` or relevant pages.
+* **4.2. Update CSS (`src/styles/`):** Use global CSS or component-scoped styles as preferred. Ensure styling for the collapsed and expanded states of the chat widget.
 * **4.3. Implement Frontend Logic (Client-side Scripts & Modules in `src/lib/`):**
     * **State Management:** Decide on a state management approach if needed (e.g., simple module state in `src/lib/state.ts`, Astro Stores, or Nano Stores) to hold `currentDistrictId`, `kuzuDb` instance, `webLlmEngine` instance, loading states, etc.
+        * **NEW**: The `ExpandableChatWidget.astro` will manage its own open/closed state, but consider if this state needs to be shared globally.
     * **Initialization (`index.astro` or layout script):**
         * Fetch `/assets/db/manifest.json` on initial load.
         * Populate the district selector.
@@ -172,10 +176,15 @@ This document outlines the step-by-step process for building the Multi-District 
         * Fetch and display the specific district boundary (`/assets/boundaries/<CDS_CODE>.geojson`).
         * Load data for the policy browser (`await policyBrowserHelper.loadDistrictData(currentDistrictId, kuzuDb)`).
         * Hide loading indicators.
+    * **NEW: Expandable Chat Widget Logic (in `ExpandableChatWidget.astro` script):**
+        * Implement client-side script to handle click events on the chat icon/button.
+        * Toggle the visibility and/or size of the embedded `ChatWindow.astro` component.
+        * Use CSS transitions or animations for a smooth user experience.
+        * Manage focus when the widget opens (e.g., to the chat input) and closes.
+        * Ensure the widget is accessible (keyboard navigation, ARIA attributes if needed).
     * **Chat Interaction (`ChatWindow.astro` script):**
         * Get user input.
-        * Call `ragController.processQuery(userQuery, kuzuDb!, webLlmEngine!, addMessageCallback)` from `src/lib/ragController.ts`. Ensure `kuzuDb` and `webLlmEngine` are initialized and passed correctly from the shared state.
-        * The `addMessageCallback` would update the chat UI within the Astro component.
+        * Call `ragController.processQuery(userQuery, kuzuDb!, webLlmEngine!, addMessageCallback)` from `src/lib/ragController.ts`. Ensure `kuzuDb` and `webLlmEngine` are initialized and passed correctly from the shared state or props.
     * **`src/lib/kuzudbHandler.ts`:** (Similar logic as before) Use KuzuDB WASM bindings. `init` function takes `dbPath`, fetches the DB file, and returns a KuzuDB instance/wrapper.
     * **`src/lib/webllmHandler.ts`:** (Similar logic as before) Use WebLLM library. `init` function initializes and returns the engine. Handle progress.
     * **`src/lib/policyBrowserHelper.ts`:** Refactored logic for fetching/displaying policy data, likely called by the main page/component after KuzuDB is ready for the selected district. Takes `kuzuDb` instance.
