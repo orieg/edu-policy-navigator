@@ -14,10 +14,11 @@
     "build:docs": "echo \"Error: no build:docs specified\"",
     "build:data": "tsc pipeline/scripts/generateDistrictJson.ts --module nodenext --outDir dist/pipeline/scripts && node dist/pipeline/scripts/generateDistrictJson.js",
     "build:boundaries": "tsc pipeline/scripts/splitBoundaries.ts --module nodenext --outDir dist/pipeline/scripts && node dist/pipeline/scripts/splitBoundaries.js",
-    "prepare": "pnpm run convert:xlsx && pnpm run build:data && pnpm run build:boundaries",
+    "build:embeddings": "node pipeline/scripts/generateEmbeddings.mjs",
+    "prepare": "pnpm run convert:xlsx && pnpm run build:data && pnpm run build:boundaries && pnpm run build:embeddings",
     "download:osm": "mkdir -p pipeline/data && curl -L -o pipeline/data/california-latest.osm.pbf https://download.geofabrik.de/north-america/us/california-latest.osm.pbf",
     "docker:nominatim": "docker run -it --rm -v ./pipeline/data:/data -v nominatim-data:/var/lib/postgresql/16/main -e PBF_PATH=/data/california-latest.osm.pbf -p 8080:8080 --shm-size=1g --name nominatim mediagis/nominatim:5.1",
-    "clean": "rm -rf dist public/assets/boundaries public/assets/districts.json public/assets/schools_by_district.json public/assets/prerender-slugs.json",
+    "clean": "rm -rf dist public/assets/boundaries public/assets/districts.json public/assets/schools_by_district.json public/assets/prerender-slugs.json public/embeddings",
     "dev": "pnpm run prepare && astro dev",
     "build": "pnpm run prepare && astro build",
     "preview": "astro preview"
@@ -40,11 +41,17 @@
   "author": "Nicolas Brousse <nicolas@brousse.info>",
   "license": "AGPL-3.0-or-later",
   "packageManager": "pnpm@10.7.1",
-  "pnpm": {},
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "sharp"
+    ]
+  },
   "dependencies": {
     "@astrojs/sitemap": "^3.3.1",
+    "@babycommando/entity-db": "^1.0.9",
     "@mlc-ai/web-llm": "^0.2.79",
     "@types/proj4": "^2.5.6",
+    "@xenova/transformers": "^2.17.2",
     "astro": "^5.7.10",
     "csv-parse": "^5.6.0",
     "leaflet": "^1.9.4",

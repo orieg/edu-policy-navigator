@@ -38,7 +38,7 @@ export default defineConfig({
     server: {
         watch: {
             // Ignore the coverage directory
-            ignored: ['**/coverage/**'],
+            ignored: ['**/coverage/**', 'coverage/**'],
         },
     },
 }); 

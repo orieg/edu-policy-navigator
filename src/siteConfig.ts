@@ -11,6 +11,6 @@ export const SITE_CONFIG: SiteConfig = {
 
 // Configuration for the RAG system
 export const WEBLLM_CHAT_MODEL_ID = "SmolLM2-135M-Instruct-q0f16-MLC";
-export const WEBLLM_EMBEDDING_MODEL_ID = "Snowflake/snowflake-arctic-embed-xs";
+export { WEBLLM_EMBEDDING_MODEL_ID } from './modelConfig.js';
 
 // Add other site-wide constants here if needed 
