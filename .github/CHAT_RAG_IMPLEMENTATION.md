@@ -53,23 +53,60 @@
     *   **Action:** Implement CSS transitions for a smoother visual effect when the chat window opens and closes.
     *   **Testing:** Visually verify smooth opening and closing animations.
 
+**Phase 2.5: RAG Backend Core Implementation**
+
+6.  **[ ] Task: Implement `kuzudbHandler.ts`**
+    *   **File:** `src/lib/kuzudbHandler.ts` (or agreed-upon location)
+    *   **Action:**
+        *   Develop logic for loading pre-built KuzuDB `.db` files for a selected district into KuzuDB-Wasm.
+        *   Implement KuzuDB instance management (initialization, connection, potentially disposal).
+        *   Provide a method to execute Cypher queries against the loaded database and return results.
+        *   Implement error handling for database loading, connection, and query execution.
+    *   **Dependencies:** KuzuDB-Wasm library, district data manifest/lookup.
+    *   **Testing:** Unit tests for loading specific district DBs, executing valid/invalid Cypher queries, and error handling.
+
+7.  **[ ] Task: Implement `webllmHandler.ts`**
+    *   **File:** `src/lib/webllmHandler.ts` (or agreed-upon location)
+    *   **Action:**
+        *   Develop logic for initializing the WebLLM engine (e.g., `ChatModule` from WebLLM, model loading, progress reporting).
+        *   Provide an interface to send prompts to the LLM and receive generated text responses.
+        *   Implement error handling for LLM initialization and prompt processing.
+        *   Consider LLM instance management and resource handling (e.g., `dispose` methods if applicable).
+    *   **Dependencies:** WebLLM library.
+    *   **Testing:** Unit tests for initializing the LLM, sending sample prompts, and handling potential LLM errors.
+
+8.  **[ ] Task: Implement `ragController.ts`**
+    *   **File:** `src/lib/ragController.ts` (or agreed-upon location)
+    *   **Action:**
+        *   Design and implement the `processQuery(query: string, districtId: string, callbacks: {/* ... */})` method (or similar interface) to orchestrate the RAG pipeline.
+        *   **Step 1 (Text-to-Cypher):** Utilize `webllmHandler` to convert natural language `query` into a Cypher query. Ensure district-specific schema information is appropriately considered/included in the prompt.
+        *   **Step 2 (Cypher-to-Context):** Utilize `kuzudbHandler` to execute the generated Cypher query against the current district's KuzuDB instance and retrieve contextual information.
+        *   **Step 3 (Context-to-Answer):** Utilize `webllmHandler` to generate a natural language answer based on the original `query` and the retrieved `context`.
+        *   Implement state management for the RAG process, using `callbacks` to report:
+            *   Different processing stages (e.g., "Initializing RAG services...", "Loading district data...", "Generating understanding...", "Searching policies...", "Composing answer...").
+            *   Successful completion with the final answer.
+            *   Errors encountered at any stage of the RAG pipeline.
+        *   Handle initialization of `kuzudbHandler` (for the specific `districtId`) and `webllmHandler`.
+    *   **Dependencies:** `kuzudbHandler.ts`, `webllmHandler.ts`.
+    *   **Testing:** Unit/integration tests for the `processQuery` method, covering the full RAG flow with mocked handlers. Test different query types, successful outcomes, and various error conditions in each RAG step.
+
 **Phase 3: RAG Integration & Full `ChatWindow.astro` Functionality**
 
-6.  **[x] Task: Embed RAG-Ready `ChatWindow.astro` & Pass Dependencies/Setup Events**
+9.  **[x] Task: Embed RAG-Ready `ChatWindow.astro` & Pass Dependencies/Setup Events**
     *   **File:** `src/components/ExpandableChatWidget.astro`
-    *   **Action:** Import and embed the prepared `ChatWindow.astro`. Establish communication (e.g., event listeners for queries, methods for responses) for RAG interactions.
+    *   **Action:** Import and embed the prepared `ChatWindow.astro`. Establish communication (e.g., event listeners for queries, methods for responses) for RAG interactions, now with the `ragController` in mind.
     *   **Testing:** Verify `ChatWindow.astro` renders correctly and mock communication flow works.
 
-7.  **[ ] Task: Implement Core Chat Logic via `ragController`**
+10. **[ ] Task: Implement Core Chat Logic via `ragController`**
     *   **File:** `src/components/ChatWindow.astro` (script section) and `src/components/ExpandableChatWidget.astro` (handler for chat events).
     *   **Action:**
-        *   Replace mock processing logic in `ExpandableChatWidget.astro` with calls to the actual `ragController.processQuery(...)`.
-        *   Ensure `ChatWindow.astro` correctly displays AI responses and handles RAG processing states (loading, errors) based on feedback from `ragController`.
+        *   Replace mock processing logic in `ExpandableChatWidget.astro` with calls to the `ragController.processQuery(...)` from the implemented `src/lib/ragController.ts`.
+        *   Ensure `ChatWindow.astro` correctly displays AI responses and handles RAG processing states (loading, errors) based on feedback (e.g., callbacks) from `ragController`.
         *   **Provide distinct visual feedback during the different stages of `ragController.processQuery` if possible (e.g., "Generating understanding...", "Searching policies...", "Composing answer...").**
         *   **Implement robust error handling and display user-friendly messages for failures during any RAG step (e.g., invalid Cypher generation, KuzuDB error, LLM answer generation failure).**
     *   **Testing:** Test with the actual RAG pipeline. Verify message display, multi-stage feedback, and error states.
 
-8.  **[ ] Task: Verify Dynamic RAG Backend Initialization and Context Switching**
+11. **[ ] Task: Verify Dynamic RAG Backend Initialization and Context Switching**
     *   **Files:** Relevant layout/state files, `ExpandableChatWidget.astro`, `ChatWindow.astro`, RAG handlers.
     *   **Action:**
         *   Confirm KuzuDB/WebLLM initialization as per `IMPLEMENTATION.md`.
@@ -79,22 +116,22 @@
 
 **Phase 4: Final Touches & System-Wide Testing**
 
-9.  **[x] Task: Integrate into Main Layout (if not already done for testing)**
+12. **[x] Task: Integrate into Main Layout (if not already done for testing)**
     *   **File:** `src/layouts/BaseLayout.astro`
     *   **Action:** Ensure `<ExpandableChatWidget />` is correctly configured.
     *   **Testing:** Verify widget presence across site pages.
 
-10. **[ ] Task: Ensure Responsiveness**
+13. **[ ] Task: Ensure Responsiveness**
     *   **Files:** `ExpandableChatWidget.astro`, `ChatWindow.astro`, CSS.
     *   **Action:** Adjust styles for various screen sizes.
     *   **Testing:** Manual viewport testing. Automated UI tests if any.
 
-11. **[ ] Task: Accessibility Review & Enhancements**
+14. **[ ] Task: Accessibility Review & Enhancements**
     *   **File:** `ExpandableChatWidget.astro`, `ChatWindow.astro`
     *   **Action:** Thorough keyboard navigation review, ARIA attributes, screen reader testing, color contrast.
     *   **Testing:** Manual keyboard/screen reader tests. Automated accessibility checks.
 
-12. **[ ] Task: Full End-to-End RAG and UI Testing**
+15. **[ ] Task: Full End-to-End RAG and UI Testing**
     *   **Action:** Comprehensive testing covering:
         *   District selection and correct RAG context/schema loading.
         *   Widget UI/UX (expand/collapse, animations, focus).
