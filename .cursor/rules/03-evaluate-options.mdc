@@ -1,0 +1,34 @@
+---
+description: 
+globs: 
+alwaysApply: false
+---
+## Evaluating and Selecting the Best Approach
+
+**Objective:** Systematically evaluate three approaches, select the optimal one, and clearly justify the choice.
+
+**1. Define Approaches (Understand Options):**
+    * **Clearly Describe:** Detail each of the three approaches: key steps, resources needed, potential risks, and expected benefits.
+    * **Assign Identifiers:** Give each a simple name (e.g., Approach A, B, C).
+
+**2. Set Evaluation Criteria (Establish Basis for Comparison):**
+    * **Identify Key Factors:** List critical criteria for judgment (e.g., effectiveness, cost, feasibility, risk, time).
+    * **(Optional) Prioritize:** Weight criteria if some are more important.
+
+**3. Evaluate Approaches (Systematic Assessment):**
+    * **Assess Each Approach:** Rate or score each of the three approaches against every criterion.
+    * **Document:** Use a simple table/matrix to display this evaluation.
+
+**4. Select Best Approach (Make the Decision):**
+    * **Analyze Results:** Identify the approach that performs best against your criteria (e.g., highest score, best fit for priorities).
+    * **Choose:** Clearly state the selected approach.
+
+**5. Explain Selection (Justify Clearly):**
+    * **Why Chosen:** State the primary reasons the selected approach is best, referencing key criteria where it excelled.
+    * **Comparative Advantage:** Briefly explain why it's better than the other two options, highlighting key differentiators.
+    * **(Optional) Acknowledge Downsides:** Briefly mention any significant drawbacks of the chosen approach and potential mitigations.
+
+**6. Plan Implementation (If relevant, especially for coding tasks):**
+    * **Create Step-by-Step Plan:** Develop a detailed, actionable implementation plan for the chosen approach.
+    * **Document for LLM Agent (if applicable):** If an LLM coding agent will be used, create a markdown file (e.g., in `.github/<feature>_implementation_plan.md`) outlining these steps. This helps the agent track progress and understand the task sequence.
+    * **Define Milestones/Checkpoints:** Break down the implementation into manageable chunks or milestones.

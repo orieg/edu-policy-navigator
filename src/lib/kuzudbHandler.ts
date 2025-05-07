@@ -1,11 +1,12 @@
 // src/lib/kuzudbHandler.ts
 
-import * as kuzu from 'kuzu-wasm';
+import kuzuDefaultApi from 'kuzu-wasm';
 
-// Assuming these types based on common KuzuDB API patterns and the documentation.
-// The exact type for QueryResult might need adjustment based on kuzu-wasm specifics.
-type KuzuDatabase = kuzu.Database;
-type KuzuConnection = kuzu.Connection;
+// console.log("Kuzu-Wasm imported module structure (default export expected):", kuzuDefaultApi); // Remove log
+
+// Use InstanceType to get the type of instances created by the constructors on the default export
+type KuzuDatabase = InstanceType<typeof kuzuDefaultApi.Database>;
+type KuzuConnection = InstanceType<typeof kuzuDefaultApi.Connection>;
 type KuzuQueryResult = any; // Placeholder: The actual type for query results needs to be verified from kuzu-wasm API.
 
 /**
@@ -40,29 +41,29 @@ export class KuzuDBHandler {
      * Initializes the KuzuDBHandler. Crucially, this method ensures the Kuzu-Wasm worker path
      * is set if provided and not already set. This should ideally be called once.
      * @param manifestData - An object mapping district IDs to their DB paths.
-     * @param workerScriptPath - The path to the kuzu-worker.js script. Defaults to '/kuzu_wasm_worker.js'.
      */
     public async initialize(
         manifestData: DistrictDBManifest,
-        workerScriptPath: string = '/kuzu_wasm_worker.js', // Default path
     ): Promise<void> {
         this.manifest = manifestData;
         console.log("KuzuDBHandler: Manifest loaded.");
 
-        if (workerScriptPath && !KuzuDBHandler.isWorkerPathSet) {
+        const siteBasePath = '/edu-policy-navigator/';
+        const workerName = 'kuzu_wasm_worker.js';
+        let fullWorkerScriptPath = siteBasePath.endsWith('/') ? siteBasePath + workerName : siteBasePath + '/' + workerName;
+        fullWorkerScriptPath = fullWorkerScriptPath.replace(/\/\//g, '/');
+
+        if (!KuzuDBHandler.isWorkerPathSet) {
             try {
-                console.log(`KuzuDBHandler: Setting Kuzu-Wasm worker path to ${workerScriptPath}`);
-                await kuzu.setWorkerPath(workerScriptPath);
+                console.log(`KuzuDBHandler: Setting Kuzu-Wasm worker path to ${fullWorkerScriptPath}`);
+                await kuzuDefaultApi.setWorkerPath(fullWorkerScriptPath);
                 KuzuDBHandler.isWorkerPathSet = true;
                 console.log("KuzuDBHandler: Kuzu-Wasm worker path configured.");
             } catch (error) {
                 console.error("KuzuDBHandler: Error setting Kuzu-Wasm worker path:", error);
-                // If the default path fails, it might indicate the copy plugin isn't working
-                // or the file isn't where expected.
-                throw new Error(`Failed to configure Kuzu-Wasm worker path using ${workerScriptPath}. Ensure vite-plugin-static-copy is set up correctly or the path is valid.`);
+                throw new Error(`Failed to configure Kuzu-Wasm worker path using ${fullWorkerScriptPath}. Ensure vite-plugin-static-copy is set up correctly or the path is valid.`);
             }
         } else if (!KuzuDBHandler.isWorkerPathSet) {
-            // This case should ideally not be hit if default is provided and workerScriptPath is not empty.
             console.error("KuzuDBHandler: Worker path somehow not set despite default. This is unexpected.");
             throw new Error("Critical error: Kuzu-Wasm worker path could not be determined or set.");
         }
@@ -77,10 +78,8 @@ export class KuzuDBHandler {
             throw new Error("KuzuDBHandler: Manifest not loaded. Please initialize first.");
         }
         if (!KuzuDBHandler.isWorkerPathSet) {
-            // Depending on strictness, we could throw an error or log a stronger warning.
             console.warn("KuzuDBHandler: Kuzu-Wasm worker path was not explicitly set during initialization. Proceeding with caution.");
         }
-
 
         if (this.connections.has(districtId)) {
             return this.connections.get(districtId)!;
@@ -95,16 +94,12 @@ export class KuzuDBHandler {
             let db = this.dbInstances.get(districtId);
             if (!db) {
                 console.log(`KuzuDBHandler: Loading database for district ${districtId} from ${districtInfo.dbPath}...`);
-                // For pre-built DBs, we provide the path. Access mode defaults or is read-only.
-                // The dbPath here would be the URL/path to the .db file.
-                // KuzuDB-Wasm needs to fetch this. Ensure httpfs extension is part of Wasm build if loading remote URLs not on same origin / IDBFS.
-                // For simplicity, assuming dbPath is accessible (e.g., relative path to a file in public/).
-                db = new kuzu.Database(districtInfo.dbPath);
+                db = new kuzuDefaultApi.Database(districtInfo.dbPath);
                 this.dbInstances.set(districtId, db);
                 console.log(`KuzuDBHandler: Database for district ${districtId} loaded.`);
             }
 
-            const connection = new kuzu.Connection(db);
+            const connection = new kuzuDefaultApi.Connection(db);
             this.connections.set(districtId, connection);
             console.log(`KuzuDBHandler: Connection established for district ${districtId}.`);
             return connection;
@@ -125,19 +120,10 @@ export class KuzuDBHandler {
         try {
             const connection = await this.getOrEstablishConnection(districtId);
             console.log(`KuzuDBHandler: Executing query on district ${districtId}: "${query}"`, params || '');
-
-            // The Kuzu-Wasm API is async, so prepare and execute return Promises.
             const preparedStatement = await connection.prepare(query);
-            const queryResult = await connection.execute(preparedStatement, params || {}); // Ensure params is an object
-
-            // How to get all results? The API docs link would clarify this.
-            // Common patterns: queryResult.getAll(), queryResult.fetchAll(), or iterating queryResult.
-            // For now, let's assume queryResult itself is what we want or has a method.
-            // This is a **critical point** to verify with the Kuzu-Wasm async API documentation.
-            // const allResults = await queryResult.getAll(); // This is an assumption
-            // return allResults;
+            const queryResult = await connection.execute(preparedStatement, params || {});
             console.log("KuzuDBHandler: Query executed. Raw result:", queryResult);
-            return queryResult; // Returning raw result for now; consumer will need to process.
+            return queryResult;
         } catch (error) {
             console.error(`KuzuDBHandler: Error executing query for district ${districtId}:`, error);
             throw new Error(`Query execution failed for district ${districtId}.`);
@@ -151,8 +137,6 @@ export class KuzuDBHandler {
         const connection = this.connections.get(districtId);
         if (connection) {
             try {
-                // KuzuDB Connection does not have an explicit close/terminate in some versions.
-                // The underlying resources are managed by the Database instance.
                 console.log(`KuzuDBHandler: Connection for district ${districtId} implicitly closed with DB.`);
             } catch (error) {
                 console.error(`KuzuDBHandler: Error during (implicit) connection closing for ${districtId}:`, error);
@@ -163,9 +147,6 @@ export class KuzuDBHandler {
         const db = this.dbInstances.get(districtId);
         if (db) {
             try {
-                // The Database object might have a terminate or close method to free Wasm memory.
-                // This is important for resource management.
-                // await db.terminate(); // Or similar method if available from Kuzu-Wasm API
                 console.log(`KuzuDBHandler: Database instance for district ${districtId} disposed (mocked - actual terminate call needed if available).`);
             } catch (error) {
                 console.error(`KuzuDBHandler: Error disposing database for ${districtId}:`, error);
@@ -178,7 +159,7 @@ export class KuzuDBHandler {
      * Disposes of all loaded KuzuDB instances and active connections.
      */
     public async disposeAll(): Promise<void> {
-        const districtIds = Array.from(this.dbInstances.keys()); // Use dbInstances as connections are tied to them
+        const districtIds = Array.from(this.dbInstances.keys());
         for (const districtId of districtIds) {
             await this.disposeDistrictDB(districtId);
         }

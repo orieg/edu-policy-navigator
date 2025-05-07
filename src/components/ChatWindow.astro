@@ -9,7 +9,7 @@ export interface Props {}
 interface Message {
     id: string;
     text: string;
-    sender: "user" | "ai" | "system";
+    sender: "user" | "ai" | "system" | "loading" | "error";
 }
 ---
 
@@ -29,13 +29,18 @@ interface Message {
             rows="3"></textarea>
         <button id="send-button">Send</button>
     </div>
-    <div id="chat-status" class="chat-status-area">
-        {/* Status messages like "AI is typing..." or errors can go here */}
+    <div id="chat-status" class="chat-status-area" style="display: none;">
+        {
+            /* Status messages like "AI is typing..." or errors can go here - now hidden by default */
+        }
     </div>
 </div>
 
 <script>
     console.log("ChatWindow script loaded.");
+
+    // Client-side equivalent type for message sender
+    type MessageSender = "user" | "ai" | "system" | "loading" | "error";
 
     const messageList = document.getElementById("message-list");
     const chatInput = document.getElementById("chat-input");
@@ -55,15 +60,16 @@ interface Message {
     // A better way might be the parent finding this element and calling a method,
     // or using a more structured event system/state manager.
     if (chatWindowWrapper) {
-        chatWindowWrapper.addMessage = (text, sender) => {
+        (chatWindowWrapper as any).addMessage = (
+            text: string,
+            sender: MessageSender, // Use client-side type
+        ) => {
             addMessageToUI(text, sender);
-        };
-        chatWindowWrapper.setStatus = (text) => {
-            if (chatStatus) chatStatus.textContent = text;
         };
     }
 
-    function addMessageToUI(text, sender) {
+    function addMessageToUI(text: string, sender: MessageSender) {
+        // Use client-side type
         console.log(`addMessageToUI called with: "${text}", sender: ${sender}`);
         if (!messageList) {
             console.error("messageList element not found in addMessageToUI");
@@ -74,7 +80,7 @@ interface Message {
 
         const p = document.createElement("p");
         p.textContent = text;
-        messageDiv.appendChild(p); // Add text directly to messageDiv
+        messageDiv.appendChild(p);
 
         messageList.appendChild(messageDiv);
         if (messageList instanceof HTMLElement) {
@@ -84,7 +90,6 @@ interface Message {
     }
 
     function handleSendMessage() {
-        // No longer async, just dispatches
         console.log("handleSendMessage called.");
 
         if (
@@ -107,48 +112,54 @@ interface Message {
 
         addMessageToUI(query, "user");
         chatInput.value = "";
-        chatInput.disabled = true;
-        sendButton.disabled = true;
-        if (chatStatus) {
-            chatStatus.textContent = "Processing query..."; // Updated status
-            console.log("Set status to Processing query...");
+
+        // Disable input using the exposed method, which parent might also call
+        if (
+            chatWindowWrapper &&
+            typeof (chatWindowWrapper as any).enableInput === "function"
+        ) {
+            (chatWindowWrapper as any).enableInput(false);
+        } else {
+            // Fallback if method not attached yet (should not happen in normal flow)
+            if (chatInput instanceof HTMLTextAreaElement)
+                chatInput.disabled = true;
+            if (sendButton instanceof HTMLButtonElement)
+                sendButton.disabled = true;
         }
 
-        // Dispatch custom event with the query detail
+        // Add a loading message directly for user feedback
+        // addMessageToUI("Processing query...", "loading"); // Parent will now show this
+
         const event = new CustomEvent("request-query-process", {
             detail: { query: query },
-            bubbles: true, // Allow event to bubble up to parent
-            composed: true, // Allow event to cross shadow DOM boundaries (though not strictly needed here)
+            bubbles: true,
+            composed: true,
         });
         console.log("Dispatching request-query-process event");
         chatWindowWrapper?.dispatchEvent(event);
-
-        // Input/button re-enabling will now be handled by the parent
-        // after it gets the response and calls back to addMessageToUI/setStatus.
     }
 
-    // Function to re-enable input, called by parent
     if (chatWindowWrapper) {
-        chatWindowWrapper.enableInput = () => {
-            console.log("Re-enabling input and button via enableInput.");
-            if (chatInput instanceof HTMLTextAreaElement)
-                chatInput.disabled = false;
-            if (sendButton instanceof HTMLButtonElement)
-                sendButton.disabled = false;
-            if (
-                chatStatus &&
-                chatStatus.textContent === "Processing query..."
-            ) {
-                chatStatus.textContent = "";
+        (chatWindowWrapper as any).enableInput = (enable = true) => {
+            console.log(`Setting input and button enabled state to: ${enable}`);
+            if (chatInput instanceof HTMLTextAreaElement) {
+                chatInput.disabled = !enable;
             }
-            if (chatInput instanceof HTMLTextAreaElement) chatInput.focus();
+            if (sendButton instanceof HTMLButtonElement) {
+                sendButton.disabled = !enable;
+            }
+
+            if (enable) {
+                // No longer managing chatStatus text here, parent does it via addMessage
+                if (chatInput instanceof HTMLTextAreaElement) chatInput.focus();
+            }
         };
-        chatWindowWrapper.showError = (
-            message = "Sorry, I encountered an error.",
+        (chatWindowWrapper as any).showError = (
+            message: string = "Sorry, I encountered an error.",
         ) => {
-            addMessageToUI(message, "system");
-            if (chatStatus) chatStatus.textContent = "Error.";
-            chatWindowWrapper.enableInput(); // Also re-enable input on error
+            addMessageToUI(message, "error"); // Use 'error' type
+            // Parent will call enableInput separately if needed after error.
+            // (chatWindowWrapper as any).enableInput(true);
         };
     }
 
@@ -229,6 +240,31 @@ interface Message {
         border-radius: 0;
         border: none;
         box-shadow: none;
+    }
+
+    :global(.loading-message) {
+        background-color: #f0f0f0; /* Light grey background */
+        color: var(--color-text-body, #333);
+        font-style: italic;
+        text-align: center;
+        align-self: center;
+        padding: 8px 12px;
+        max-width: 80%;
+        border-radius: 12px;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
+    }
+
+    :global(.error-message) {
+        background-color: #ffebee; /* Light pink/red background */
+        color: #c62828; /* Darker red text */
+        font-weight: bold;
+        text-align: center;
+        align-self: center;
+        padding: 8px 12px;
+        max-width: 80%;
+        border-radius: 8px;
+        border: 1px solid #ef9a9a; /* Lighter red border */
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.05);
     }
 
     /* Input area styles are scoped normally as they are not dynamically created */
