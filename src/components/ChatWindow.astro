@@ -1,0 +1,283 @@
+---
+// src/components/ChatWindow.astro
+// This component will handle the actual chat interactions and display.
+
+export interface Props {}
+
+// const { processQuery } = Astro.props; // No longer needed
+
+interface Message {
+    id: string;
+    text: string;
+    sender: "user" | "ai" | "system";
+}
+---
+
+<div class="chat-window-internal-wrapper">
+    <div id="message-list" class="message-list">
+        <!-- Messages will be dynamically added here by client-side script -->
+        <div class="message system-message">
+            <p>
+                AI Initialized. How can I help you with district policies today?
+            </p>
+        </div>
+    </div>
+    <div class="message-input-area">
+        <textarea
+            id="chat-input"
+            placeholder="Ask a question about policies..."
+            rows="3"></textarea>
+        <button id="send-button">Send</button>
+    </div>
+    <div id="chat-status" class="chat-status-area">
+        {/* Status messages like "AI is typing..." or errors can go here */}
+    </div>
+</div>
+
+<script>
+    console.log("ChatWindow script loaded.");
+
+    const messageList = document.getElementById("message-list");
+    const chatInput = document.getElementById("chat-input");
+    const sendButton = document.getElementById("send-button");
+    const chatStatus = document.getElementById("chat-status");
+    const chatWindowWrapper = document.querySelector(
+        ".chat-window-internal-wrapper",
+    ); // Need parent for dispatching
+
+    console.log({ messageList, chatInput, sendButton, chatStatus });
+
+    let messageIdCounter = 0;
+
+    // Make addMessageToUI accessible externally (e.g., via the element)
+    // Note: Exposing methods directly on elements isn't typical web component pattern,
+    // but works for this direct parent-child Astro case for simplicity now.
+    // A better way might be the parent finding this element and calling a method,
+    // or using a more structured event system/state manager.
+    if (chatWindowWrapper) {
+        chatWindowWrapper.addMessage = (text, sender) => {
+            addMessageToUI(text, sender);
+        };
+        chatWindowWrapper.setStatus = (text) => {
+            if (chatStatus) chatStatus.textContent = text;
+        };
+    }
+
+    function addMessageToUI(text, sender) {
+        console.log(`addMessageToUI called with: "${text}", sender: ${sender}`);
+        if (!messageList) {
+            console.error("messageList element not found in addMessageToUI");
+            return;
+        }
+        const messageDiv = document.createElement("div");
+        messageDiv.classList.add("message", `${sender}-message`);
+
+        const p = document.createElement("p");
+        p.textContent = text;
+        messageDiv.appendChild(p); // Add text directly to messageDiv
+
+        messageList.appendChild(messageDiv);
+        if (messageList instanceof HTMLElement) {
+            messageList.scrollTop = messageList.scrollHeight;
+        }
+        messageIdCounter++;
+    }
+
+    function handleSendMessage() {
+        // No longer async, just dispatches
+        console.log("handleSendMessage called.");
+
+        if (
+            !(chatInput instanceof HTMLTextAreaElement) ||
+            !(sendButton instanceof HTMLButtonElement)
+        ) {
+            console.error("handleSendMessage failed initial checks:", {
+                isChatInputTextArea: chatInput instanceof HTMLTextAreaElement,
+                isSendButtonButton: sendButton instanceof HTMLButtonElement,
+            });
+            return;
+        }
+
+        const query = chatInput.value.trim();
+        console.log(`User query: "${query}"`);
+        if (query === "") {
+            console.log("Query is empty, exiting handleSendMessage.");
+            return;
+        }
+
+        addMessageToUI(query, "user");
+        chatInput.value = "";
+        chatInput.disabled = true;
+        sendButton.disabled = true;
+        if (chatStatus) {
+            chatStatus.textContent = "Processing query..."; // Updated status
+            console.log("Set status to Processing query...");
+        }
+
+        // Dispatch custom event with the query detail
+        const event = new CustomEvent("request-query-process", {
+            detail: { query: query },
+            bubbles: true, // Allow event to bubble up to parent
+            composed: true, // Allow event to cross shadow DOM boundaries (though not strictly needed here)
+        });
+        console.log("Dispatching request-query-process event");
+        chatWindowWrapper?.dispatchEvent(event);
+
+        // Input/button re-enabling will now be handled by the parent
+        // after it gets the response and calls back to addMessageToUI/setStatus.
+    }
+
+    // Function to re-enable input, called by parent
+    if (chatWindowWrapper) {
+        chatWindowWrapper.enableInput = () => {
+            console.log("Re-enabling input and button via enableInput.");
+            if (chatInput instanceof HTMLTextAreaElement)
+                chatInput.disabled = false;
+            if (sendButton instanceof HTMLButtonElement)
+                sendButton.disabled = false;
+            if (
+                chatStatus &&
+                chatStatus.textContent === "Processing query..."
+            ) {
+                chatStatus.textContent = "";
+            }
+            if (chatInput instanceof HTMLTextAreaElement) chatInput.focus();
+        };
+        chatWindowWrapper.showError = (
+            message = "Sorry, I encountered an error.",
+        ) => {
+            addMessageToUI(message, "system");
+            if (chatStatus) chatStatus.textContent = "Error.";
+            chatWindowWrapper.enableInput(); // Also re-enable input on error
+        };
+    }
+
+    if (sendButton && chatInput) {
+        console.log("Adding event listeners to send button and chat input.");
+        sendButton.addEventListener("click", handleSendMessage);
+        chatInput.addEventListener("keypress", (event) => {
+            if (event.key === "Enter" && !event.shiftKey) {
+                console.log("Enter pressed on chat input.");
+                event.preventDefault();
+                handleSendMessage();
+            }
+        });
+    } else {
+        console.error(
+            "Could not add event listeners because sendButton or chatInput is missing.",
+        );
+    }
+</script>
+
+<style>
+    /* Apply :global() to message styles to bypass Astro scoping for dynamic elements */
+    .chat-window-internal-wrapper {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        background-color: var(--color-text-light, #ffffff);
+    }
+    .message-list {
+        flex-grow: 1;
+        overflow-y: auto;
+        padding: 15px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    /* Styles for dynamically created messages need to be global within this component's context */
+    :global(.message) {
+        padding: 10px 14px;
+        border-radius: 18px;
+        max-width: 75%;
+        word-wrap: break-word;
+        line-height: 1.4;
+        box-shadow: 0 1px 1px rgba(0, 0, 0, 0.08);
+    }
+    :global(.message p) {
+        margin: 0;
+    }
+
+    :global(.user-message) {
+        background-color: var(--color-primary, #0b93f6);
+        color: var(--color-text-light, white);
+        align-self: flex-end;
+        /* Keep base rounding from .message */
+        border-bottom-right-radius: 4px; /* Less rounded */
+    }
+
+    :global(.ai-message) {
+        background-color: #e5e5ea;
+        color: var(--color-text-body, #000000);
+        align-self: flex-start;
+        border: none;
+        /* Keep base rounding from .message */
+        border-bottom-left-radius: 4px; /* Less rounded */
+    }
+
+    :global(.system-message) {
+        /* System message is usually static, but apply :global for consistency */
+        background-color: transparent;
+        color: #6c757d;
+        font-style: normal;
+        font-size: 0.8em;
+        text-align: center;
+        align-self: center;
+        padding: 4px 8px;
+        max-width: 90%;
+        border-radius: 0;
+        border: none;
+        box-shadow: none;
+    }
+
+    /* Input area styles are scoped normally as they are not dynamically created */
+    .message-input-area {
+        display: flex;
+        padding: 10px;
+        border-top: 1px solid var(--color-border-light, #ddd);
+        background-color: #f9f9f9;
+    }
+    .message-input-area textarea {
+        flex-grow: 1;
+        padding: 8px 10px;
+        border: 1px solid var(--color-border-medium, #ccc);
+        border-radius: 18px;
+        resize: none;
+        font-family: inherit;
+        font-size: 1rem;
+        line-height: 1.4;
+        margin-right: 8px;
+        background-color: white;
+    }
+    .message-input-area textarea:focus {
+        border-color: var(--color-primary, #007bff);
+        outline: none;
+        box-shadow: 0 0 0 1px var(--color-primary, #007bff);
+    }
+    .message-input-area button {
+        padding: 0 18px;
+        background-color: var(--color-primary, #007bff);
+        color: var(--color-text-light, white);
+        border: none;
+        border-radius: 18px;
+        cursor: pointer;
+        font-weight: bold;
+        font-size: 0.95rem;
+    }
+    .message-input-area button:hover {
+        background-color: var(--color-primary-darker, #0056b3);
+    }
+    .message-input-area button:disabled {
+        background-color: #d1d5db;
+        cursor: not-allowed;
+    }
+    .chat-status-area {
+        padding: 4px 10px;
+        font-size: 0.85em;
+        color: var(--color-text-body, #555);
+        min-height: 1.5em;
+        text-align: center;
+        background-color: #f9f9f9;
+    }
+</style>

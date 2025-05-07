@@ -7,6 +7,20 @@ interface Props {}
 
 const {} = Astro.props;
 
+import ChatWindow from "./ChatWindow.astro"; // <-- IMPORT ChatWindow
+
+// Mock function to simulate RAG processing
+const mockProcessQueryFunction = async (query: string): Promise<string> => {
+    console.log(`[Mock] Processing query: "${query}"`);
+    return new Promise((resolve) => {
+        setTimeout(() => {
+            const response = `AI says: You asked about "${query}". This is a mock response.`;
+            console.log(`[Mock] Responding with: "${response}"`);
+            resolve(response);
+        }, 1500);
+    });
+};
+
 // Later, we might import the actual ChatWindow component
 // import ChatWindow from './ChatWindow.astro';
 ---
@@ -34,59 +48,35 @@ const {} = Astro.props;
     </button>
 
     <div id="chat-window-expanded" class="hidden">
-        <div class="chat-window-header">
-            <h3>Chat with Us</h3>
-            <button id="chat-close-button" aria-label="Close chat window">
-                <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    class="close-icon"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                >
-                    <path
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                        d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
-            </button>
-        </div>
-        <div class="chat-window-body">
-            <p>Chat window content will go here...</p>
-            <p class="powered-by">Powered by WebLLM & KuzuDB</p>
-            {/* <ChatWindow /> will be placed here eventually */}
-        </div>
-        <div class="chat-window-footer">
-            <input type="text" placeholder="Type your message..." />
-        </div>
+        <ChatWindow />
     </div>
 </div>
 
 <script>
     document.addEventListener("DOMContentLoaded", () => {
-        const toggleButton = document.getElementById(
-            "chat-widget-toggle",
-        ) as HTMLButtonElement;
-        const chatWindow = document.getElementById(
-            "chat-window-expanded",
-        ) as HTMLDivElement;
-        const closeButton = document.getElementById(
-            "chat-close-button",
-        ) as HTMLButtonElement;
+        const toggleButton = document.getElementById("chat-widget-toggle");
+        const chatWindow = document.getElementById("chat-window-expanded");
+        const chatWindowInternalWrapper = chatWindow?.querySelector(
+            ".chat-window-internal-wrapper",
+        );
+        const chatInputForFocus =
+            chatWindowInternalWrapper?.querySelector("#chat-input");
 
         function openChat() {
-            if (chatWindow && toggleButton) {
+            if (chatWindow && toggleButton instanceof HTMLButtonElement) {
                 chatWindow.classList.remove("hidden");
                 toggleButton.setAttribute("aria-expanded", "true");
-                const inputField =
-                    chatWindow.querySelector('input[type="text"]');
-                if (inputField) (inputField as HTMLElement).focus();
+                if (
+                    chatInputForFocus &&
+                    chatInputForFocus instanceof HTMLElement
+                ) {
+                    chatInputForFocus.focus();
+                }
             }
         }
 
         function closeChat() {
-            if (chatWindow && toggleButton) {
+            if (chatWindow && toggleButton instanceof HTMLButtonElement) {
                 chatWindow.classList.add("hidden");
                 toggleButton.setAttribute("aria-expanded", "false");
                 toggleButton.focus();
@@ -97,16 +87,77 @@ const {} = Astro.props;
             toggleButton.addEventListener("click", () => {
                 const isExpanded =
                     toggleButton.getAttribute("aria-expanded") === "true";
-                if (isExpanded) {
-                    closeChat();
-                } else {
-                    openChat();
-                }
+                isExpanded ? closeChat() : openChat();
             });
         }
 
-        if (closeButton) {
-            closeButton.addEventListener("click", closeChat);
+        async function handleQueryRequest(event) {
+            if (!(event instanceof CustomEvent) || !chatWindowInternalWrapper)
+                return;
+            const query = event.detail?.query;
+            if (typeof query !== "string") return;
+
+            console.log(`ExpandableChatWidget received query: "${query}"`);
+
+            try {
+                const mockProcess = async (q) => {
+                    console.log(`[Inline Mock] Processing query: "${q}"`);
+                    return new Promise((resolve) => {
+                        setTimeout(() => {
+                            const response = `AI says: You asked about "${q}". Mocked in handler.`;
+                            console.log(
+                                `[Inline Mock] Responding with: "${response}"`,
+                            );
+                            resolve(response);
+                        }, 1500);
+                    });
+                };
+                const aiResponse = await mockProcess(query);
+
+                if (
+                    typeof chatWindowInternalWrapper.addMessage === "function"
+                ) {
+                    chatWindowInternalWrapper.addMessage(aiResponse, "ai");
+                } else {
+                    console.error(
+                        "ChatWindow does not have addMessage method exposed.",
+                    );
+                }
+            } catch (error) {
+                console.error(
+                    "Error processing query in ExpandableChatWidget:",
+                    error,
+                );
+                if (typeof chatWindowInternalWrapper.showError === "function") {
+                    chatWindowInternalWrapper.showError(
+                        "Sorry, an error occurred in the main widget.",
+                    );
+                } else {
+                    console.error(
+                        "ChatWindow does not have showError method exposed.",
+                    );
+                }
+            } finally {
+                if (
+                    typeof chatWindowInternalWrapper.enableInput === "function"
+                ) {
+                    chatWindowInternalWrapper.enableInput();
+                } else {
+                    console.error(
+                        "ChatWindow does not have enableInput method exposed.",
+                    );
+                }
+            }
+        }
+
+        if (chatWindow) {
+            console.log(
+                "Adding listener for 'request-query-process' on #chat-window-expanded",
+            );
+            chatWindow.addEventListener(
+                "request-query-process",
+                handleQueryRequest,
+            );
         }
     });
 </script>
@@ -173,78 +224,6 @@ const {} = Astro.props;
 
     #chat-window-expanded.hidden {
         display: none;
-    }
-
-    .chat-window-header {
-        background-color: var(--color-primary);
-        color: var(--color-text-light);
-        padding: 1rem; /* p-4 */
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-    }
-
-    .chat-window-header h3 {
-        font-weight: 600; /* font-semibold */
-        font-size: 1.125rem; /* text-lg */
-        margin: 0;
-    }
-
-    #chat-close-button {
-        background: none;
-        border: none;
-        color: var(--color-text-light);
-        padding: 0.25rem; /* p-1 */
-        border-radius: 50%;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-    #chat-close-button:hover {
-        background-color: var(--color-primary-darker);
-    }
-    .close-icon {
-        width: 20px; /* h-5 w-5 */
-        height: 20px;
-    }
-
-    .chat-window-body {
-        padding: 1rem; /* p-4 */
-        flex-grow: 1;
-        overflow-y: auto;
-        background-color: var(--color-background-light);
-        color: var(--color-text-body);
-    }
-    .chat-window-body p {
-        margin-bottom: 0.5rem;
-    }
-    .chat-window-body .powered-by {
-        color: var(--color-text-body);
-        opacity: 0.7;
-        font-size: 0.875rem; /* text-sm */
-        margin-top: 0.5rem;
-        text-align: center;
-    }
-
-    .chat-window-footer {
-        padding: 0.75rem; /* p-3 */
-        border-top: 1px solid var(--color-border-light);
-        background-color: var(--color-text-light);
-    }
-
-    .chat-window-footer input[type="text"] {
-        width: 100%;
-        padding: 0.5rem; /* p-2 */
-        border: 1px solid var(--color-border-medium);
-        border-radius: 0.375rem; /* rounded-md */
-        box-sizing: border-box; /* Ensure padding doesn't add to width */
-        color: var(--color-text-body);
-        background-color: var(--color-text-light);
-    }
-    .chat-window-footer input[type="text"]:focus {
-        border-color: var(--color-primary);
-        outline: 1px solid var(--color-primary);
     }
 
     @keyframes bounce-once-మిత్ర {
