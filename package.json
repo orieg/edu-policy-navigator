@@ -14,7 +14,7 @@
     "build:docs": "echo \"Error: no build:docs specified\"",
     "build:data": "tsc pipeline/scripts/generateDistrictJson.ts --module nodenext --outDir dist/pipeline/scripts && node dist/pipeline/scripts/generateDistrictJson.js",
     "build:boundaries": "tsc pipeline/scripts/splitBoundaries.ts --module nodenext --outDir dist/pipeline/scripts && node dist/pipeline/scripts/splitBoundaries.js",
-    "build:kuzu": "tsc pipeline/scripts/generateKuzuDB.ts --module nodenext --outDir dist/pipeline/scripts && node dist/pipeline/scripts/generateKuzuDB.js",
+    "build:kuzu": "node pipeline/scripts/generateKuzuDB.cjs",
     "prepare": "pnpm run convert:xlsx && pnpm run build:data && pnpm run build:boundaries && pnpm run build:kuzu",
     "download:osm": "mkdir -p pipeline/data && curl -L -o pipeline/data/california-latest.osm.pbf https://download.geofabrik.de/north-america/us/california-latest.osm.pbf",
     "docker:nominatim": "docker run -it --rm -v ./pipeline/data:/data -v nominatim-data:/var/lib/postgresql/16/main -e PBF_PATH=/data/california-latest.osm.pbf -p 8080:8080 --shm-size=1g --name nominatim mediagis/nominatim:5.1",
@@ -42,12 +42,21 @@
   "author": "Nicolas Brousse <nicolas@brousse.info>",
   "license": "AGPL-3.0-or-later",
   "packageManager": "pnpm@10.7.1",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "kuzu"
+    ],
+    "ignoredBuiltDependencies": [
+      "kuzu"
+    ]
+  },
   "dependencies": {
     "@astrojs/sitemap": "^3.3.1",
     "@mlc-ai/web-llm": "^0.2.79",
     "@types/proj4": "^2.5.6",
     "astro": "^5.7.10",
     "csv-parse": "^5.6.0",
+    "kuzu": "^0.9.0",
     "kuzu-wasm": "^0.9.0",
     "leaflet": "^1.9.4",
     "leaflet-geosearch": "^4.2.0",
@@ -62,7 +71,6 @@
     "@types/node": "^22.15.3",
     "@vitest/coverage-v8": "^3.1.3",
     "jsdom": "^26.1.0",
-    "kuzu": "^0.9.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.3",
     "vite": "^6.3.4",

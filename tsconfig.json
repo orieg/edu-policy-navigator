@@ -25,6 +25,9 @@
         "paths": {
             "@/*": [
                 "src/*"
+            ],
+            "kuzu": [
+                "types/kuzu.d.ts"
             ]
         }
     },
@@ -32,7 +35,9 @@
         "src/**/*.ts",
         "src/**/*.astro",
         "astro.config.mjs",
-        "vite.config.ts"
+        "vite.config.ts",
+        "types/**/*.d.ts",
+        "pipeline/**/*.ts"
     ],
     "exclude": [
         "node_modules",
