@@ -2,6 +2,12 @@
 
 This document outlines the plan for implementing a web crawler to gather data from school district websites, California educational legislation sites, board websites, and school websites. The primary goal is to obtain clean Markdown content from these pages for later indexing with Kuzu and use in an LLM chat application.
 
+## Relationship to Custom Scraper Implementation (`IMPLEMENTATION.MD`)
+
+This crawler plan focuses on evaluating and integrating a general-purpose crawling tool (e.g., `Crawl4AI`) as the primary strategy for data acquisition. This approach prioritizes leveraging existing, robust crawling frameworks to handle common challenges like JavaScript rendering, session management, and deep crawling configuration.
+
+If this general-purpose tool approach proves insufficient for all data sources (as determined by the decision points in Section A/B below), elements of a custom scraping solution, potentially aligning with the TypeScript-based framework outlined in `.github/IMPLEMENTATION.MD`, may be considered as a fallback or for specific, problematic sources. The "Detailed Workstreams" below will be adapted to the chosen primary crawling tool from this plan.
+
 ## Key Requirements
 
 *These requirements are based on the project goals outlined in `PRD.md`.*
@@ -48,21 +54,22 @@ Based on the comparison and project requirements, **`Crawl4AI`** is the recommen
             *   An `identifier` (this will be the official CDS code for the district or school).
             *   An `entity_type` (e.g., "district", "school").
             *   A `displayName` (e.g., "San Ramon Valley Unified School District" or "Monte Vista High School").
-            *   `seedUrls`: An array of objects, each specifying a starting URL for crawling (e.g., main website, policy portal) and associated:
-                *   `source_category` (e.g., "general_website", "policy_simbli", "board_meetings").
+            *   `seedUrls`: An array of objects, each specifying a starting URL for crawling and associated parameters:
+                *   `url`: The actual starting URL.
+                *   `source_category` (e.g., "general_website", "policy_simbli", "board_meetings", "ed_code_section").
+                *   `crawl_type`: Type of content expected, influencing processing (e.g., "html_to_markdown", "download_pdf", "download_docx").
                 *   Specific `whitelisted_domains` for this seed URL (e.g., `["srvusd.org"]`, `["simbli.eboardsolutions.com"]`).
-                *   Specific `url_patterns_to_include` (e.g., `["/policies/", "/board-docs/"]`).
-                *   Specific `url_patterns_to_exclude` (e.g., `["/sports/scores/"]`).
+                *   Specific `url_patterns_to_include` (e.g., `["/policies/", "/board-docs/"]`) - patterns the crawler should follow.
+                *   Specific `url_patterns_to_exclude` (e.g., `["/sports/scores/", "/calendar/"]`) - patterns the crawler should ignore.
                 *   Crawl parameters for this source: `max_depth` (e.g., 2), `max_pages` (e.g., 50).
-            *   `global_include_external`: `false` (applies to all seed URLs for this entity, usually `false`).
+            *   `global_include_external`: `false` (applies to all seed URLs for this entity, usually `false` - typically, whitelisted_domains per seedUrl offers finer control).
             *   **Note on Populating `districts_config.json`:** This file will be the source of truth for the crawler.
                 *   [ ] **Initial population can leverage the existing `public/assets/districts.json` and `public/assets/schools_by_district.json` files.** A utility script can be created to transform entries from these files (extracting CDS Code for `identifier`, Name for `displayName`, `entity_type` based on the source file, and Website for an initial `seedUrls` entry) into a foundational `districts_config.json`.
                 *   [ ] Manual curation will then be essential to:
                     *   Add specific **policy portal URLs** and other relevant seed URLs with their categories.
                     *   Define precise **whitelisted domains and URL patterns** for each seed URL.
                     *   Set appropriate **crawl parameters** (`max_depth`, `max_pages`) for each distinct seed URL/source.
-        *   [ ] Define the primary seed URL for California Education Code: `https://leginfo.legislature.ca.gov/faces/codesTOCSelected.xhtml?tocCode=EDC`.
-        *   [ ] Whitelist for Ed Code: `leginfo.legislature.ca.gov`. Define appropriate `max_depth` and `max_pages` for Ed Code.
+        *   [ ] Define the primary seed URL for California Education Code in `districts_config.json` as an entity (e.g., identifier `ca_ed_code`, entity_type `legal_document`, with appropriate seedUrls for its TOC or sections, whitelists `leginfo.legislature.ca.gov`, and crawl parameters).
     *   **Setup:** Pull and run the `Crawl4AI` Docker image.
         *   `docker pull unclecode/crawl4ai:latest` (or a specific stable version)
         *   `docker run -d -p 11235:11235 --name crawl4ai --shm-size=1g unclecode/crawl4ai:latest`
@@ -82,6 +89,7 @@ Based on the comparison and project requirements, **`Crawl4AI`** is the recommen
         *   The primary source URL for a piece of content is available via `result.url` (final URL after redirects). Verify how other metadata (e.g., page `title` from `result.metadata.title` or a direct `result.title` attribute, crawl `depth`, relevance `score` from `result.metadata` or direct attributes) is available in the crawler's `CrawlResult` object. Since existing documentation reviewed does not confirm automatic frontmatter injection of metadata (like source URL, crawl date), our manifest file will be the definitive record for this.
         *   Evaluate the utility of `Crawl4AI`'s link citation feature (outputting `[text][1]` and a reference list) for traceability (PRD.md F4).
         *   Verify its suitability for Kuzu indexing (e.g., preservation of headings, lists, tables if important).
+        *   Assess error reporting and retry capabilities of the crawler for transient network issues or problematic pages.
     *   **Usability Assessment:**
         *   Evaluate the ease of submitting crawl jobs (potentially iterating through `districts_config.json`).
         *   Determine how to manage lists of URLs and organize the output Markdown files based on the proposed storage structure (see Section C).
@@ -125,7 +133,11 @@ Based on the comparison and project requirements, **`Crawl4AI`** is the recommen
                 ```
             *   The `[entity_identifier]` will correspond to the `identifier` (CDS code) from `districts_config.json` for the district or school.
             *   Subdirectories under each `[entity_identifier]` will be named after the `domain_name` from which the content was sourced (derived from the specific seed URL being processed).
-            *   File naming within these domain-specific directories should be consistent (e.g., derived from URL slugs, page titles, or a content hash if no other clear identifier exists) to ensure uniqueness and traceability.
+            *   File naming within these domain-specific directories should be consistent and aim for human-readability while ensuring uniqueness and traceability. A suggested strategy for Markdown files:
+                1.  Use a sanitized version of a policy number (e.g., `BP_1234.md`, `AR_5678.md`) or a legislative section ID (e.g., `EDC_48900.md`) if clearly identifiable from the URL or page content.
+                2.  Otherwise, use a sanitized slug derived from the page title or the last significant segment of the URL path.
+                3.  As a fallback, use a unique identifier, such as a hash of the source URL.
+                Ensure all filenames are URL-safe (e.g., replace spaces with hyphens, remove special characters).
             *   **Note on Content Categorization:** The initial crawling phase will focus on capturing content and organizing it by district and source domain. Granular categorization (e.g., distinguishing specific policy documents from general informational pages) might require additional heuristics during or after crawling and can be refined in a subsequent data processing phase. The crawler should attempt to preserve any obvious identifiers (like policy numbers in URLs or titles) in filenames or metadata where possible.
         *   **Manifest File Generation:**
             *   For each `[entity_identifier]` and `education_code_ca`, generate a local manifest file (e.g., `[entity_identifier]_manifest.jsonl` or `education_code_ca_manifest.jsonl`) within its respective top-level directory. Each line in this JSON Lines file would represent a crawled item and serve as the **primary record for linking saved content to its origin and associated metadata**:
@@ -145,14 +157,14 @@ Based on the comparison and project requirements, **`Crawl4AI`** is the recommen
 
 ---
 
-*The following sections outline detailed implementation workstreams for specific data sources and post-processing steps. These workstreams will need to be adapted based on the crawler tool selected and validated in Sections A/B/C above. If a general-purpose crawler like `Crawl4AI` is chosen, these steps will primarily involve configuring and running that crawler for each source, rather than building custom TypeScript/Playwright crawlers from scratch as initially drafted below, unless the chosen tool proves insufficient for a specific source.* 
+*The following sections outline detailed implementation workstreams for specific data sources and post-processing steps. These workstreams describe the *configuration and operational requirements* for the chosen crawler tool (from Sections A/B/C) for each data source. They do not imply building custom scrapers from scratch unless the chosen general-purpose tool is found insufficient for a particular source.*
 
 ## Detailed Workstream: California Education Code Data Acquisition
 
 *   **Goal:** Download and structure the text of the California Education Code using the chosen crawler tool.
 *   [ ] **Step 1.1: Tool Configuration for Ed Code**
-    *   [ ] Create/update entry in `districts_config.json` for CA Ed Code, specifying seed URL, whitelisted domain (`leginfo.legislature.ca.gov`), `max_depth`, `max_pages`, and any specific URL patterns to target/avoid for Ed Code sections.
-    *   [ ] If necessary, define specific `Crawl4AI` (or chosen tool) scraping/content selection strategies tailored for the Ed Code website structure (e.g., targeting main content blocks of sections, handling navigation if not through simple links).
+    *   [ ] Ensure the CA Education Code entity is comprehensively defined in `districts_config.json`, including its seed URL(s) (e.g., main TOC), `crawl_type: "html_to_markdown"`, whitelisted domain (`leginfo.legislature.ca.gov`), appropriate `max_depth` and `max_pages` to cover all relevant sections, and any specific URL patterns to efficiently target legislative text sections and avoid unrelated pages.
+    *   [ ] Define content selection parameters for the chosen crawler (e.g., CSS selectors, XPath, or specific tool configurations like `Crawl4AI`'s content selection features) to accurately target the main textual content of Ed Code sections and exclude headers, footers, and navigation menus.
 *   [ ] **Step 1.2: Implement Invocation in Data Ingestion Script**
     *   [ ] Ensure the Data Ingestion Script (from Section C) correctly processes the Ed Code configuration and invokes the chosen crawler tool with the appropriate parameters.
 *   [ ] **Step 1.3: Output Structuring & Manifest**
@@ -164,11 +176,10 @@ Based on the comparison and project requirements, **`Crawl4AI`** is the recommen
 
 ## Detailed Workstream: District-Specific Data Acquisition (Example: SRVUSD)
 
-*   **Goal:** Find and download policy documents and relevant web page text from configured district websites (e.g., SRVUSD using Simbli and their main site) using the chosen crawler tool.
-*   [ ] **Step 2.1: Tool Configuration for District (e.g., SRVUSD)**
-    *   [ ] Ensure SRVUSD (and other target districts) are fully configured in `districts_config.json` with unique IDs (CDS codes), seed URLs (Simbli, main website), whitelisted domains, URL patterns (e.g., for policy sections, board meeting pages), `max_depth`, and `max_pages`.
-    *   [ ] Define specific `Crawl4AI` (or chosen tool) scraping/content selection strategies if needed for Simbli structure or the district's main website (e.g., handling AJAX-loaded policies on Simbli, identifying main content on various page layouts).
-    *   [ ] Configure file download capabilities of the chosen crawler if PDFs/DOCX are hosted directly and need to be fetched (Crawl4AI has file downloading features).
+*   **Goal:** Find and download policy documents and relevant web page text from configured district and school websites (e.g., SRVUSD using Simbli and their main site) using the chosen crawler tool.
+*   [ ] **Step 2.1: Tool Configuration for Entity (e.g., SRVUSD District or a specific school)**
+    *   [ ] Ensure SRVUSD (and other target entities) are fully configured in `districts_config.json` with unique `identifier` (CDS codes), `entity_type`, and `seedUrls`. Each seed URL should specify its `url`, `source_category`, `crawl_type` (e.g., `html_to_markdown` for webpages, `download_pdf` for policy documents if directly linked), whitelisted domains, relevant URL inclusion/exclusion patterns, `max_depth`, and `max_pages`.
+    *   [ ] For each `seedUrl`, define content selection parameters for the chosen crawler to target the main content areas (e.g., policy text on Simbli, main article content on a webpage). For `crawl_type: "download_pdf"` or similar, ensure the crawler is configured to download the file directly.
 *   [ ] **Step 2.2: Implement Invocation in Data Ingestion Script**
     *   [ ] Verify the Data Ingestion Script correctly processes each district's configuration.
 *   [ ] **Step 2.3: Output Structuring & Manifest**
