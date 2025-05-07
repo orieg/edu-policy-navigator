@@ -13,6 +13,7 @@ export class RAGController {
 
     public async processQuery(
         query: string,
+        currentDistrictId: string,
         progressCallback: (message: string, type: 'ai' | 'system' | 'error' | 'loading', replaceLast?: boolean) => void
     ): Promise<void> {
         try {
@@ -22,15 +23,15 @@ export class RAGController {
             progressCallback("Converting text to Cypher query...", 'loading');
             const cypherQuery = await this._textToCypher(query, progressCallback);
             if (!cypherQuery) {
-                throw new Error("Failed to generate Cypher query.");
+                return;
             }
             progressCallback(`Generated Cypher: ${cypherQuery}`, 'system');
 
             // Step 2: Cypher-to-Context
             progressCallback("Querying database for context...", 'loading');
-            const context = await this._cypherToContext(cypherQuery, progressCallback);
+            const context = await this._cypherToContext(cypherQuery, currentDistrictId, progressCallback);
             if (!context) {
-                throw new Error("Failed to retrieve context from database.");
+                return;
             }
             progressCallback("Retrieved context from database.", 'system');
 
@@ -76,9 +77,46 @@ export class RAGController {
         const KUZUDB_SCHEMA_DESCRIPTION = `
 KuzuDB Schema Overview:
 Node Tables (Collections of Records):
+  - District: Represents a school district.
+    Properties:
+      - cdsCode: STRING (PRIMARY KEY, e.g., \"01611190000000\")
+      - name: STRING (e.g., \"Alameda Unified\")
+      - county: STRING (e.g., \"Alameda\")
+      - status: STRING (e.g., \"Active\")
+      - entityType: STRING (e.g., \"Unified School District\")
+      - streetAddress: STRING
+      - city: STRING
+      - state: STRING
+      - zip: STRING
+      - phone: STRING
+      - website: STRING
+      - lowGrade: STRING
+      - highGrade: STRING
+      - latitude: DOUBLE
+      - longitude: DOUBLE
+      - slug: STRING
+
+  - School: Represents an individual school.
+    Properties:
+      - cdsCode: STRING (PRIMARY KEY, Unique identifier for the school, e.g., \"01100170130401\")
+      - name: STRING (Name of the school, from JSON 'School' property)
+      - type: STRING (Educational program type, e.g., \"Juvenile Court School\", \"High School\")
+      - status: STRING (e.g., \"Active\")
+      - isPublic: BOOLEAN (Derived from JSON 'Public Yes/No' property)
+      - lowGrade: STRING
+      - highGrade: STRING
+      - streetAddress: STRING
+      - city: STRING
+      - state: STRING
+      - zip: STRING
+      - phone: STRING
+      - website: STRING
+      - latitude: DOUBLE (Note: Parsed from string in source JSON)
+      - longitude: DOUBLE (Note: Parsed from string in source JSON)
+
   - Policy: Represents a specific policy document or section.
     Properties:
-      - name: STRING (A unique identifier or title for the policy, e.g., "BP 5131.2 Conduct")
+      - name: STRING (A unique identifier or title for the policy, e.g., \"BP 5131.2 Conduct\")
       - title: STRING (The official title of the policy document or section)
       - text_content: STRING (The full text content of the policy)
       - description: STRING (A brief summary or abstract of the policy)
@@ -94,6 +132,7 @@ Node Tables (Collections of Records):
       - full_text: STRING (The complete text of the document if it's not broken into Policy nodes)
 
 Relationship Tables (Connections between Node Tables):
+  - School -[BELONGS_TO]-> District: Connects a School to the District it belongs to.
   - Policy -[MENTIONED_IN]-> Document: Connects a Policy to a Document it is mentioned or contained in.
   - Document -[CONTAINS_POLICY]-> Policy: (Alternative to MENTIONED_IN, depending on data model direction)
 
@@ -103,6 +142,8 @@ Cypher Query Guidelines for KuzuDB:
 - For string matching, use the \`CONTAINS\` keyword (e.g., \`p.text_content CONTAINS 'bullying'\`). \`CONTAINS\` is case-insensitive by default in common KuzuDB setups for text search.
 - Prefer returning specific, relevant properties (e.g., \`RETURN p.name, p.description\`). Avoid \`RETURN *\` unless necessary.
 - If looking for policies related to keywords, search in \`p.text_content\`, \`p.description\`, or \`p.keywords\`.
+- Example for finding schools in "Alameda Unified":
+  \`MATCH (s:School)-[:BELONGS_TO]->(d:District) WHERE d.name = 'Alameda Unified' RETURN s.name, s.type;\`
 - Example for finding policies about "bullying": 
   \`MATCH (p:Policy) WHERE p.text_content CONTAINS 'bullying' OR p.description CONTAINS 'bullying' RETURN p.name, p.text_content LIMIT 5;\`
 - Ensure queries are syntactically correct for KuzuDB Cypher.
@@ -150,26 +191,56 @@ Cypher Query:`;
         }
     }
 
-    private async _cypherToContext(cypherQuery: string, progressCallback: (message: string, type: 'ai' | 'system' | 'error' | 'loading', replaceLast?: boolean) => void): Promise<string | null> {
+    private async _cypherToContext(cypherQuery: string, currentDistrictId: string, progressCallback: (message: string, type: 'ai' | 'system' | 'error' | 'loading', replaceLast?: boolean) => void): Promise<string | null> {
         // Placeholder: Implement actual Cypher execution using KuzuDBHandler
-        console.log(`RAGController: _cypherToContext called with cypher: ${cypherQuery}`);
+        console.log(`RAGController: _cypherToContext called with cypher: ${cypherQuery} for district: ${currentDistrictId}`);
         if (!this.kuzuHandler.isReady()) {
             progressCallback("KuzuDB is not initialized with manifest or worker path. Please open the chat to initialize.", 'error');
             return null;
         }
         try {
-            // TODO: RAGController needs access to currentDistrictId
-            const placeholderDistrictId = "default_district"; // Or get from a central state
-            progressCallback(`Querying ${placeholderDistrictId} DB...`, 'loading', true);
-            const results = await this.kuzuHandler.executeQuery(placeholderDistrictId, cypherQuery);
+            // Use the passed currentDistrictId
+            progressCallback(`Querying ${currentDistrictId} DB...`, 'loading', true);
+            const results = await this.kuzuHandler.executeQuery(currentDistrictId, cypherQuery);
 
-            // Assuming the context is a string concatenation of results.
-            // This will need to be refined based on actual query result structure.
+            // Refined context formatting logic
+            if (!results || results.length === 0) {
+                return "No context found for the given query.";
+            }
+
+            let contextString = "";
+            if (results.length === 1) {
+                contextString = "Retrieved Information:\n";
+                const row = results[0];
+                contextString += Object.entries(row)
+                    .map(([key, value]) => `${key}: ${value}`)
+                    .join('\n');
+            } else {
+                contextString = `Found ${results.length} items:\n`;
+                contextString += results.map((row: Record<string, any>, index: number) => {
+                    // Combine values in the row, handling potential objects/arrays simply
+                    const rowValues = Object.values(row)
+                        .map(val => typeof val === 'object' ? JSON.stringify(val) : val)
+                        .join(', ');
+                    return `${index + 1}. ${rowValues}`;
+                }).join('\n');
+            }
+
+            // Limit context length if necessary (e.g., to avoid overly long LLM prompts)
+            const MAX_CONTEXT_LENGTH = 4000; // Example limit, adjust as needed
+            if (contextString.length > MAX_CONTEXT_LENGTH) {
+                contextString = contextString.substring(0, MAX_CONTEXT_LENGTH) + "... [truncated]";
+            }
+
+            return contextString;
+
+            /* // Old simple formatting
             if (results && results.length > 0) {
                 // Assuming results is an array of objects (records)
                 return JSON.stringify(results.map((row: Record<string, any>) => Object.values(row).join(' \n'))); // Typed row
             }
             return "No context found for the given query.";
+            */
         } catch (error) {
             console.error("Error querying KuzuDB:", error);
             progressCallback(`Error querying database: ${error instanceof Error ? error.message : "Unknown DB error"}`, 'error');

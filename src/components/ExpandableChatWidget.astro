@@ -302,8 +302,8 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
             try {
                 // RAGController is checked for null above
                 await ragController!.processQuery(
-                    // Use non-null assertion operator after check
                     query,
+                    currentDistrictId, // Pass currentDistrictId
                     (
                         message: string,
                         type: "ai" | "system" | "error" | "loading",
