@@ -57,6 +57,10 @@ This project uses [pnpm](https://pnpm.io/) for package management.
 *   **LLM (Synthesis - Build Time):** External LLM API
 *   **Hosting:** GitHub Pages
 
+## Testing
+
+This project uses [Vitest](https://vitest.dev/) for unit and component testing. For more details on our testing strategy, tools, and coverage, please see the [TESTING_PLAN.md](TESTING_PLAN.md) document.
+
 ## License
 
 This project is licensed under the terms of the [LICENSE](LICENSE) file. 
