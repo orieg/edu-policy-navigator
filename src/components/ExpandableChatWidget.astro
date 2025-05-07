@@ -8,6 +8,10 @@ interface Props {}
 const {} = Astro.props;
 
 import ChatWindow from "./ChatWindow.astro"; // <-- IMPORT ChatWindow
+import { KuzuDBHandler } from "../lib/kuzudbHandler";
+import { WebLLMHandler } from "../lib/webllmHandler";
+import { RAGController } from "../lib/ragController";
+import { MODEL_ID } from "../siteConfig";
 
 // Mock function to simulate RAG processing
 const mockProcessQueryFunction = async (query: string): Promise<string> => {
@@ -53,18 +57,17 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
 </div>
 
 <script>
-    import { KuzuDBHandler } from "../lib/kuzudbHandler"; // Adjust path
-
-    const kuzuHandler = new KuzuDBHandler();
-    let isKuzuGlobalInitialized = false; // For the main kuzu worker path and manifest
-    let activeDistrictDB: string | null = null; // To track if the specific district DB is ready
+    let kuzuHandler: KuzuDBHandler | null = null;
+    let webllmHandler: WebLLMHandler | null = null;
+    let ragController: RAGController | null = null;
+    let servicesInitialized = false;
 
     // TODO: This needs to be dynamically set based on user selection from the main page
     let currentDistrictId = "district_A"; // Placeholder
 
     // This manifest would ideally be fetched or passed as a prop
     const districtManifest = {
-        district_A: { dbPath: "/placeholder_district_A.kuzu" }, // These .kuzu files don't need to exist for this test
+        district_A: { dbPath: "/placeholder_district_A.kuzu" },
         district_B: { dbPath: "/placeholder_district_B.kuzu" },
     };
 
@@ -73,7 +76,6 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
         const chatWindowContainer = document.getElementById(
             "chat-window-expanded",
         );
-        // Assuming ChatWindow.astro exposes methods on its internal wrapper
         const chatWindowInternalWrapper = chatWindowContainer?.querySelector(
             ".chat-window-internal-wrapper",
         );
@@ -109,56 +111,104 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
             }
         }
 
-        async function initializeKuzuForDistrict(districtId: string) {
-            if (activeDistrictDB === districtId && isKuzuGlobalInitialized) {
-                // ensure global init also checked
-                console.log(
-                    `KuzuDB for ${districtId} already active and initialized.`,
-                );
-                // Ensure input is enabled if re-opening to same active district
-                enableChatInput(true);
-                return true;
-            }
+        // Renamed function to reflect initializing both services
+        async function initializeRAGServices() {
+            if (servicesInitialized) return;
 
-            showChatWindowStatus(
-                `Initializing resources for ${districtId}...`,
-                "loading",
+            chatWindowWrapper.addMessage(
+                "Initializing RAG services...",
+                "system",
             );
-            enableChatInput(false);
+            chatWindowWrapper.enableInput(false);
 
             try {
-                if (!isKuzuGlobalInitialized) {
-                    console.log("First time KuzuDB global initialization.");
-                    await kuzuHandler.initialize(districtManifest); // Uses default worker path '/kuzu_wasm_worker.js'
-                    isKuzuGlobalInitialized = true;
-                    console.log("KuzuDB global initialization complete.");
+                // Initialize KuzuDB Handler
+                if (!kuzuHandler) {
+                    kuzuHandler = new KuzuDBHandler();
+                }
+                if (!kuzuHandler.isInitialized()) {
+                    chatWindowWrapper.addMessage(
+                        "Initializing KuzuDB...",
+                        "loading",
+                    );
+                    await kuzuHandler.initialize();
+                    chatWindowWrapper.addMessage(
+                        "KuzuDB Initialized.",
+                        "system",
+                    );
+                } else {
+                    chatWindowWrapper.addMessage(
+                        "KuzuDB already initialized.",
+                        "system",
+                    );
                 }
 
-                console.log(`Ensuring KuzuDB for ${districtId} is ready...`);
-                // For now, we assume initialize() is enough to get the worker path set up.
-                // Actual DB file loading for the district is handled by executeQuery implicitly in KuzuDBHandler
-                // or would be a specific call like kuzuHandler.loadDistrictDB(districtId).
-                // To confirm the setup, the first actual query will be the real test for a specific district DB.
-                // For this step, successfully calling initialize is the main check.
-                activeDistrictDB = districtId; // Tentatively set active district
-                showChatWindowStatus(
-                    `Ready to chat about ${districtId}.`,
+                // Initialize WebLLM Handler
+                if (!webllmHandler) {
+                    webllmHandler = new WebLLMHandler(MODEL_ID);
+                }
+                if (!webllmHandler.isInitialized()) {
+                    chatWindowWrapper.addMessage(
+                        "Initializing WebLLM... This may take a moment.",
+                        "loading",
+                    );
+                    await webllmHandler.initialize((progress) => {
+                        chatWindowWrapper.addMessage(
+                            `WebLLM loading: ${progress.text}`,
+                            "loading",
+                            true /* replaceLast */,
+                        );
+                    });
+                    chatWindowWrapper.addMessage(
+                        "WebLLM Initialized.",
+                        "system",
+                        true,
+                    );
+                } else {
+                    chatWindowWrapper.addMessage(
+                        "WebLLM already initialized.",
+                        "system",
+                    );
+                }
+
+                // Initialize RAG Controller
+                if (!ragController && kuzuHandler && webllmHandler) {
+                    ragController = new RAGController(
+                        kuzuHandler,
+                        webllmHandler,
+                    );
+                    chatWindowWrapper.addMessage(
+                        "RAG Controller Initialized.",
+                        "system",
+                    );
+                } else if (ragController) {
+                    chatWindowWrapper.addMessage(
+                        "RAG Controller already initialized.",
+                        "system",
+                    );
+                } else {
+                    throw new Error(
+                        "Failed to initialize RAGController: handlers not ready.",
+                    );
+                }
+
+                servicesInitialized = true;
+                chatWindowWrapper.addMessage(
+                    "All RAG services ready.",
                     "system",
                 );
-                enableChatInput(true);
-                return true;
+                chatWindowWrapper.enableInput(true);
             } catch (error) {
-                console.error(
-                    `Failed to initialize KuzuDB for district ${districtId}:`,
-                    error,
-                );
-                showChatWindowStatus(
-                    `Error initializing resources: ${(error as Error).message}`,
+                console.error("Error initializing RAG services:", error);
+                const errorMessage =
+                    error instanceof Error
+                        ? error.message
+                        : "Unknown error during service initialization.";
+                chatWindowWrapper.addMessage(
+                    `Initialization Error: ${errorMessage}`,
                     "error",
                 );
-                activeDistrictDB = null; // Reset on failure
-                enableChatInput(false);
-                return false;
+                chatWindowWrapper.enableInput(false); // Keep input disabled if essential services fail
             }
         }
 
@@ -170,8 +220,8 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
                 chatWindowContainer.classList.remove("hidden");
                 toggleButton.setAttribute("aria-expanded", "true");
 
-                const success =
-                    await initializeKuzuForDistrict(currentDistrictId);
+                // Use the renamed initialization function
+                const success = await initializeRAGServices();
 
                 if (
                     success &&
@@ -180,8 +230,7 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
                 ) {
                     chatInputForFocus.focus();
                 } else if (!success) {
-                    // Keep chat open but input disabled, error shown by initializeKuzuForDistrict
-                    // No specific action here, status is already set.
+                    // Status already handled by initializeRAGServices
                 }
             }
         }
@@ -209,6 +258,8 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
             });
         }
 
+        // --- handleQueryRequest will later use ragController ---
+        // Temporarily adapt to check RAG readiness
         async function handleQueryRequest(event: Event) {
             if (!(event instanceof CustomEvent) || !chatWindowInternalWrapper)
                 return;
@@ -216,12 +267,19 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
 
             if (typeof query !== "string") return;
 
-            if (!activeDistrictDB || !isKuzuGlobalInitialized) {
+            // Check if both services are ready for the current context
+            if (
+                !currentDistrictId ||
+                !kuzuHandler ||
+                !kuzuHandler.isInitialized() ||
+                !webllmHandler ||
+                !webllmHandler.isInitialized()
+            ) {
                 showChatWindowStatus(
                     "AI services not ready. Please try reopening the chat.",
                     "error",
                 );
-                enableChatInput(true); // Allow user to try again / resubmit if it was a brief glitch
+                enableChatInput(true);
                 return;
             }
 
@@ -229,44 +287,45 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
             enableChatInput(false);
 
             try {
-                // const actualResponse = await kuzuHandler.executeQuery(activeDistrictDB, query); // Placeholder for REAL CALL
-                // console.log("KuzuDB query result:", actualResponse);
-                // For now, using a mock LLM-like response, later this will be part of ragController
-                const mockLLMResponse = (q: string, district: string | null) =>
-                    new Promise((resolve) =>
-                        setTimeout(
-                            () =>
-                                resolve(
-                                    `Mock AI response for "${q}" about ${district}`,
-                                ),
-                            1000,
-                        ),
-                    );
-                const aiResponse = await mockLLMResponse(
+                // RAGController's processQuery now returns void.
+                // All messages, including the final answer or errors, are sent via the progressCallback.
+                await ragController.processQuery(
                     query,
-                    activeDistrictDB,
+                    (message, type, replaceLast = false) => {
+                        // If ChatWindow.astro's addMessage doesn't support replaceLast directly,
+                        // we ensure that the call to it from here includes it.
+                        // The previous implementation of addMessage in ChatWindow was:
+                        // addMessage(content, type, id = undefined, replaceLastId = undefined)
+                        // We might need to adjust ChatWindow if this new `replaceLast` boolean isn't directly compatible.
+                        // For now, assuming chatWindowWrapper.addMessage can take a boolean `replaceLast`.
+                        chatWindowInternalWrapper.addMessage(
+                            message,
+                            type,
+                            replaceLast,
+                        );
+                    },
                 );
 
-                if (
-                    typeof (chatWindowInternalWrapper as any).addMessage ===
-                    "function"
-                ) {
-                    (chatWindowInternalWrapper as any).addMessage(
-                        aiResponse,
-                        "ai",
-                    );
-                }
+                // No need to handle a return value from processQuery anymore.
+                // const answer = await ragController.processQuery(...)
+                // if (answer && !answer.startsWith("Sorry, I encountered an error")) { ... }
             } catch (error) {
                 console.error(
-                    "Error during query processing in ExpandableChatWidget:",
+                    "Error processing query with RAGController:",
                     error,
                 );
-                showChatWindowStatus(
-                    `Error: ${(error as Error).message}`,
+                const errorMessage =
+                    error instanceof Error
+                        ? error.message
+                        : "An unknown error occurred.";
+                // Send this critical error via the chat window, replacing the last message (e.g., a loading message)
+                chatWindowInternalWrapper.addMessage(
+                    `Error: ${errorMessage}`,
                     "error",
+                    true,
                 );
             } finally {
-                enableChatInput(true);
+                chatWindowInternalWrapper.enableInput(true);
             }
         }
 

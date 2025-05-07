@@ -63,18 +63,37 @@ interface Message {
         (chatWindowWrapper as any).addMessage = (
             text: string,
             sender: MessageSender, // Use client-side type
+            replaceLast = false,
+            id = undefined,
         ) => {
-            addMessageToUI(text, sender);
+            addMessageToUI(text, sender, replaceLast, id);
         };
     }
 
-    function addMessageToUI(text: string, sender: MessageSender) {
+    function addMessageToUI(
+        text: string,
+        sender: MessageSender,
+        replaceLast = false,
+        id = undefined,
+    ) {
         // Use client-side type
         console.log(`addMessageToUI called with: "${text}", sender: ${sender}`);
         if (!messageList) {
             console.error("messageList element not found in addMessageToUI");
             return;
         }
+        const messageContainer = messageList;
+        if (!messageContainer) return;
+
+        let messageId =
+            id ||
+            `msg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
+        if (replaceLast && messageContainer.lastElementChild) {
+            // If replaceLast is true, remove the last message element
+            messageContainer.removeChild(messageContainer.lastElementChild);
+        }
+
         const messageDiv = document.createElement("div");
         messageDiv.classList.add("message", `${sender}-message`);
 
@@ -82,9 +101,9 @@ interface Message {
         p.textContent = text;
         messageDiv.appendChild(p);
 
-        messageList.appendChild(messageDiv);
-        if (messageList instanceof HTMLElement) {
-            messageList.scrollTop = messageList.scrollHeight;
+        messageContainer.appendChild(messageDiv);
+        if (messageContainer instanceof HTMLElement) {
+            messageContainer.scrollTop = messageContainer.scrollHeight;
         }
         messageIdCounter++;
     }

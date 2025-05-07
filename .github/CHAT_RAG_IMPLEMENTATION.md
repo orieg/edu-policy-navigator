@@ -15,6 +15,39 @@
 
 ---
 
+**Progress Log / Current Status:**
+
+*   **Initial Setup & Planning:** Established plan, created this file.
+*   **Widget UI (`ExpandableChatWidget.astro`, `ChatWindow.astro`):**
+    *   Created components, integrated into `BaseLayout.astro`.
+    *   Styled using plain CSS and global variables.
+    *   Implemented expand/collapse, parent-child communication (custom events, exposed methods).
+    *   Ensured `ChatWindow.astro` handles various message types and can control input state.
+    *   Troubleshot styling, JS syntax, and communication issues.
+*   **RAG Backend Handlers (Phase 2.5 initiated):**
+    *   **`kuzudbHandler.ts` (Task 6 - In Progress/Largely Complete):**
+        *   Created `src/lib/kuzudbHandler.ts`, installed `kuzu-wasm`.
+        *   Configured `vite-plugin-static-copy` for worker script.
+        *   Implemented handler class, refined API usage.
+        *   Created `src/kuzu-wasm.d.ts` for basic types.
+        *   Integrated `initialize()` into `ExpandableChatWidget.astro`, confirmed working.
+    *   **`webllmHandler.ts` (Task 7 - In Progress/Largely Complete):**
+        *   Created `src/lib/webllmHandler.ts`, installed `@mlc-ai/web-llm`.
+        *   Refactored based on `MLCEngine` and `engine.chat.completions.create` API.
+    *   Moved WebLLM model ID to `src/siteConfig.ts`.
+    *   `ExpandableChatWidget.astro` initializes both handlers.
+*   **`ragController.ts` (Task 8 - In Progress):**
+    *   Created `src/lib/ragController.ts` with a basic structure: constructor, `processQuery` method, and private placeholder methods (`_textToCypher`, `_cypherToContext`, `_contextToAnswer`).
+    *   Integrated `RAGController` into `ExpandableChatWidget.astro`:
+        *   Imported and instantiated `RAGController` during service initialization.
+        *   Modified `handleQueryRequest` to call `ragController.processQuery()`.
+        *   Updated `RAGController.processQuery` to return `Promise<void>` and send all messages (including final answer/error) via the `progressCallback`.
+        *   The `progressCallback` in `RAGController` now accepts a `replaceLast?: boolean` argument, passed to `ChatWindow.astro`.
+        *   Adjusted `ExpandableChatWidget.astro` to match the `void` return and pass `replaceLast` from the callback to `chatWindowWrapper.addMessage`.
+    *   Verified that `ChatWindow.astro`'s `addMessage` method (exposed on `chatWindowWrapper`) already correctly handles a `replaceLast: boolean` parameter to replace the most recent message.
+
+---
+
 **Step-by-Step Implementation Tasks:**
 
 **Phase 1: Core Component Setup & RAG Service Access Strategy**
@@ -55,40 +88,37 @@
 
 **Phase 2.5: RAG Backend Core Implementation**
 
-6.  **[ ] Task: Implement `kuzudbHandler.ts`**
-    *   **File:** `src/lib/kuzudbHandler.ts` (or agreed-upon location)
+6.  **[~] Task: Implement `kuzudbHandler.ts`** (Largely complete, core functionality for initialization and querying in place)
+    *   **File:** `src/lib/kuzudbHandler.ts`
     *   **Action:**
-        *   Develop logic for loading pre-built KuzuDB `.db` files for a selected district into KuzuDB-Wasm.
+        *   Develop logic for loading pre-built KuzuDB `.db` files for a selected district into KuzuDB-Wasm. (Current implementation initializes globally, district-specific DB loading path needs review/implementation if dynamic loading per district is required beyond initial setup).
         *   Implement KuzuDB instance management (initialization, connection, potentially disposal).
         *   Provide a method to execute Cypher queries against the loaded database and return results.
         *   Implement error handling for database loading, connection, and query execution.
     *   **Dependencies:** KuzuDB-Wasm library, district data manifest/lookup.
-    *   **Testing:** Unit tests for loading specific district DBs, executing valid/invalid Cypher queries, and error handling.
+    *   **Testing:** Unit tests for loading specific district DBs, executing valid/invalid Cypher queries, and error handling. (Basic initialization tested via widget).
 
-7.  **[ ] Task: Implement `webllmHandler.ts`**
-    *   **File:** `src/lib/webllmHandler.ts` (or agreed-upon location)
+7.  **[~] Task: Implement `webllmHandler.ts`** (Core structure for initialization and response generation in place)
+    *   **File:** `src/lib/webllmHandler.ts`
     *   **Action:**
-        *   Develop logic for initializing the WebLLM engine (e.g., `ChatModule` from WebLLM, model loading, progress reporting).
-        *   Provide an interface to send prompts to the LLM and receive generated text responses.
+        *   Develop logic for initializing the WebLLM engine (e.g., `MLCEngine` from WebLLM, model loading, progress reporting).
+        *   Provide an interface to send prompts to the LLM and receive generated text responses (e.g., `generateResponse` method).
         *   Implement error handling for LLM initialization and prompt processing.
         *   Consider LLM instance management and resource handling (e.g., `dispose` methods if applicable).
-    *   **Dependencies:** WebLLM library.
-    *   **Testing:** Unit tests for initializing the LLM, sending sample prompts, and handling potential LLM errors.
+    *   **Dependencies:** WebLLM library (`@mlc-ai/web-llm`).
+    *   **Testing:** Unit tests for initializing the LLM, sending sample prompts, and handling potential LLM errors. (Initialization integrated, response generation placeholder in use by `ragController`).
 
-8.  **[ ] Task: Implement `ragController.ts`**
-    *   **File:** `src/lib/ragController.ts` (or agreed-upon location)
+8.  **[>] Task: Implement `ragController.ts`** (Structure in place, core logic for RAG steps needs implementation)
+    *   **File:** `src/lib/ragController.ts`
     *   **Action:**
-        *   Design and implement the `processQuery(query: string, districtId: string, callbacks: {/* ... */})` method (or similar interface) to orchestrate the RAG pipeline.
-        *   **Step 1 (Text-to-Cypher):** Utilize `webllmHandler` to convert natural language `query` into a Cypher query. Ensure district-specific schema information is appropriately considered/included in the prompt.
-        *   **Step 2 (Cypher-to-Context):** Utilize `kuzudbHandler` to execute the generated Cypher query against the current district's KuzuDB instance and retrieve contextual information.
-        *   **Step 3 (Context-to-Answer):** Utilize `webllmHandler` to generate a natural language answer based on the original `query` and the retrieved `context`.
-        *   Implement state management for the RAG process, using `callbacks` to report:
-            *   Different processing stages (e.g., "Initializing RAG services...", "Loading district data...", "Generating understanding...", "Searching policies...", "Composing answer...").
-            *   Successful completion with the final answer.
-            *   Errors encountered at any stage of the RAG pipeline.
-        *   Handle initialization of `kuzudbHandler` (for the specific `districtId`) and `webllmHandler`.
+        *   Design and implement the `processQuery(query: string, progressCallback: Function)` method (or similar interface) to orchestrate the RAG pipeline. (Signature and basic flow established).
+        *   **Step 1 (Text-to-Cypher):** Utilize `webllmHandler` to convert natural language `query` into a Cypher query. Ensure district-specific schema information is appropriately considered/included in the prompt. (**Next focus area**)
+        *   **Step 2 (Cypher-to-Context):** Utilize `kuzudbHandler` to execute the generated Cypher query against the current district's KuzuDB instance and retrieve contextual information. (Placeholder in place, needs refinement based on actual KuzuDB results format).
+        *   **Step 3 (Context-to-Answer):** Utilize `webllmHandler` to generate a natural language answer based on the original `query` and the retrieved `context`. (Placeholder in place, needs prompt engineering).
+        *   Implement state management for the RAG process, using `progressCallback` to report different processing stages, success, and errors. (Basic callback mechanism implemented).
+        *   Handle initialization of `kuzudbHandler` and `webllmHandler` (done by `ExpandableChatWidget.astro` before controller use).
     *   **Dependencies:** `kuzudbHandler.ts`, `webllmHandler.ts`.
-    *   **Testing:** Unit/integration tests for the `processQuery` method, covering the full RAG flow with mocked handlers. Test different query types, successful outcomes, and various error conditions in each RAG step.
+    *   **Testing:** Unit/integration tests for the `processQuery` method, covering the full RAG flow with mocked handlers. Test different query types, successful outcomes, and various error conditions in each RAG step. (Current testing relies on widget integration with placeholder methods).
 
 **Phase 3: RAG Integration & Full `ChatWindow.astro` Functionality**
 
@@ -97,14 +127,14 @@
     *   **Action:** Import and embed the prepared `ChatWindow.astro`. Establish communication (e.g., event listeners for queries, methods for responses) for RAG interactions, now with the `ragController` in mind.
     *   **Testing:** Verify `ChatWindow.astro` renders correctly and mock communication flow works.
 
-10. **[ ] Task: Implement Core Chat Logic via `ragController`**
-    *   **File:** `src/components/ChatWindow.astro` (script section) and `src/components/ExpandableChatWidget.astro` (handler for chat events).
+10. **[~] Task: Implement Core Chat Logic via `ragController`** (Partially done; `ExpandableChatWidget` calls `ragController`, which uses placeholders)
+    *   **File:** `src/components/ExpandableChatWidget.astro` (handler for chat events).
     *   **Action:**
-        *   Replace mock processing logic in `ExpandableChatWidget.astro` with calls to the `ragController.processQuery(...)` from the implemented `src/lib/ragController.ts`.
-        *   Ensure `ChatWindow.astro` correctly displays AI responses and handles RAG processing states (loading, errors) based on feedback (e.g., callbacks) from `ragController`.
-        *   **Provide distinct visual feedback during the different stages of `ragController.processQuery` if possible (e.g., "Generating understanding...", "Searching policies...", "Composing answer...").**
-        *   **Implement robust error handling and display user-friendly messages for failures during any RAG step (e.g., invalid Cypher generation, KuzuDB error, LLM answer generation failure).**
-    *   **Testing:** Test with the actual RAG pipeline. Verify message display, multi-stage feedback, and error states.
+        *   Replace mock processing logic in `ExpandableChatWidget.astro` with calls to the `ragController.processQuery(...)`. (Done).
+        *   Ensure `ChatWindow.astro` correctly displays AI responses and handles RAG processing states (loading, errors) based on feedback (e.g., callbacks) from `ragController`. (Mechanism in place).
+        *   **Provide distinct visual feedback during the different stages of `ragController.processQuery` if possible (e.g., "Generating understanding...", "Searching policies...", "Composing answer...").** (Callback provides this, UI displays it).
+        *   **Implement robust error handling and display user-friendly messages for failures during any RAG step (e.g., invalid Cypher generation, KuzuDB error, LLM answer generation failure).** (Error reporting through callback is in place).
+    *   **Testing:** Test with the actual RAG pipeline. Verify message display, multi-stage feedback, and error states. (Currently testing with placeholder RAG steps).
 
 11. **[ ] Task: Verify Dynamic RAG Backend Initialization and Context Switching**
     *   **Files:** Relevant layout/state files, `ExpandableChatWidget.astro`, `ChatWindow.astro`, RAG handlers.
@@ -140,6 +170,15 @@
         *   UI behavior with long messages, multiple messages.
         *   Cross-browser compatibility.
     *   **Goal:** Ensure a robust, user-friendly, accessible, and functional chat widget with the RAG backend.
+
+---
+
+**Next Steps (Focus Areas):**
+
+1.  **Implement `RAGController._textToCypher()`:** Use `WebLLMHandler` to convert natural language user queries into Cypher queries. This will involve prompt engineering and potentially passing KuzuDB schema information to the LLM.
+2.  **Implement `RAGController._cypherToContext()`:** Refine how results from `KuzuDBHandler.query()` are processed into a string context suitable for the LLM. This depends on the actual structure of data in KuzuDB.
+3.  **Implement `RAGController._contextToAnswer()`:** Refine the prompt engineering for generating the final answer using `WebLLMHandler` based on the original query and retrieved context.
+4.  **District-Specific Data:** Address how `currentDistrictId` (if needed for KuzuDB path or schema variations) is actually obtained and utilized by the RAG services. The `kuzudbHandler` currently initializes globally.
 
 ---
 

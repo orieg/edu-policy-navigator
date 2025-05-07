@@ -129,9 +129,9 @@ export class WebLLMHandler {
                 // Explicitly define options for streaming request
                 const requestOptions: ChatCompletionRequestStreaming = {
                     messages,
-                    stream: true,
+                    ...options, // Spread options first
+                    stream: true, // Explicitly set stream after spread
                     stream_options: { include_usage: true },
-                    ...options
                 };
                 const chunks: AsyncIterable<ChatCompletionChunk> = await this.engine.chat.completions.create(requestOptions);
 
@@ -152,8 +152,8 @@ export class WebLLMHandler {
                 // Explicitly define options for non-streaming request
                 const requestOptions: ChatCompletionRequestNonStreaming = {
                     messages,
-                    stream: false,
-                    ...options
+                    ...options, // Spread options first
+                    stream: false, // Explicitly set stream after spread
                 };
                 const reply: ChatCompletion = await this.engine.chat.completions.create(requestOptions);
                 const responseText = reply.choices[0]?.message?.content || "";
