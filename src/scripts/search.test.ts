@@ -37,7 +37,7 @@ const selectDistrictStandalone = async (district: DistrictDetails, appBaseUrl: s
         console.error("Error: Selected district data is missing the 'slug' property. Cannot navigate.");
         return null; // Indicate error or inability to navigate
     }
-    const path = `${appBaseUrl.replace(/$/, '')}/districts/${slug}`;
+    const path = `${appBaseUrl.replace(/\/$/, '')}/districts/${slug}`;
     return path; // Return the path for assertion
 };
 
