@@ -44,7 +44,7 @@ IMPORTANT: Always follow these steps before creating a commit message:
 
 ## Format
 - Use conventional commit format
-- Use the edit_tool or a temporary file for commit messages to handle line breaks properly
+- Use the edit_file or a temporary file for commit messages to handle line breaks properly
 - Format:
   ```
   type: short description

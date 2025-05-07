@@ -33,5 +33,12 @@ export default defineConfig({
             //     main: path.resolve(__dirname, 'src/main.ts')
             // }
         }
-    }
+    },
+    // Add server configuration for watching
+    server: {
+        watch: {
+            // Ignore the coverage directory
+            ignored: ['**/coverage/**'],
+        },
+    },
 }); 
