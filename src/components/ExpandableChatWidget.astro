@@ -1,0 +1,259 @@
+---
+// src/components/ExpandableChatWidget.astro
+// This component will manage the collapsed and expanded state of the chat widget.
+
+// Props will be defined here later if needed, e.g., to pass district info or handlers.
+interface Props {}
+
+const {} = Astro.props;
+
+// Later, we might import the actual ChatWindow component
+// import ChatWindow from './ChatWindow.astro';
+---
+
+<div id="expandable-chat-widget-container">
+    <button
+        id="chat-widget-toggle"
+        aria-label="Toggle chat widget"
+        aria-expanded="false"
+    >
+        <svg
+            xmlns="http://www.w3.org/2000/svg"
+            class="chat-icon"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            stroke-width="2"
+        >
+            <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 5.523-4.477 10-10 10S1 17.523 1 12 5.477 2 11 2s10 4.477 10 10z"
+            ></path>
+        </svg>
+    </button>
+
+    <div id="chat-window-expanded" class="hidden">
+        <div class="chat-window-header">
+            <h3>Chat with Us</h3>
+            <button id="chat-close-button" aria-label="Close chat window">
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    class="close-icon"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                >
+                    <path
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        <div class="chat-window-body">
+            <p>Chat window content will go here...</p>
+            <p class="powered-by">Powered by WebLLM & KuzuDB</p>
+            {/* <ChatWindow /> will be placed here eventually */}
+        </div>
+        <div class="chat-window-footer">
+            <input type="text" placeholder="Type your message..." />
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener("DOMContentLoaded", () => {
+        const toggleButton = document.getElementById(
+            "chat-widget-toggle",
+        ) as HTMLButtonElement;
+        const chatWindow = document.getElementById(
+            "chat-window-expanded",
+        ) as HTMLDivElement;
+        const closeButton = document.getElementById(
+            "chat-close-button",
+        ) as HTMLButtonElement;
+
+        function openChat() {
+            if (chatWindow && toggleButton) {
+                chatWindow.classList.remove("hidden");
+                toggleButton.setAttribute("aria-expanded", "true");
+                const inputField =
+                    chatWindow.querySelector('input[type="text"]');
+                if (inputField) (inputField as HTMLElement).focus();
+            }
+        }
+
+        function closeChat() {
+            if (chatWindow && toggleButton) {
+                chatWindow.classList.add("hidden");
+                toggleButton.setAttribute("aria-expanded", "false");
+                toggleButton.focus();
+            }
+        }
+
+        if (toggleButton && chatWindow) {
+            toggleButton.addEventListener("click", () => {
+                const isExpanded =
+                    toggleButton.getAttribute("aria-expanded") === "true";
+                if (isExpanded) {
+                    closeChat();
+                } else {
+                    openChat();
+                }
+            });
+        }
+
+        if (closeButton) {
+            closeButton.addEventListener("click", closeChat);
+        }
+    });
+</script>
+
+<style>
+    #expandable-chat-widget-container {
+        position: fixed;
+        bottom: 20px; /* Corresponds to bottom-5 */
+        right: 20px; /* Corresponds to right-5 */
+        z-index: 1000;
+    }
+
+    #chat-widget-toggle {
+        background-color: var(--color-primary);
+        color: var(--color-text-light);
+        width: 60px; /* Increased size for better visibility */
+        height: 60px;
+        border-radius: 50%;
+        border: none;
+        box-shadow:
+            0 10px 15px -3px rgba(0, 0, 0, 0.1),
+            0 4px 6px -2px rgba(0, 0, 0, 0.05); /* shadow-xl */
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition:
+            background-color 0.2s ease-in-out,
+            transform 0.15s ease-in-out;
+        animation: bounce-once-మిత్ర 1.2s ease-in-out 1s 1; /* Animation name, duration, timing, delay, iteration */
+    }
+
+    #chat-widget-toggle:hover {
+        background-color: var(--color-primary-darker);
+    }
+
+    #chat-widget-toggle:focus {
+        outline: 2px solid var(--color-primary);
+        outline-offset: 2px;
+    }
+
+    .chat-icon {
+        width: 32px; /* Corresponds to h-7 w-7 (approx 28px), slightly larger */
+        height: 32px;
+    }
+
+    #chat-window-expanded {
+        position: absolute;
+        bottom: calc(100% + 1rem); /* 1rem above the button */
+        right: 0;
+        width: 320px; /* sm:w-96 is 384px, w-80 is 320px */
+        height: 60vh; /* Consistent with Tailwind */
+        max-height: 500px; /* Adjusted from 700px for typical chat widget */
+        background-color: var(--color-text-light);
+        border-radius: 0.5rem; /* rounded-lg */
+        box-shadow:
+            0 20px 25px -5px rgba(0, 0, 0, 0.1),
+            0 10px 10px -5px rgba(0, 0, 0, 0.04); /* shadow-2xl */
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border: 1px solid var(--color-border-light);
+    }
+
+    #chat-window-expanded.hidden {
+        display: none;
+    }
+
+    .chat-window-header {
+        background-color: var(--color-primary);
+        color: var(--color-text-light);
+        padding: 1rem; /* p-4 */
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .chat-window-header h3 {
+        font-weight: 600; /* font-semibold */
+        font-size: 1.125rem; /* text-lg */
+        margin: 0;
+    }
+
+    #chat-close-button {
+        background: none;
+        border: none;
+        color: var(--color-text-light);
+        padding: 0.25rem; /* p-1 */
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    #chat-close-button:hover {
+        background-color: var(--color-primary-darker);
+    }
+    .close-icon {
+        width: 20px; /* h-5 w-5 */
+        height: 20px;
+    }
+
+    .chat-window-body {
+        padding: 1rem; /* p-4 */
+        flex-grow: 1;
+        overflow-y: auto;
+        background-color: var(--color-background-light);
+        color: var(--color-text-body);
+    }
+    .chat-window-body p {
+        margin-bottom: 0.5rem;
+    }
+    .chat-window-body .powered-by {
+        color: var(--color-text-body);
+        opacity: 0.7;
+        font-size: 0.875rem; /* text-sm */
+        margin-top: 0.5rem;
+        text-align: center;
+    }
+
+    .chat-window-footer {
+        padding: 0.75rem; /* p-3 */
+        border-top: 1px solid var(--color-border-light);
+        background-color: var(--color-text-light);
+    }
+
+    .chat-window-footer input[type="text"] {
+        width: 100%;
+        padding: 0.5rem; /* p-2 */
+        border: 1px solid var(--color-border-medium);
+        border-radius: 0.375rem; /* rounded-md */
+        box-sizing: border-box; /* Ensure padding doesn't add to width */
+        color: var(--color-text-body);
+        background-color: var(--color-text-light);
+    }
+    .chat-window-footer input[type="text"]:focus {
+        border-color: var(--color-primary);
+        outline: 1px solid var(--color-primary);
+    }
+
+    @keyframes bounce-once-మిత్ర {
+        0%,
+        100% {
+            transform: translateY(0);
+        }
+        50% {
+            transform: translateY(-12px); /* Bounce height */
+        }
+    }
+</style>

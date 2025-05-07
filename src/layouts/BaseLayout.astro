@@ -10,6 +10,7 @@ import "leaflet.markercluster/dist/MarkerCluster.css";
 import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import { WEBSITE_NAME, WEBSITE_DESCRIPTION } from "../siteConfig"; // Import site constants
 import TableOfContents from "../components/TableOfContents.astro"; // Import the new TOC component
+import ExpandableChatWidget from "../components/ExpandableChatWidget.astro"; // <-- ADDED IMPORT
 
 export interface Props {
     frontmatter?: {
@@ -223,5 +224,7 @@ const documentTitle = source.title || WEBSITE_NAME;
                 });
             });
         </script>
+        <ExpandableChatWidget />
+        {/* <-- ADDED COMPONENT */}
     </body>
 </html>
