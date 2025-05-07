@@ -115,9 +115,13 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
                 const aiResponse = await mockProcess(query);
 
                 if (
-                    typeof chatWindowInternalWrapper.addMessage === "function"
+                    typeof (chatWindowInternalWrapper as any).addMessage ===
+                    "function"
                 ) {
-                    chatWindowInternalWrapper.addMessage(aiResponse, "ai");
+                    (chatWindowInternalWrapper as any).addMessage(
+                        aiResponse,
+                        "ai",
+                    );
                 } else {
                     console.error(
                         "ChatWindow does not have addMessage method exposed.",
@@ -128,8 +132,11 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
                     "Error processing query in ExpandableChatWidget:",
                     error,
                 );
-                if (typeof chatWindowInternalWrapper.showError === "function") {
-                    chatWindowInternalWrapper.showError(
+                if (
+                    typeof (chatWindowInternalWrapper as any).showError ===
+                    "function"
+                ) {
+                    (chatWindowInternalWrapper as any).showError(
                         "Sorry, an error occurred in the main widget.",
                     );
                 } else {
@@ -139,9 +146,10 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
                 }
             } finally {
                 if (
-                    typeof chatWindowInternalWrapper.enableInput === "function"
+                    typeof (chatWindowInternalWrapper as any).enableInput ===
+                    "function"
                 ) {
-                    chatWindowInternalWrapper.enableInput();
+                    (chatWindowInternalWrapper as any).enableInput();
                 } else {
                     console.error(
                         "ChatWindow does not have enableInput method exposed.",
@@ -220,10 +228,27 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
         flex-direction: column;
         overflow: hidden;
         border: 1px solid var(--color-border-light);
+        /* Add initial state for transition (when hidden) */
+        opacity: 0;
+        visibility: hidden;
+        transform: translateY(10px) scale(0.95);
+        transform-origin: bottom right; /* Ensure scaling towards the button */
+        transition:
+            opacity 0.3s ease-in-out,
+            transform 0.3s ease-in-out,
+            visibility 0.3s ease-in-out; /* visibility transition ensures it's not interactive when hidden */
+    }
+
+    #chat-window-expanded:not(.hidden) {
+        /* State when visible */
+        opacity: 1;
+        visibility: visible;
+        transform: translateY(0) scale(1);
     }
 
     #chat-window-expanded.hidden {
-        display: none;
+        /* Keep hidden class for JS logic, but rely on opacity/visibility for transition */
+        /* display: none; */ /* Replaced by opacity and visibility transitions */
     }
 
     @keyframes bounce-once-మిత్ర {

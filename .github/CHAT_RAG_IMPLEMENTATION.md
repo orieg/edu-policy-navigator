@@ -48,7 +48,7 @@
     *   **Action:** Style the collapsed state (chat toggle button) and the expanded state (window frame, including `ChatWindow` content like header, messages, input area).
     *   **Testing:** Visually inspect styles and animations. Ensure use of global color palette. (Message bubble styling achieved).
 
-5.  **[ ] Task: Add Smooth Transitions for Expand/Collapse**
+5.  **[x] Task: Add Smooth Transitions for Expand/Collapse**
     *   **File:** `src/components/ExpandableChatWidget.astro` (CSS)
     *   **Action:** Implement CSS transitions for a smoother visual effect when the chat window opens and closes.
     *   **Testing:** Visually verify smooth opening and closing animations.
