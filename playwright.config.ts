@@ -6,7 +6,7 @@ const serverHost = (process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:43
 const effectiveBaseURL = `${serverHost}${astroBasePath}`;
 
 /**
- * See https://playwright.dev/docs/test-configuration.
+ * See  https://playwright.dev/docs/test-configuration.
  */
 export default defineConfig({
     testDir: './e2e', // Directory for E2E test files
@@ -19,7 +19,7 @@ export default defineConfig({
     /* Opt out of parallel tests on CI. */
     workers: process.env.CI ? 1 : undefined,
     /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-    reporter: 'html',
+    reporter: [['list'], ['html', { open: 'never' }]],
     /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
     use: {
         /* Base URL to use in actions like `await page.goto('/')`. 

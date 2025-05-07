@@ -90,11 +90,44 @@ const documentTitle = source.title || WEBSITE_NAME;
                                     }
                                 >
                                     {crumb.href &&
-                                    index < breadcrumbs.length - 1 ? (
-                                        <a href={crumb.href}>{crumb.text}</a>
-                                    ) : (
-                                        crumb.text
-                                    )}
+                                    index < breadcrumbs.length - 1
+                                        ? (() => {
+                                              let finalHref = crumb.href;
+                                              const base = import.meta.env
+                                                  .BASE_URL;
+                                              if (
+                                                  crumb.href.startsWith("/") &&
+                                                  !crumb.href.startsWith(
+                                                      "//",
+                                                  ) &&
+                                                  base &&
+                                                  base !== "/"
+                                              ) {
+                                                  const normBase =
+                                                      base.endsWith("/")
+                                                          ? base
+                                                          : base + "/";
+                                                  if (crumb.href === "/") {
+                                                      finalHref = normBase;
+                                                  } else {
+                                                      finalHref =
+                                                          normBase +
+                                                          (crumb.href.startsWith(
+                                                              "/",
+                                                          )
+                                                              ? crumb.href.substring(
+                                                                    1,
+                                                                )
+                                                              : crumb.href);
+                                                  }
+                                              }
+                                              return (
+                                                  <a href={finalHref}>
+                                                      {crumb.text}
+                                                  </a>
+                                              );
+                                          })()
+                                        : crumb.text}
                                 </li>
                             ))}
                         </ol>

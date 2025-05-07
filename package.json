@@ -8,7 +8,7 @@
     "preinstall": "npx only-allow pnpm && git config core.hooksPath .githooks",
     "test": "vitest run --coverage",
     "test:ui": "vitest --ui",
-    "test:e2e": "playwright test",
+    "test:e2e": "pnpm run build && playwright test",
     "coverage": "vitest run --coverage",
     "convert:xlsx": "tsc pipeline/scripts/convertXlsxToCsv.ts --module nodenext --outDir dist/pipeline/scripts && node dist/pipeline/scripts/convertXlsxToCsv.js",
     "build:docs": "echo \"Error: no build:docs specified\"",

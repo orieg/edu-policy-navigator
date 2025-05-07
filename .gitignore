@@ -17,3 +17,6 @@ public/assets/prerender-slugs.json
 
 # Build/Output
 .vike/ 
+
+# Playwright reports
+playwright-report/ 

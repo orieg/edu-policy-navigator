@@ -1,55 +1,59 @@
 import { test, expect } from '@playwright/test';
 
-// Ensure this matches or is derived from your playwright.config.ts
-const BASE_URL = process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:4321';
+// Pages to check for broken internal links
+// Paths are relative to the baseURL configured in playwright.config.ts
+const PAGES_TO_CHECK = [
+    { name: 'Homepage', path: '' },
+    { name: 'Guides Index', path: 'guides/' },
+    { name: 'Academic Curriculum Guide', path: 'guides/academic-curriculum' },
+    { name: 'School Safety Protocol Guide', path: 'guides/school-safety-respect-protocol' },
+    { name: 'San Ramon Valley District Page', path: 'districts/san-ramon-valley-unified-07618040000000' },
+];
 
-test.describe('Internal Link Checker', () => {
-    test('should check internal links on the homepage for 404s', async ({ page }) => {
-        await page.goto('/');
-        await page.waitForLoadState('networkidle'); // Wait for network to be idle
+test.describe('Internal Link Checker for Multiple Pages', () => {
+    for (const pageInfo of PAGES_TO_CHECK) {
+        test(`should check internal links on ${pageInfo.name} (${pageInfo.path}) for errors`, async ({ page, baseURL }) => {
+            await page.goto(pageInfo.path);
+            await page.waitForLoadState('networkidle');
 
-        const allLinks = await page.locator('a[href]').evaluateAll((links: HTMLAnchorElement[]) =>
-            links.map(link => link.href)
-        );
+            const allLinks = await page.locator('a[href]').evaluateAll((links: HTMLAnchorElement[]) =>
+                links.map(link => link.href)
+            );
 
-        const internalLinks = allLinks.filter(href => {
-            try {
-                const url = new URL(href);
-                // Check if the origin matches the base URL's origin, or if it's a relative path
-                return url.origin === new URL(BASE_URL).origin || !url.protocol.startsWith('http');
-            } catch (error) {
-                // Invalid URL, could be mailto: or tel: etc., ignore
-                return false;
+            const internalLinks = allLinks.filter(href => {
+                try {
+                    const linkUrl = new URL(href, page.url()); // Resolve relative links against the current page's URL
+                    const baseUrlObj = new URL(baseURL!);
+
+                    // Consider a link internal if its origin matches the baseURL's origin.
+                    // The subsequent fetch will determine if it's a valid page or a 404.
+                    return linkUrl.origin === baseUrlObj.origin;
+                } catch (error) {
+                    // Ignore mailto:, tel:, etc. and invalid URLs
+                    return false;
+                }
+            });
+
+            const uniqueInternalLinks = [...new Set(internalLinks)];
+            console.log(`Found ${uniqueInternalLinks.length} unique internal links to check on ${pageInfo.name} (${page.url()}).`);
+
+            expect(uniqueInternalLinks.length, `Should find at least one internal link on ${pageInfo.name}`).toBeGreaterThan(0);
+
+            for (const link of uniqueInternalLinks) {
+                console.log(`Checking link on ${pageInfo.name}: ${link}`);
+                let response;
+                try {
+                    response = await page.request.get(link, { failOnStatusCode: false });
+                } catch (error) {
+                    console.error(`Error requesting ${link} on page ${pageInfo.name}: ${error}`);
+                    // If page.request.get() itself throws (e.g., network error for an absolute URL), treat as failure.
+                    expect(true, `Request to ${link} (on ${pageInfo.name}) failed: ${error}`).toBe(false);
+                    continue;
+                }
+
+                const status = response.status();
+                expect(status, `Link ${link} (on ${pageInfo.name}) returned status ${status}`).toBeLessThan(400);
             }
         });
-
-        // Deduplicate links to avoid checking the same URL multiple times
-        const uniqueInternalLinks = [...new Set(internalLinks)];
-
-        console.log(`Found ${uniqueInternalLinks.length} unique internal links to check on the homepage.`);
-
-        for (const link of uniqueInternalLinks) {
-            console.log(`Checking link: ${link}`);
-            let response;
-            try {
-                // For relative links, Playwright's page.request will correctly use the baseURL from the page context
-                // For absolute internal links, it will use them as is.
-                response = await page.request.get(link, { failOnStatusCode: false });
-                // For a more robust check if page.goto was preferred for some links:
-                // await page.goto(link, { waitUntil: 'domcontentloaded' });
-                // const status = page. ಸುಮಾರು().status();
-                // expect(status, `Link ${link} should not be a 404 or error page`).toBe(200);
-            } catch (error) {
-                console.error(`Error navigating to ${link}: ${error}`);
-                // If request.get itself throws (e.g. network error), we treat it as a failure
-                expect(true, `Request to ${link} failed: ${error}`).toBe(false);
-                continue;
-            }
-
-            const status = response.status();
-            // Allow redirects (3xx) but fail on client (4xx) or server (5xx) errors.
-            // Note: 204 No Content is also a valid success for some scenarios.
-            expect(status, `Link ${link} returned status ${status}`).toBeLessThan(400);
-        }
-    });
+    }
 }); 
