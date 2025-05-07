@@ -10,18 +10,6 @@ const {} = Astro.props;
 import ChatWindow from "./ChatWindow.astro"; // <-- IMPORT ChatWindow
 import { WEBLLM_CHAT_MODEL_ID } from "../siteConfig";
 
-// Mock function to simulate RAG processing
-const mockProcessQueryFunction = async (query: string): Promise<string> => {
-    console.log(`[Mock] Processing query: "${query}"`);
-    return new Promise((resolve) => {
-        setTimeout(() => {
-            const response = `AI says: You asked about "${query}". This is a mock response.`;
-            console.log(`[Mock] Responding with: "${response}"`);
-            resolve(response);
-        }, 1500);
-    });
-};
-
 // Later, we might import the actual ChatWindow component
 // import ChatWindow from './ChatWindow.astro';
 ---
@@ -55,7 +43,6 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
 
 <script>
     // Client-side imports for the handlers and controller
-    import { KuzuDBHandler } from "../lib/kuzudbHandler";
     import { WebLLMHandler } from "../lib/webllmHandler";
     import { RAGController } from "../lib/ragController";
     import { WEBLLM_CHAT_MODEL_ID } from "../siteConfig"; // Client-side import for MODEL_ID
@@ -63,7 +50,6 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
     import type { InitializationCallbacks } from "../lib/webllmHandler";
     // No need for separate type imports if runtime imports are used for types too
 
-    let kuzuHandler: KuzuDBHandler | null = null;
     let webllmHandler: WebLLMHandler | null = null;
     let ragController: RAGController | null = null;
     let servicesInitialized = false;
@@ -72,15 +58,8 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
     let chatWindowInstance: HTMLElement | null = null;
 
     // TODO: This needs to be dynamically set based on user selection from the main page
-    let currentDistrictId = "district_A"; // Placeholder
-
-    // This manifest would ideally be fetched or passed as a prop, or be a global constant
-    // For now, defining it here for KuzuDBHandler initialization
-    const districtManifest = {
-        district_A: { dbPath: "/kuzu_dbs/district_A.db" }, // Example actual path
-        district_B: { dbPath: "/kuzu_dbs/district_B.db" },
-        // Add other districts as needed
-    };
+    // For now, using a generic ID. This will be important for Vector RAG context.
+    let currentDistrictId = "main_data"; // Or perhaps a more generic placeholder if not tied to a DB file name
 
     document.addEventListener("DOMContentLoaded", () => {
         const toggleButton = document.getElementById("chat-widget-toggle");
@@ -151,16 +130,6 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
             (chatWindowInstance as any).enableInput(false);
 
             try {
-                // Initialize KuzuDB Handler (silently in terms of new messages)
-                if (!kuzuHandler) {
-                    kuzuHandler = new KuzuDBHandler();
-                }
-                if (!kuzuHandler.isReady()) {
-                    // No new message here, initial loading message is active
-                    await kuzuHandler.initialize(districtManifest);
-                    // No new message here
-                }
-
                 // Initialize WebLLM Handler (progress will update the initial loading message)
                 if (!webllmHandler) {
                     webllmHandler = new WebLLMHandler();
@@ -180,15 +149,13 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
                 }
 
                 // Initialize RAG Controller (silently)
-                if (!ragController && kuzuHandler && webllmHandler) {
-                    ragController = new RAGController(
-                        kuzuHandler,
-                        webllmHandler,
-                    );
+                if (!ragController && webllmHandler) {
+                    // Removed kuzuHandler dependency
+                    ragController = new RAGController(webllmHandler);
                 } else if (!ragController) {
                     // If handlers were ready but controller still not set
                     throw new Error(
-                        "Failed to initialize RAGController: prerequisite handlers available but controller not instantiated.",
+                        "Failed to initialize RAGController: prerequisite webllmHandler available but controller not instantiated.",
                     );
                 }
 
@@ -281,9 +248,7 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
 
             // Check if essential services and controller are ready
             if (
-                !currentDistrictId || // Still using placeholder currentDistrictId
-                !kuzuHandler ||
-                !kuzuHandler.isReady() || // Corrected check
+                !currentDistrictId || // Placeholder, will adapt for Vector RAG
                 !webllmHandler ||
                 !webllmHandler.getIsInitialized() || // Corrected check
                 !ragController // Added null check for ragController

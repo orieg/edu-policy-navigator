@@ -1,5 +1,15 @@
 // src/types.ts
 
+// Type definition for site configuration
+export interface SiteConfig {
+    title: string;
+    description: string;
+    url: string;
+    logo: string;
+    lastUpdated: Date;
+    githubUrl: string;
+}
+
 // Type for the main districts data object (keyed by CDS Code)
 export interface DistrictDataMap {
     [id: string]: DistrictDetails;

@@ -9,10 +9,7 @@ export default defineConfig({
         plugins: [
             viteStaticCopy({
                 targets: [
-                    {
-                        src: 'node_modules/kuzu-wasm/kuzu_wasm_worker.js',
-                        dest: '.'
-                    }
+                    // Removed KuzuDB worker target
                 ]
             })
         ]

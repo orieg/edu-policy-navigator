@@ -14,11 +14,10 @@
     "build:docs": "echo \"Error: no build:docs specified\"",
     "build:data": "tsc pipeline/scripts/generateDistrictJson.ts --module nodenext --outDir dist/pipeline/scripts && node dist/pipeline/scripts/generateDistrictJson.js",
     "build:boundaries": "tsc pipeline/scripts/splitBoundaries.ts --module nodenext --outDir dist/pipeline/scripts && node dist/pipeline/scripts/splitBoundaries.js",
-    "build:kuzu": "node pipeline/scripts/generateKuzuDB.cjs",
-    "prepare": "pnpm run convert:xlsx && pnpm run build:data && pnpm run build:boundaries && pnpm run build:kuzu",
+    "prepare": "pnpm run convert:xlsx && pnpm run build:data && pnpm run build:boundaries",
     "download:osm": "mkdir -p pipeline/data && curl -L -o pipeline/data/california-latest.osm.pbf https://download.geofabrik.de/north-america/us/california-latest.osm.pbf",
     "docker:nominatim": "docker run -it --rm -v ./pipeline/data:/data -v nominatim-data:/var/lib/postgresql/16/main -e PBF_PATH=/data/california-latest.osm.pbf -p 8080:8080 --shm-size=1g --name nominatim mediagis/nominatim:5.1",
-    "clean": "rm -rf dist public/assets/boundaries public/assets/districts.json public/assets/schools_by_district.json public/assets/prerender-slugs.json public/kuzu_dbs",
+    "clean": "rm -rf dist public/assets/boundaries public/assets/districts.json public/assets/schools_by_district.json public/assets/prerender-slugs.json",
     "dev": "pnpm run prepare && astro dev",
     "build": "pnpm run prepare && astro build",
     "preview": "astro preview"
@@ -33,7 +32,6 @@
     "education",
     "policy",
     "navigator",
-    "kuzu",
     "graph",
     "database",
     "llm",
@@ -42,22 +40,13 @@
   "author": "Nicolas Brousse <nicolas@brousse.info>",
   "license": "AGPL-3.0-or-later",
   "packageManager": "pnpm@10.7.1",
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "kuzu"
-    ],
-    "ignoredBuiltDependencies": [
-      "kuzu"
-    ]
-  },
+  "pnpm": {},
   "dependencies": {
     "@astrojs/sitemap": "^3.3.1",
     "@mlc-ai/web-llm": "^0.2.79",
     "@types/proj4": "^2.5.6",
     "astro": "^5.7.10",
     "csv-parse": "^5.6.0",
-    "kuzu": "^0.9.0",
-    "kuzu-wasm": "^0.9.0",
     "leaflet": "^1.9.4",
     "leaflet-geosearch": "^4.2.0",
     "leaflet.markercluster": "^1.5.3",
