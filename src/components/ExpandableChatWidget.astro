@@ -8,10 +8,7 @@ interface Props {}
 const {} = Astro.props;
 
 import ChatWindow from "./ChatWindow.astro"; // <-- IMPORT ChatWindow
-import { KuzuDBHandler } from "../lib/kuzudbHandler";
-import { WebLLMHandler } from "../lib/webllmHandler";
-import { RAGController } from "../lib/ragController";
-import { MODEL_ID } from "../siteConfig";
+import { WEBLLM_CHAT_MODEL_ID } from "../siteConfig";
 
 // Mock function to simulate RAG processing
 const mockProcessQueryFunction = async (query: string): Promise<string> => {
@@ -57,18 +54,32 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
 </div>
 
 <script>
+    // Client-side imports for the handlers and controller
+    import { KuzuDBHandler } from "../lib/kuzudbHandler";
+    import { WebLLMHandler } from "../lib/webllmHandler";
+    import { RAGController } from "../lib/ragController";
+    import { WEBLLM_CHAT_MODEL_ID } from "../siteConfig"; // Client-side import for MODEL_ID
+    // Import InitializationCallbacks for typing the onProgress callback's 'report' parameter
+    import type { InitializationCallbacks } from "../lib/webllmHandler";
+    // No need for separate type imports if runtime imports are used for types too
+
     let kuzuHandler: KuzuDBHandler | null = null;
     let webllmHandler: WebLLMHandler | null = null;
     let ragController: RAGController | null = null;
     let servicesInitialized = false;
 
+    // Variable to hold the chat window wrapper element, methods are attached to this in ChatWindow.astro
+    let chatWindowInstance: HTMLElement | null = null;
+
     // TODO: This needs to be dynamically set based on user selection from the main page
     let currentDistrictId = "district_A"; // Placeholder
 
-    // This manifest would ideally be fetched or passed as a prop
+    // This manifest would ideally be fetched or passed as a prop, or be a global constant
+    // For now, defining it here for KuzuDBHandler initialization
     const districtManifest = {
-        district_A: { dbPath: "/placeholder_district_A.kuzu" },
-        district_B: { dbPath: "/placeholder_district_B.kuzu" },
+        district_A: { dbPath: "/kuzu_dbs/district_A.db" }, // Example actual path
+        district_B: { dbPath: "/kuzu_dbs/district_B.db" },
+        // Add other districts as needed
     };
 
     document.addEventListener("DOMContentLoaded", () => {
@@ -76,20 +87,30 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
         const chatWindowContainer = document.getElementById(
             "chat-window-expanded",
         );
-        const chatWindowInternalWrapper = chatWindowContainer?.querySelector(
+        // Assign to the globally scoped variable chatWindowInstance
+        chatWindowInstance = chatWindowContainer?.querySelector(
             ".chat-window-internal-wrapper",
-        );
+        ) as HTMLElement | null;
+
         const chatInputForFocus =
-            chatWindowInternalWrapper?.querySelector("#chat-input");
+            chatWindowInstance?.querySelector("#chat-input");
 
         // Helper to show messages/status in the chat window
-        function showChatWindowStatus(message: string, type = "system") {
+        // Updated to use chatWindowInstance
+        function showChatWindowStatus(
+            message: string,
+            type = "system",
+            replaceLast = false,
+        ) {
             if (
-                chatWindowInternalWrapper &&
-                typeof (chatWindowInternalWrapper as any).addMessage ===
-                    "function"
+                chatWindowInstance &&
+                typeof (chatWindowInstance as any).addMessage === "function"
             ) {
-                (chatWindowInternalWrapper as any).addMessage(message, type);
+                (chatWindowInstance as any).addMessage(
+                    message,
+                    type,
+                    replaceLast,
+                );
             } else {
                 console.warn(
                     "ChatWindow.addMessage method not available to show status:",
@@ -97,13 +118,13 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
                 );
             }
         }
+        // Updated to use chatWindowInstance
         function enableChatInput(enable = true) {
             if (
-                chatWindowInternalWrapper &&
-                typeof (chatWindowInternalWrapper as any).enableInput ===
-                    "function"
+                chatWindowInstance &&
+                typeof (chatWindowInstance as any).enableInput === "function"
             ) {
-                (chatWindowInternalWrapper as any).enableInput(enable);
+                (chatWindowInstance as any).enableInput(enable);
             } else {
                 console.warn(
                     `ChatWindow.enableInput method not available. Tried to set to ${enable}`,
@@ -112,32 +133,38 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
         }
 
         // Renamed function to reflect initializing both services
-        async function initializeRAGServices() {
-            if (servicesInitialized) return;
+        async function initializeRAGServices(): Promise<boolean> {
+            if (servicesInitialized) return true;
+            if (!chatWindowInstance) {
+                console.error(
+                    "Chat window instance not found during RAG initialization.",
+                );
+                return false;
+            }
 
-            chatWindowWrapper.addMessage(
+            (chatWindowInstance as any).addMessage(
                 "Initializing RAG services...",
                 "system",
             );
-            chatWindowWrapper.enableInput(false);
+            (chatWindowInstance as any).enableInput(false);
 
             try {
                 // Initialize KuzuDB Handler
                 if (!kuzuHandler) {
                     kuzuHandler = new KuzuDBHandler();
                 }
-                if (!kuzuHandler.isInitialized()) {
-                    chatWindowWrapper.addMessage(
+                if (!kuzuHandler.isReady()) {
+                    (chatWindowInstance as any).addMessage(
                         "Initializing KuzuDB...",
                         "loading",
                     );
-                    await kuzuHandler.initialize();
-                    chatWindowWrapper.addMessage(
+                    await kuzuHandler.initialize(districtManifest);
+                    (chatWindowInstance as any).addMessage(
                         "KuzuDB Initialized.",
                         "system",
                     );
                 } else {
-                    chatWindowWrapper.addMessage(
+                    (chatWindowInstance as any).addMessage(
                         "KuzuDB already initialized.",
                         "system",
                     );
@@ -145,27 +172,30 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
 
                 // Initialize WebLLM Handler
                 if (!webllmHandler) {
-                    webllmHandler = new WebLLMHandler(MODEL_ID);
+                    webllmHandler = new WebLLMHandler();
                 }
-                if (!webllmHandler.isInitialized()) {
-                    chatWindowWrapper.addMessage(
+                if (!webllmHandler.getIsInitialized()) {
+                    (chatWindowInstance as any).addMessage(
                         "Initializing WebLLM... This may take a moment.",
                         "loading",
                     );
-                    await webllmHandler.initialize((progress) => {
-                        chatWindowWrapper.addMessage(
-                            `WebLLM loading: ${progress.text}`,
-                            "loading",
-                            true /* replaceLast */,
-                        );
+                    await webllmHandler.initialize(WEBLLM_CHAT_MODEL_ID, {
+                        onProgress: (report) => {
+                            // report type will be inferred from InitializationCallbacks
+                            (chatWindowInstance as any).addMessage(
+                                `WebLLM loading: ${report.text}`,
+                                "loading",
+                                true /* replaceLast */,
+                            );
+                        },
                     });
-                    chatWindowWrapper.addMessage(
+                    (chatWindowInstance as any).addMessage(
                         "WebLLM Initialized.",
                         "system",
                         true,
                     );
                 } else {
-                    chatWindowWrapper.addMessage(
+                    (chatWindowInstance as any).addMessage(
                         "WebLLM already initialized.",
                         "system",
                     );
@@ -177,12 +207,12 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
                         kuzuHandler,
                         webllmHandler,
                     );
-                    chatWindowWrapper.addMessage(
+                    (chatWindowInstance as any).addMessage(
                         "RAG Controller Initialized.",
                         "system",
                     );
                 } else if (ragController) {
-                    chatWindowWrapper.addMessage(
+                    (chatWindowInstance as any).addMessage(
                         "RAG Controller already initialized.",
                         "system",
                     );
@@ -193,22 +223,24 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
                 }
 
                 servicesInitialized = true;
-                chatWindowWrapper.addMessage(
+                (chatWindowInstance as any).addMessage(
                     "All RAG services ready.",
                     "system",
                 );
-                chatWindowWrapper.enableInput(true);
+                (chatWindowInstance as any).enableInput(true);
+                return true;
             } catch (error) {
                 console.error("Error initializing RAG services:", error);
                 const errorMessage =
                     error instanceof Error
                         ? error.message
                         : "Unknown error during service initialization.";
-                chatWindowWrapper.addMessage(
+                (chatWindowInstance as any).addMessage(
                     `Initialization Error: ${errorMessage}`,
                     "error",
                 );
-                chatWindowWrapper.enableInput(false); // Keep input disabled if essential services fail
+                (chatWindowInstance as any).enableInput(false);
+                return false;
             }
         }
 
@@ -261,22 +293,24 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
         // --- handleQueryRequest will later use ragController ---
         // Temporarily adapt to check RAG readiness
         async function handleQueryRequest(event: Event) {
-            if (!(event instanceof CustomEvent) || !chatWindowInternalWrapper)
+            if (!(event instanceof CustomEvent) || !chatWindowInstance)
+                // Use chatWindowInstance
                 return;
-            const query = event.detail?.query;
+            const query = event.detail?.query as string;
 
             if (typeof query !== "string") return;
 
-            // Check if both services are ready for the current context
+            // Check if essential services and controller are ready
             if (
-                !currentDistrictId ||
+                !currentDistrictId || // Still using placeholder currentDistrictId
                 !kuzuHandler ||
-                !kuzuHandler.isInitialized() ||
+                !kuzuHandler.isReady() || // Corrected check
                 !webllmHandler ||
-                !webllmHandler.isInitialized()
+                !webllmHandler.getIsInitialized() || // Corrected check
+                !ragController // Added null check for ragController
             ) {
                 showChatWindowStatus(
-                    "AI services not ready. Please try reopening the chat.",
+                    "AI services not ready or controller missing. Please try reopening the chat.",
                     "error",
                 );
                 enableChatInput(true);
@@ -287,18 +321,22 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
             enableChatInput(false);
 
             try {
-                // RAGController's processQuery now returns void.
-                // All messages, including the final answer or errors, are sent via the progressCallback.
-                await ragController.processQuery(
+                // RAGController is checked for null above
+                await ragController!.processQuery(
+                    // Use non-null assertion operator after check
                     query,
-                    (message, type, replaceLast = false) => {
+                    (
+                        message: string,
+                        type: "ai" | "system" | "error" | "loading",
+                        replaceLast = false,
+                    ) => {
                         // If ChatWindow.astro's addMessage doesn't support replaceLast directly,
                         // we ensure that the call to it from here includes it.
                         // The previous implementation of addMessage in ChatWindow was:
                         // addMessage(content, type, id = undefined, replaceLastId = undefined)
                         // We might need to adjust ChatWindow if this new `replaceLast` boolean isn't directly compatible.
-                        // For now, assuming chatWindowWrapper.addMessage can take a boolean `replaceLast`.
-                        chatWindowInternalWrapper.addMessage(
+                        // For now, assuming chatWindowInstance.addMessage can take a boolean `replaceLast`.
+                        (chatWindowInstance as any).addMessage(
                             message,
                             type,
                             replaceLast,
@@ -319,13 +357,13 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
                         ? error.message
                         : "An unknown error occurred.";
                 // Send this critical error via the chat window, replacing the last message (e.g., a loading message)
-                chatWindowInternalWrapper.addMessage(
+                (chatWindowInstance as any).addMessage(
                     `Error: ${errorMessage}`,
                     "error",
                     true,
                 );
             } finally {
-                chatWindowInternalWrapper.enableInput(true);
+                (chatWindowInstance as any).enableInput(true); // Use chatWindowInstance
             }
         }
 

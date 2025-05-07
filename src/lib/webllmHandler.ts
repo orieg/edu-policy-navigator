@@ -14,7 +14,7 @@ import {
 } from "@mlc-ai/web-llm";
 
 // Local definition based on OpenAI API structure
-type ChatMessage = {
+export type ChatMessage = {
     role: "system" | "user" | "assistant";
     content: string;
 };
@@ -23,7 +23,7 @@ type ChatMessage = {
 /**
  * Interface for callbacks during initialization.
  */
-interface InitializationCallbacks {
+export interface InitializationCallbacks {
     onProgress: (report: InitProgressReport) => void;
 }
 

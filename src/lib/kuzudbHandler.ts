@@ -71,6 +71,13 @@ export class KuzuDBHandler {
     }
 
     /**
+     * Checks if the handler has been initialized with a manifest and the worker path is set.
+     */
+    public isReady(): boolean {
+        return !!this.manifest && KuzuDBHandler.isWorkerPathSet;
+    }
+
+    /**
      * Retrieves or establishes a KuzuDB connection for the specified district.
      */
     private async getOrEstablishConnection(districtId: string): Promise<KuzuConnection> {
