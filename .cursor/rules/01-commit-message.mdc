@@ -44,7 +44,7 @@ IMPORTANT: Always follow these steps before creating a commit message:
 
 ## Format
 - Use conventional commit format
-- Use temporary files for commit messages to handle line breaks properly
+- Use the edit_tool or a temporary file for commit messages to handle line breaks properly
 - Format:
   ```
   type: short description
@@ -88,7 +88,7 @@ IMPORTANT: Always follow these steps before creating a commit message:
 
 ## Examples
 
-### Using Temporary File (Required Method)
+### Using Temporary File (Alternative Method)
 ```bash
 # Create temporary file with commit message
 printf "type: short description\n\nContext:\nClear description of what this change accomplishes.\n\nChanges made:\n- Specific change 1\n- Specific change 2\n\nImpact:\nWhat this change accomplishes and why it matters." > /tmp/commit_msg
