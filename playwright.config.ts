@@ -1,7 +1,9 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// Default to localhost if no specific URL is set via environment variables
-const baseURL = process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:4321';
+const astroBasePath = '/edu-policy-navigator/'; // Your Astro site's base path, with trailing slash
+const serverHost = (process.env.PLAYWRIGHT_TEST_BASE_URL || 'http://localhost:4321').replace(/\/$/, ''); // Ensure serverHost has no trailing slash
+
+const effectiveBaseURL = `${serverHost}${astroBasePath}`;
 
 /**
  * See https://playwright.dev/docs/test-configuration.
@@ -20,8 +22,9 @@ export default defineConfig({
     reporter: 'html',
     /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
     use: {
-        /* Base URL to use in actions like `await page.goto('/')`. */
-        baseURL: baseURL,
+        /* Base URL to use in actions like `await page.goto('/')`. 
+           It will be prepended to relative paths, e.g., page.goto('/') will go to effectiveBaseURL */
+        baseURL: effectiveBaseURL,
 
         /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
         trace: 'on-first-retry',
@@ -49,7 +52,10 @@ export default defineConfig({
     /* Run your local dev server before starting the tests */
     webServer: {
         command: 'pnpm run preview',
-        url: baseURL, // Use the same baseURL for the server health check
+        // The URL Playwright will hit to check if the server is ready.
+        // This should be a path that returns a 2xx status code on your preview server.
+        // Since your site is at /edu-policy-navigator/, checking this directly is best.
+        url: effectiveBaseURL,
         reuseExistingServer: !process.env.CI,
         timeout: 120 * 1000, // 2 minutes timeout for server to start
         // stdout: 'pipe', // Or 'inherit' or 'ignore'
