@@ -142,90 +142,67 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
                 return false;
             }
 
+            // Single initial loading message, with replaceLast: true
             (chatWindowInstance as any).addMessage(
-                "Initializing RAG services...",
-                "system",
+                "Initializing AI assistant, please wait...",
+                "loading",
+                true,
             );
             (chatWindowInstance as any).enableInput(false);
 
             try {
-                // Initialize KuzuDB Handler
+                // Initialize KuzuDB Handler (silently in terms of new messages)
                 if (!kuzuHandler) {
                     kuzuHandler = new KuzuDBHandler();
                 }
                 if (!kuzuHandler.isReady()) {
-                    (chatWindowInstance as any).addMessage(
-                        "Initializing KuzuDB...",
-                        "loading",
-                    );
+                    // No new message here, initial loading message is active
                     await kuzuHandler.initialize(districtManifest);
-                    (chatWindowInstance as any).addMessage(
-                        "KuzuDB Initialized.",
-                        "system",
-                    );
-                } else {
-                    (chatWindowInstance as any).addMessage(
-                        "KuzuDB already initialized.",
-                        "system",
-                    );
+                    // No new message here
                 }
 
-                // Initialize WebLLM Handler
+                // Initialize WebLLM Handler (progress will update the initial loading message)
                 if (!webllmHandler) {
                     webllmHandler = new WebLLMHandler();
                 }
                 if (!webllmHandler.getIsInitialized()) {
-                    (chatWindowInstance as any).addMessage(
-                        "Initializing WebLLM... This may take a moment.",
-                        "loading",
-                    );
+                    // Initial "Initializing AI assistant..." message is still up or being updated by progress.
                     await webllmHandler.initialize(WEBLLM_CHAT_MODEL_ID, {
                         onProgress: (report) => {
-                            // report type will be inferred from InitializationCallbacks
                             (chatWindowInstance as any).addMessage(
-                                `WebLLM loading: ${report.text}`,
+                                `AI Assistant loading: ${report.text}`,
                                 "loading",
                                 true /* replaceLast */,
                             );
                         },
                     });
-                    (chatWindowInstance as any).addMessage(
-                        "WebLLM Initialized.",
-                        "system",
-                        true,
-                    );
-                } else {
-                    (chatWindowInstance as any).addMessage(
-                        "WebLLM already initialized.",
-                        "system",
-                    );
+                    // No new message here, success message comes at the end.
                 }
 
-                // Initialize RAG Controller
+                // Initialize RAG Controller (silently)
                 if (!ragController && kuzuHandler && webllmHandler) {
                     ragController = new RAGController(
                         kuzuHandler,
                         webllmHandler,
                     );
-                    (chatWindowInstance as any).addMessage(
-                        "RAG Controller Initialized.",
-                        "system",
-                    );
-                } else if (ragController) {
-                    (chatWindowInstance as any).addMessage(
-                        "RAG Controller already initialized.",
-                        "system",
-                    );
-                } else {
+                } else if (!ragController) {
+                    // If handlers were ready but controller still not set
                     throw new Error(
-                        "Failed to initialize RAGController: handlers not ready.",
+                        "Failed to initialize RAGController: prerequisite handlers available but controller not instantiated.",
                     );
                 }
 
                 servicesInitialized = true;
+                // Final success messages
                 (chatWindowInstance as any).addMessage(
-                    "All RAG services ready.",
+                    "AI assistant is ready.",
                     "system",
+                    true /* replaceLast: replaces the loading message */,
+                );
+                (chatWindowInstance as any).addMessage(
+                    "How can I help you with district policies today?",
+                    "ai", // This is the AI's first conversational bubble
+                    false /* replaceLast: false, adds as a new message */,
                 );
                 (chatWindowInstance as any).enableInput(true);
                 return true;
@@ -235,9 +212,11 @@ const mockProcessQueryFunction = async (query: string): Promise<string> => {
                     error instanceof Error
                         ? error.message
                         : "Unknown error during service initialization.";
+                // Error message replaces the loading message
                 (chatWindowInstance as any).addMessage(
                     `Initialization Error: ${errorMessage}`,
                     "error",
+                    true /* replaceLast */,
                 );
                 (chatWindowInstance as any).enableInput(false);
                 return false;
