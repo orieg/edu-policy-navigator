@@ -1,208 +1,267 @@
-# Chat Widget Implementation Plan
+# Plan: In-Browser RAG with Pre-Computed Raw Binary Embeddings, Clusters & WebLLM Chat (JSON Metadata)
 
-**Goal:** Implement a small, expandable chat widget that integrates with an in-browser **Vector Search RAG backend (using e.g., EntityDB, Transformers.js embeddings, and WebLLM)** to provide policy information for a selected school district.
+**Objective:** Implement a high-performance, lightweight Retrieval Augmented Generation (RAG) system entirely within the browser. This system will use:
+1.  **Offline Pre-computation:**
+    * Document embeddings (for the `Snowflake Arctic embed xs` model - 384 dimensions) stored as L2-normalized, **raw binary files (`.bin`)** per cluster.
+    * Associated text chunks and original document IDs stored in companion **JSON metadata files** per cluster (`<cluster_id>_metadata.json`), maintaining order with embeddings.
+    * L2-normalized cluster centroids, stored either as a **raw binary file (`.bin`)** or as structured **JSON**. 
+2.  **Client-Side:**
+    * **WebLLM** to generate L2-normalized embeddings *only for user queries* (using the `Snowflake Arctic embed xs` model, sourced from central configuration like `src/config/siteConfig.ts`).
+    * A **Data Loader** to fetch and process the raw binary embedding files and their corresponding JSON metadata files, guided by a manifest.
+    * A **lightweight vector search module** (custom TypeScript implementation) to perform efficient two-stage search (query vs. centroids, then query vs. documents in selected clusters using dot product on the L2-normalized vectors).
+    * **WebLLM** for chat completions (using a model like `SmolLM-135M-Instruct-q0f16-MLC`, sourced from `src/config/siteConfig.ts`), augmented with retrieved context.
+The data in the browser will be read-only after initial load.
 
-**Strategic Pivot (Date TBD):** Moved away from the initial Graph RAG approach (Text-to-Cypher -> KuzuDB-Wasm) due to significant challenges with LLM brittleness in Cypher generation, potential KuzuDB-Wasm instability in the browser, and the need for very capable (large) LLMs. **Pivoting to Vector Search RAG** using embeddings for semantic context retrieval, aiming for increased robustness and feasibility.
+**Core Client-Side Components (TypeScript):**
+1.  WebLLM Engine (for Query Embedding).
+2.  WebLLM Engine (for Chat).
+3.  Pre-computed Data Loader (handles manifest, `.bin` embedding files, and `.json` metadata files).
+4.  Lightweight Vector Search Logic (custom, optimized for pre-loaded, clustered, normalized binary data).
+5.  RAG Pipeline (orchestrating the client-side flow).
 
-**Assumptions:**
-*   **New:** The RAG backend will use vector embeddings for context retrieval.
-*   **New:** A suitable embedding model (e.g., from Transformers.js) will be used client-side or embeddings pre-computed in a pipeline.
-*   **New:** An in-browser vector database library (e.g., EntityDB) will be used for storing and querying embeddings.
-*   **New:** The data pipeline will be adapted to chunk source documents (policies, district info) and generate/store corresponding embeddings.
-*   `webllmHandler.ts` (for final answer generation) and state management for `currentDistrictId` are still relevant.
-*   A testing script is available via `pnpm run test`.
-
-**Guidance:**
- * When not sure of current implementation, review code in `src/`.
- * Never assume blindly, always confirm current implementation before changing or adding new code.
- * Do not add new framework unless explicitly asked for it.
- * Use our global CSS and shared color palette.
-
----
-
-**Progress Log / Current Status:**
-
-*   **Initial Setup & Planning:** Established plan, created this file.
-*   **Widget UI (`ExpandableChatWidget.astro`, `ChatWindow.astro`):**
-    *   Created components, integrated into `BaseLayout.astro`.
-    *   Styled using plain CSS and global variables.
-    *   Implemented expand/collapse, parent-child communication (custom events, exposed methods).
-    *   Ensured `ChatWindow.astro` handles various message types and can control input state.
-    *   Troubleshot styling, JS syntax, and communication issues.
-    *   Refined initialization messages for better UX (single loading message, updates for WebLLM progress, distinct final system/AI messages).
-*   **RAG Backend Handlers (Phase 2.5 - PIVOTED):**
-    *   **`kuzudbHandler.ts` (Task 6 - Obsolete):** Implementation abandoned due to pivot.
-    *   **`webllmHandler.ts` (Task 7 - Still Relevant):** Core structure for final LLM answer generation remains valid.
-*   **`ragController.ts` (Task 8 - Needs Rework):** Initial Graph RAG implementation (Text-to-Cypher, Cypher-to-Context) needs replacement with Vector Search logic.
-*   **Backend KuzuDB Generation Pipeline (Task 8.5 - Obsolete):** Script `generateKuzuDB.cjs` is no longer needed. Pipeline requires significant rework for text chunking and embedding generation.
-*   **Fixes:** Previous fixes remain relevant.
-*   **Pivot Decision:** Decided to switch from Graph RAG to Vector Search RAG due to feasibility issues.
+**General Guidance for Client-Side Implementation:**
+* All new client-side code should be written in **TypeScript**.
+* Model IDs for WebLLM (both query embedding and chat) should be sourced from a central configuration file (e.g., `src/config/siteConfig.ts`).
+* Minimize external dependencies. Only `@mlc-ai/web-llm` is expected. JSON metadata uses native `JSON.parse()`.
+* Ensure all vector embeddings (document, centroid, and runtime query embeddings) are L2-normalized. Use **dot product** for similarity.
+* Refer to the latest WebLLM documentation for exact API method names and configuration options.
 
 ---
 
-**Step-by-Step Implementation Tasks:**
+## Phase 0: Offline Data Preparation (Pre-computation - Outputs for Client)
 
-**Phase 1: Core Component Setup & RAG Service Access Strategy**
+*(This phase is done beforehand by a separate pipeline, e.g., an enhanced `pipeline/scripts/generateEmbeddings.mjs`. The client-side agent needs to understand these output formats.)*
 
-1.  **[x] Task: Create `ExpandableChatWidget.astro` (Initial Shell)**
-    *   **File:** `src/components/ExpandableChatWidget.astro`
-    *   **Content:** Basic Astro component structure for the fixed widget container and the clickable toggle button.
-    *   **Sub-task:** Determine and document strategy for `ExpandableChatWidget.astro` to access shared RAG state/services (e.g., `ragController`, `currentDistrictId`, instances of KuzuDB/WebLLM). (Decision: Direct instantiation in client script, passing district ID).
-    *   **Testing:** Manually verify the basic widget toggle button renders.
+### Task 0.1: Document Chunking (Offline)
+* Divide source documents (including processing `public/assets/districts.json` and `public/assets/schools_by_district.json`) into text chunks.
+* Assign a unique ID to each chunk. **Use `CDSCode` (or similar unique identifier) as the `id` for chunks derived from school/district data.**
+* **Output:** Internal list of `{ id: string, text: string }`.
 
-2.  **[x] Task: Prepare `ChatWindow.astro` for RAG-Powered Embedding**
-    *   **File:** `src/components/ChatWindow.astro`
-    *   **Action:** Design, review, or refactor `ChatWindow.astro` to:
-        *   Be cleanly embeddable within `ExpandableChatWidget.astro`.
-        *   Communicate via events and exposed methods (`addMessage`, `enableInput`).
-        *   Internally manage and display UI states for loading/errors. (Enhanced loading/ready messages).
-        *   Handle user input submission gracefully.
-        *   Display user messages and AI responses.
-    *   **Testing:** Mock interaction tested and working.
+### Task 0.2: Embedding Generation for Chunks (Offline)
+* Using `Snowflake Arctic embed xs` (384 dimensions), generate embeddings for each text chunk.
+* **Crucial:** L2-normalize each embedding vector.
+* **Output:** L2-normalized `Float32Array` embeddings.
 
-**Phase 2: Widget UI & Basic Interactivity**
+### Task 0.3: Clustering Embeddings (Offline)
+* Apply K-Means to L2-normalized document embeddings. Determine `k` clusters.
+* Calculate `k` L2-normalized centroid vectors (`Float32Array`s).
+* Map each document chunk ID to its cluster ID.
 
-3.  **[x] Task: Implement Expand/Collapse UI Logic for Widget Shell**
-    *   **File:** `src/components/ExpandableChatWidget.astro`
-    *   **Action:** Implement client-side script to toggle visibility of the expanded window area. Manage `aria-expanded` attributes.
-    *   **Testing:** Manually test click-to-toggle functionality of the expanded view.
-
-4.  **[x] Task: Style Collapsed & Expanded Widget Shell**
-    *   **File:** `src/components/ExpandableChatWidget.astro`, `src/components/ChatWindow.astro` (using plain CSS with global variables)
-    *   **Action:** Style the collapsed state (chat toggle button) and the expanded state (window frame, including `ChatWindow` content like header, messages, input area).
-    *   **Testing:** Visually inspect styles and animations. Ensure use of global color palette. (Message bubble styling achieved).
-
-5.  **[x] Task: Add Smooth Transitions for Expand/Collapse**
-    *   **File:** `src/components/ExpandableChatWidget.astro` (CSS)
-    *   **Action:** Implement CSS transitions for a smoother visual effect when the chat window opens and closes.
-    *   **Testing:** Visually verify smooth opening and closing animations.
-
-**Phase 2.5: RAG Backend Core Implementation (OLD - Graph RAG)**
-
-6.  **[!] Task: Implement `kuzudbHandler.ts`** (Obsolete due to Pivot)
-    *   ~File: `src/lib/kuzudbHandler.ts`~
-    *   ~Action: Logic for loading/querying KuzuDB.~~\n    *   ~Dependencies: KuzuDB-Wasm library.~~\n\n7.  **[~] Task: Implement `webllmHandler.ts`** (Core structure complete, types exported - Still needed for final LLM)\n    *   File: `src/lib/webllmHandler.ts`\n    *   Action: Logic for initializing WebLLM engine and providing `chatCompletion`.
-    *   Dependencies: WebLLM library (`@mlc-ai/web-llm`).
-
-8.  **[!] Task: Implement `ragController.ts` (Graph RAG version)** (Needs Rework for Vector RAG)
-    *   ~File: `src/lib/ragController.ts`~
-    *   ~Action: Text-to-Cypher, Cypher-to-Context, Context-to-Answer logic.~~
-    *   ~Dependencies: `kuzudbHandler.ts`, `webllmHandler.ts`.~~
-
-8.5 **[!] Task: Implement Backend KuzuDB Generation Pipeline** (Obsolete due to Pivot)
-    *   ~Files: `pipeline/scripts/generateKuzuDB.cjs`, `package.json`~
-    *   ~Action: Generate KuzuDB `.db` file from source JSONs.~~
-
-**Phase 2.5b: Vector Search RAG Backend Implementation (NEW)**
-
-**[x] Task: Cleanup Task (P0): Remove Obsolete KuzuDB/Graph RAG Components**
-    *   **Action:** Executed the following cleanup steps:
-        *   Removed `kuzu` and `kuzu-wasm` dependencies using `pnpm remove`.
-        *   Deleted `src/lib/kuzudbHandler.ts`.
-        *   Deleted `pipeline/scripts/generateKuzuDB.cjs`.
-        *   Deleted `src/kuzu-wasm.d.ts`.
-        *   Deleted `public/kuzu_dbs/` directory.
-        *   Updated `package.json`:
-            *   Removed the `build:kuzu` script.
-            *   Removed `&& pnpm run build:kuzu` from `prepare` and `dev` scripts.
-            *   Removed `"kuzu"` from `keywords`.
-            *   Removed `kuzu`-related entries from the `pnpm` configuration object.
-            *   Removed `public/kuzu_dbs` from the `clean` script.
-        *   Note: The sub-task "Update `vite.config.ts`: remove the `kuzu_wasm_worker.js` target from `viteStaticCopy` plugin config" was not performed as this configuration was not found or identified as needing removal during the previous steps.
-
-6b. **[ ] Task: Implement Text Processing & Embedding Pipeline**
-    *   Files: New pipeline script(s) (e.g., `pipeline/scripts/generateEmbeddings.js`),
-    *   Action: Read source data (policies, district info - requires obtaining/parsing these), implement text chunking, integrate embedding model (e.g., Transformers.js Node), generate embeddings, save chunks + embeddings (e.g., to JSON files in `public/embeddings/`).
-    *   Dependencies: Node.js, file system access, text parsing libs (e.g., pdf-parse), embedding library.
-
-7b. **[x] Task: Implement Client-Side Vector DB Handler (e.g., EntityDBWrapper)**
-    *   File: New `src/lib/vectorDbHandler.ts` (or similar).
-    *   Action: Wrapped EntityDB library. Implemented initialization (loading pre-computed data from `public/embeddings/embedded_data.json`), querying based on embedding vector, error handling.
-    *   Dependencies: Vector DB library (`@babycommando/entity-db`).
-    *   Added `src/types/entity-db.d.ts` for module declaration.
-
-8b. **[x] Task: Refactor `ragController.ts` for Vector RAG**
-    *   File: `src/lib/ragController.ts`
-    *   Action:
-        *   Removed old Text-to-Cypher and Cypher-to-Context logic.
-        *   Integrated with `vectorDbHandler.ts`.
-        *   Added client-side query embedding generation using `@xenova/transformers` (`Snowflake/snowflake-arctic-embed-xs`).
-        *   Implemented lazy/cached loading for the embedding model.
-        *   Implemented lazy/cached loading for the Vector DB data via `vectorDbHandler.initialize`.
-        *   The main `processQuery` method now orchestrates: Lazy init of embedding model & vector DB -> Query Embedding -> Vector Search -> Context Compilation -> LLM Answer.
-        *   Updated `_contextToAnswer` with a more robust prompt for context-only answers.
-        *   Fallbacks to general LLM knowledge if no context is found.
-        *   Status: Refactoring complete. Resolved several runtime issues related to library usage, base URLs, and data loading.
-        *   **Note:** Encountering persistent runtime errors within `EntityDB.queryManualVectors` / `EntityDB.query` even after successful data loading. Further debugging or library alternative may be needed.
-    *   Dependencies: `vectorDbHandler.ts`, `webllmHandler.ts`, `@xenova/transformers`.
-
-**Phase 3: RAG Integration & Full `ChatWindow.astro` Functionality**
-
-9.  **[x] Task: Embed RAG-Ready `ChatWindow.astro` & Pass Dependencies/Setup Events** (Structure is reusable)
-
-10. **[ ] Task: Implement Core Chat Logic via Refactored `ragController`**
-    *   File: `src/components/ExpandableChatWidget.astro` (handler for chat events).
-    *   Action:
-        *   Update initialization logic for new RAG services (Embedding model, Vector DB).
-        *   Call refactored `ragController.processQuery(...)`.
-        *   Ensure `ChatWindow.astro` displays responses/states correctly via `progressCallback`.
-    *   Testing: Test with the actual Vector RAG pipeline.
-
-11. **[ ] Task: Verify Dynamic RAG Backend Initialization and Context Switching**
-    *   Files: Relevant layout/state files, `ExpandableChatWidget.astro`, `ChatWindow.astro`, new RAG handlers.
-    *   Action:
-        *   Implement actual `currentDistrictId` selection logic (needed if embeddings are district-specific).
-        *   Confirm correct Vector DB data is loaded/queried based on context.
-        *   Test chat functionality after changing districts (if applicable).
-    *   Testing: Manually switch districts (if applicable); perform test queries. Monitor console/network.
-
-**Phase 4: Final Touches & System-Wide Testing**
-
-12. **[x] Task: Integrate into Main Layout**
-    *   **File:** `src/layouts/BaseLayout.astro`
-    *   **Action:** Ensured `<ExpandableChatWidget />` is correctly configured.
-    *   **Testing:** Verify widget presence across site pages.
-
-13. **[ ] Task: Ensure Responsiveness**
-    *   **Files:** `ExpandableChatWidget.astro`, `ChatWindow.astro`, CSS.
-    *   **Action:** Adjust styles for various screen sizes.
-    *   **Testing:** Manual viewport testing. Automated UI tests if any.
-
-14. **[ ] Task: Accessibility Review & Enhancements**
-    *   **File:** `ExpandableChatWidget.astro`, `ChatWindow.astro`
-    *   **Action:** Thorough keyboard navigation review, ARIA attributes, screen reader testing, color contrast.
-    *   **Testing:** Manual keyboard/screen reader tests. Automated accessibility checks.
-
-15. **[ ] Task: Full End-to-End RAG and UI Testing**
-    *   Action: Comprehensive testing covering:
-        *   District selection and correct RAG context loading (Vector DB).
-        *   Widget UI/UX.
-        *   **Query Complexity & Performance: Test with simple and complex natural language questions. Evaluate context relevance from Vector DB and final answer quality. Ensure UI handles delays gracefully.**
-        *   **RAG Error Handling: Test scenarios where embedding generation fails, vector search returns no results, or LLM answer generation issues.**
-        *   UI behavior with long messages, multiple messages.
-        *   Cross-browser compatibility.
-    *   Goal: Ensure a robust, user-friendly, accessible, and functional chat widget with the **Vector RAG** backend.
+### Task 0.4: Structuring and Saving Pre-computed Data (Offline)
+* **For each cluster (e.g., `cluster_0`, ... `cluster_k-1`):**
+    1.  **Embeddings File (`<cluster_id>_embeddings.bin`):**
+        * Collect all L2-normalized `Float32Array` embeddings for this cluster.
+        * Concatenate into a single flat `Float32Array`.
+        * **Write the raw bytes of this flat array directly to the binary file.**
+    2.  **Metadata File (`<cluster_id>_metadata.json`):**
+        * Contains an array of objects, ordered identically to the embeddings in the corresponding `.bin` file.
+        * Each object: `{ id: string (e.g., CDSCode), text: string (original chunk_text), any_other_metadata... }`.
+        * **Format:** Standard JSON.
+* **Cluster Centroids File:**
+    * **Option A (Pure Raw Binary - Recommended for numerical data): `centroids_vectors.bin`**
+        * Concatenate all L2-normalized `Float32Array` centroid vectors into a single flat `Float32Array`.
+        * Write the raw bytes to this binary file.
+        * The `manifest.json` needs the `centroidClusterIds` array (ordered list of `clusterId`s corresponding to the binary segments).
+    * **Option B (Structured with IDs): `centroids_data.json`**
+        * An array of objects: `{ clusterId: string, centroid: number[] (L2-normalized float values) }`.
+        * **Format:** Standard JSON.
+* **Manifest File (`manifest.json` in `public/embeddings/` or similar):**
+    * A JSON file detailing the dataset structure.
+        ```json
+        {
+          "embeddingModelId": "Snowflake/snowflake-arctic-embed-xs",
+          "embeddingDimensions": 384,
+          "centroidsFileFormat": "binary", // "binary" or "json"
+          "centroidsFile": "centroids_vectors.bin", // Path if format is binary
+          "centroidClusterIds": ["cluster_0", "cluster_1", "..."], // Required if format is binary
+          // OR "centroidsDataFile": "centroids_data.json", // Path if format is json
+          // metadataFileFormat field removed - assumed JSON
+          "clusters": [
+            { "clusterId": "cluster_0", "embeddingsFile": "cluster_0_embeddings.bin", "metadataFile": "cluster_0_metadata.json", "numEmbeddings": 1000 },
+            { "clusterId": "cluster_1", "embeddingsFile": "cluster_1_embeddings.bin", "metadataFile": "cluster_1_metadata.json", "numEmbeddings": 1250 }
+            // ...
+          ]
+        }
+        ```
 
 ---
 
-**Next Steps (Focus Areas - NEW):**
+## Phase 0.5: Client-Side Code & Dependency Cleanup
 
-1.  **Implement Vector Pipeline (Task 6b):** Define sources for policy text, choose chunking strategy, integrate embedding model, output data for client.
-2.  **Implement Client Vector Handling (Task 7b):** Integrate EntityDB (or alternative), load data, implement query logic.
-3.  **Refactor `ragController` (Task 8b):** Adapt controller to use embedding/vector search for context.
-4.  **Integrate & Test (Task 10):** Connect refactored controller to UI, perform end-to-end tests.
-5.  **Implement `currentDistrictId` Selection (Task 11):** If vector data is per-district, implement logic to switch context.
+*   **Goal:** Remove obsolete code and dependencies from previous RAG experiments before starting the new implementation.
+*   **Actions:**
+    1.  **Remove Dependencies:**
+        *   `pnpm remove @xenova/transformers` (if its only purpose was client-side query embedding).
+        *   Verify `@babycommando/entity-db`, `kuzu`, `kuzu-wasm` are removed from `package.json` / `pnpm-lock.yaml`.
+    2.  **Delete Obsolete Files:**
+        *   `src/lib/vectorDbHandler.ts` (if exists).
+        *   `src/types/entity-db.d.ts` (if exists).
+    3.  **Decide Fate of `src/lib/ragController.ts`:**
+        *   **Option A (Recommended):** Delete `src/lib/ragController.ts`. A new `RAGManager.ts` will be created (Phase 3).
+        *   **Option B:** Rename `ragController.ts` to `RAGManager.ts` and completely rewrite its internals later.
+    4.  **Consolidate WebLLM Logic (`webllmHandler.ts` -> `WebLLMService.ts`):**
+        *   Plan to either merge logic from `src/lib/webllmHandler.ts` into the new `src/lib/WebLLMService.ts` (and delete the old handler) OR rename `webllmHandler.ts` to `WebLLMService.ts` and expand it (Phase 1).
 
 ---
 
-**General Testing Guidance:**
-*   Run `pnpm run test` frequently.
-*   Complement with manual testing for UI, UX, and **Vector RAG** functionality.
-*   Use browser developer tools extensively.
+## Phase 1: Client-Side Setup and Initialization (TypeScript)
+
+*(Starts AFTER Phase 0.5 Cleanup)*
+
+### Task 1.1: Initialize WebLLM Engine for Query Embedding
+* **Action:** Implement in `src/lib/webLLMService.ts`. Ensure `MLCEngine` is initialized with `Snowflake Arctic embed xs` (ID from `siteConfig.ts`). Generated query embeddings *must be L2-normalized* by client code after receiving from WebLLM.
+
+### Task 1.2: Initialize WebLLM Engine for Chat Completions
+* **Action:** Implement in `src/lib/webLLMService.ts` (e.g., `SmolLM-135M-Instruct-q0f16-MLC` from `siteConfig.ts`).
+
+---
+
+## Phase 2: Client-Side Data Loading and Vector Store Setup (TypeScript)
+
+### Task 2.1: Define Client-Side Data Structures
+* **File:** `src/types/vectorStore.d.ts` (or `vectorStore.types.ts`).
+    ```typescript
+    interface DocumentMetadata { id: string; text: string; /* ...other metadata */ }
+
+    interface ClusterEmbeddingData { // Represents content of one <cluster_id>_embeddings.bin
+      embeddingsFlatArray: Float32Array; // All embeddings for the cluster, flattened
+      numEmbeddings: number; // Number of embeddings in this flat array
+      dimensions: number; // e.g., 384
+    }
+
+    interface ClusterData {
+      clusterId: string;
+      embeddingData: ClusterEmbeddingData;
+      metadata: DocumentMetadata[]; // Ordered to match embeddings (from .json)
+    }
+
+    interface ClusterCentroidData {
+      clusterId: string;
+      centroid: Float32Array; // L2-normalized
+    }
+
+    interface SearchResult {
+        id: string;
+        text: string;
+        score: number;
+        // ... any other metadata to display
+    }
+
+    interface ManifestClusterEntry { // Structure from manifest.json clusters array
+        clusterId: string;
+        embeddingsFile: string;
+        metadataFile: string; // Assumed .json
+        numEmbeddings: number;
+    }
+
+    interface ManifestData { // Structure of manifest.json
+        embeddingModelId: string;
+        embeddingDimensions: number;
+        centroidsFileFormat: "binary" | "json";
+        centroidsFile?: string; // Path if binary
+        centroidClusterIds?: string[]; // Required if binary format
+        centroidsDataFile?: string; // Path if json format
+        // metadataFileFormat field removed
+        clusters: ManifestClusterEntry[];
+    }
+    ```
+* **Action:** Create/update type definitions.
+
+### Task 2.2: Implement Data Loader for Raw Binary and JSON Metadata
+* **Module:** `src/lib/dataLoader.ts`.
+* **Functionality:**
+    1.  `async function loadManifest(url: string): Promise<ManifestData>`.
+    2.  `async function loadCentroids(manifest: ManifestData, basePath: string = ''): Promise<ClusterCentroidData[]>`:
+        * Handles loading based on `manifest.centroidsFileFormat` (binary slicing or JSON parsing via `response.json()`).
+    3.  `async function loadSingleClusterData(clusterManifestEntry: ManifestClusterEntry, embeddingDimensions: number, basePath: string = ''): Promise<ClusterData>`:
+        * Handles `.bin` embeddings (`ArrayBuffer` -> `Float32Array`).
+        * Handles `.json` metadata (`response.json()`).
+    4.  `async function loadAllRAGData(manifestUrl: string): Promise<{ centroids: ClusterCentroidData[], clustersData: Map<string, ClusterData>, embeddingDimensions: number, embeddingModelId: string }>`.
+* **Action:** Implement `DataLoader.ts`. Use native JSON parsing for metadata.
+
+### Task 2.3: Implement Lightweight Vector Search Logic
+* **Module:** `src/lib/clusteredSearchService.ts`.
+* **Class:** `ClusteredSearchService`.
+    * `constructor(centroids: ClusterCentroidData[], clustersData: Map<string, ClusterData>, embeddingDimensions: number)`
+    * `dotProduct(vecA: Float32Array, vecB: Float32Array): number` (ensure inputs are normalized).
+    * `findTopKClusters(queryEmbedding: Float32Array, topM: number): ClusterCentroidData[]`.
+    * `searchInCluster(queryEmbedding: Float32Array, clusterData: ClusterData, topKPerCluster: number): SearchResult[]`: (Details on slicing flat binary array as before).
+* **Action:** Implement `ClusteredSearchService.ts`.
+
+---
+
+## Phase 3: RAG Pipeline Implementation (Client-Side, TypeScript)
+
+* **Module:** `src/lib/ragManager.ts`.
+
+### Task 3.1: Query Embedding
+* **Action:** Implement `async getQueryEmbedding(query: string): Promise<Float32Array>` (gets embedding from `webLLMService` and L2-normalizes it).
+
+### Task 3.2: Two-Stage Document Retrieval
+* **Action:** Implement `async retrieveRelevantDocuments(...)` using `ClusteredSearchService`.
+
+### Task 3.3: Augment Prompt & Generate Response
+* **Action:** Implement `async getRagResponse(...)` using `webLLMService` (chat engine).
+
+---
+
+## Phase 4: User Interface & Integration (Initial Testbed, TypeScript)
+
+### Task 4.1: Basic UI
+* **Action:** Create `public/rag_test.html`.
+
+### Task 4.2: Integrate RAG with UI (Web Workers)
+* **Action:** Implement `public/rag_test_main.ts`. Ensure computationally intensive client-side tasks (query embedding, `findTopKClusters`, and especially `searchInCluster` within `retrieveRelevantDocuments`) are offloaded to Web Workers.
+
+---
+
+## Phase 5: Testing and Refinement (Initial Testbed)
+
+### Task 5.1: Core Functionality Testing
+* **Action:** Test data loading, binary parsing, normalization, search, RAG.
+
+### Task 5.2: Performance & UX
+* **Action:** Profile and optimize.
+
+---
+
+## Phase 6: Integration with Astro Chat Widget (TypeScript)
+
+### Task 6.1: Integrate Custom RAG into `ExpandableChatWidget.astro`
+* **Action:** Adapt widget's client script to use the new `RAGManager`, `DataLoader`, etc. Ensure Web Worker usage for intensive tasks. Manage loading states via `progressCallback`.
+
+### Task 6.2: Context Switching / District ID (If Applicable)
+* Consider how `currentDistrictId` might influence data loading or filtering if needed in the future.
+
+---
+
+## Phase 7: Final Touches & System-Wide Testing (Astro Widget)
+
+### Task 7.1: Ensure Responsiveness of Astro Widget.
+### Task 7.2: Accessibility Review & Enhancements.
+### Task 7.3: Full End-to-End RAG and UI Testing.
+
+---
+
+**Next Steps (Focus Areas):**
+
+1.  **Offline Pipeline Enhancement (Phase 0):** Output L2-normalized embeddings in per-cluster `.bin` files, ordered metadata (**JSON**), L2-normalized centroids (as `.bin` with ID mapping in manifest, or structured **JSON**), and `manifest.json`.
+2.  **Client-Side Cleanup (Phase 0.5):** Remove old code/dependencies.
+3.  **Implement Client-Side RAG Core (Phases 1-3 in TypeScript):** `WebLLMService`, `VectorStoreTypes.ts`, `DataLoader.ts`, `ClusteredSearchService.ts`, `RAGManager.ts`.
+4.  **Basic UI Testing with Web Workers (Phases 4-5):** Test core logic and performance.
+5.  **Astro Integration (Phase 6):** Integrate into `ExpandableChatWidget.astro`.
+6.  **Final Testing & Polish (Phase 7):** Comprehensive E2E testing.
+
+---
+
+**General Testing Guidance (Client-Side):**
+* Use browser developer tools extensively.
+* Validate data integrity after loading from binary/JSON files.
+* Verify correct slicing and interpretation of flat binary embedding arrays.
 
 ---
 
 **Phase X: Potential Enhancements & Long-Term Considerations (Post-MVP)**
-
-*   **State Management Reactivity (Astro Specific):**
-    *   If using a global state store (e.g., `src/lib/state.ts`), thoroughly review and test how Astro components (`
+* Progressive data loading for very many clusters (if not all data is loaded upfront).
+* Browser HTTP caching strategies for static assets.
+* Further vector quantization exploration (e.g., scalar quantization to int8) for even smaller footprints if quality trade-off is acceptable (would require offline changes and client adaptation).
