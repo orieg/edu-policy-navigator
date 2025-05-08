@@ -115,19 +115,26 @@
     *   Action: Read source data (policies, district info - requires obtaining/parsing these), implement text chunking, integrate embedding model (e.g., Transformers.js Node), generate embeddings, save chunks + embeddings (e.g., to JSON files in `public/embeddings/`).
     *   Dependencies: Node.js, file system access, text parsing libs (e.g., pdf-parse), embedding library.
 
-7b. **[ ] Task: Implement Client-Side Vector DB Handler (e.g., EntityDBWrapper)**
+7b. **[x] Task: Implement Client-Side Vector DB Handler (e.g., EntityDBWrapper)**
     *   File: New `src/lib/vectorDbHandler.ts` (or similar).
-    *   Action: Wrap chosen vector DB library (e.g., EntityDB). Implement initialization (loading pre-computed data), querying based on embedding vector, error handling.
-    *   Dependencies: Vector DB library (`@babycommando/entity-db`), embedding library (`@xenova/transformers`).
+    *   Action: Wrapped EntityDB library. Implemented initialization (loading pre-computed data from `public/embeddings/embedded_data.json`), querying based on embedding vector, error handling.
+    *   Dependencies: Vector DB library (`@babycommando/entity-db`).
+    *   Added `src/types/entity-db.d.ts` for module declaration.
 
-8b. **[ ] Task: Refactor `ragController.ts` for Vector RAG**
+8b. **[x] Task: Refactor `ragController.ts` for Vector RAG**
     *   File: `src/lib/ragController.ts`
     *   Action:
-        *   Remove Text-to-Cypher and Cypher-to-Context logic.
-        *   Integrate with `vectorDbHandler.ts` and `webllmHandler.ts` (for embeddings).
-        *   Implement `_queryToContext`: Generate query embedding -> Query Vector DB -> Format results.
-        *   Keep `_contextToAnswer` (using WebLLM for final synthesis).
-    *   Dependencies: `vectorDbHandler.ts`, `webllmHandler.ts`.
+        *   Removed old Text-to-Cypher and Cypher-to-Context logic.
+        *   Integrated with `vectorDbHandler.ts`.
+        *   Added client-side query embedding generation using `@xenova/transformers` (`Snowflake/snowflake-arctic-embed-xs`).
+        *   Implemented lazy/cached loading for the embedding model.
+        *   Implemented lazy/cached loading for the Vector DB data via `vectorDbHandler.initialize`.
+        *   The main `processQuery` method now orchestrates: Lazy init of embedding model & vector DB -> Query Embedding -> Vector Search -> Context Compilation -> LLM Answer.
+        *   Updated `_contextToAnswer` with a more robust prompt for context-only answers.
+        *   Fallbacks to general LLM knowledge if no context is found.
+        *   Status: Refactoring complete. Resolved several runtime issues related to library usage, base URLs, and data loading.
+        *   **Note:** Encountering persistent runtime errors within `EntityDB.queryManualVectors` / `EntityDB.query` even after successful data loading. Further debugging or library alternative may be needed.
+    *   Dependencies: `vectorDbHandler.ts`, `webllmHandler.ts`, `@xenova/transformers`.
 
 **Phase 3: RAG Integration & Full `ChatWindow.astro` Functionality**
 
@@ -198,28 +205,4 @@
 **Phase X: Potential Enhancements & Long-Term Considerations (Post-MVP)**
 
 *   **State Management Reactivity (Astro Specific):**
-    *   If using a global state store (e.g., `src/lib/state.ts`), thoroughly review and test how Astro components (`ExpandableChatWidget.astro`, `ChatWindow.astro`) subscribe to and react to changes in shared state (e.g., `currentDistrictId`, RAG service readiness, KuzuDB/WebLLM instances). Given Astro's island architecture, ensure client-side scripts handle external state updates correctly to re-render or update behavior as needed.
-
-*   **User Input Sanitization:**
-    *   While Astro provides some XSS protection by default, if user messages are ever directly rendered as HTML (e.g., if future features allow markdown or rich text from users), ensure robust input sanitization is implemented to prevent XSS vulnerabilities.
-
-*   **Chat History Management (UX):**
-    *   Consider adding a client-side feature to allow users to clear the current session's chat history within the `ChatWindow.astro` component. (Note: PRD specifies no saving history across browser sessions).
-
-*   **Resource Management for KuzuDB/WebLLM Instances:**
-    *   Investigate and confirm if explicit cleanup or disposal operations are needed for KuzuDB instances or the WebLLM engine when the chat widget is closed for a long time, the user navigates to a completely different section of the site, or the browser tab is closed. This might involve adding `dispose()` methods to `kuzudbHandler.ts` and `webllmHandler.ts` to be called appropriately by the client-side logic managing these instances to free up browser memory and resources if they are not automatically reclaimed efficiently by the WebAssembly environment upon loss of reference.
-
-*   **Scalability of Pre-built DBs & Manifest:**
-    *   While primarily a backend pipeline concern (`IMPLEMENTATION.md`, Phase 2.6), monitor the total number and size of pre-built KuzuDB `.db` files and the `manifest.json`. If the number of districts grows exceptionally large, the size of `manifest.json` could impact initial load time or client-side processing. This might necessitate future optimizations in how the manifest is structured or loaded, potentially impacting the widget's data source lookup for the selected district.
-
-*   **Advanced RAG UI Feedback:**
-    *   Explore more granular UI feedback for the different stages of the RAG process (Text-to-Cypher, KuzuDB query execution, LLM answer synthesis) if the `ragController` can provide such state updates. This could enhance user perception of system activity during processing.
-
-*   **Optimizing Perceived Performance for In-Browser LLMs:**
-    *   Continuously evaluate strategies to improve the perceived performance of the in-browser LLM, such as progressive display of generated text (streaming), or optimizing prompts for faster Cypher generation and answer synthesis, as highlighted in the KuzuDB blog on in-browser RAG.
-
-*   **Resource Management:** Update to consider disposal needs for Embedding Models / Vector DBs.
-
-*   **Scalability:** Update to consider embedding storage size and JSON loading performance.
-
-*   **Hybrid Search:** Consider adding FTS (e.g., MiniSearch) alongside Vector Search for improved keyword relevance if Vector Search alone proves insufficient. 
+    *   If using a global state store (e.g., `src/lib/state.ts`), thoroughly review and test how Astro components (`

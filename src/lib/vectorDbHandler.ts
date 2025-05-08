@@ -1,25 +1,33 @@
-import { EntityDB, type EmbeddingVector } from '@babycommando/entity-db';
+import { EntityDB, type EmbeddingVector as XenovaEmbeddingVector } from '@babycommando/entity-db'; // Reverted to named import
 
 // Define the structure of the records we expect in embedded_data.json
-interface EmbeddedRecord {
+// Export this interface for use in RAGController
+export interface EmbeddedRecord {
     id: string; // e.g., "district_01407900000000", "school_01611190109835"
     type: 'district' | 'school'; // Type identifier
     text: string; // The text that was embedded
-    embedding: EmbeddingVector; // The actual embedding vector
+    embedding: EmbeddingVector; // Use the type alias again
     metadata: Record<string, any>; // Original data subset and other info
 }
 
+// Export the EmbeddingVector type alias for use in RAGController
+export type EmbeddingVector = XenovaEmbeddingVector; // Restore original type alias
+
+// Assign type dynamically - Using 'any' to bypass potential linter errors on EntityDB methods
+const EntityDBConstructor = EntityDB as any;
+
 export class VectorDBHandler {
-    private db: EntityDB<EmbeddedRecord> | null = null;
+    private db: any | null = null; // Use 'any' temporarily to bypass linter issues with db methods
     private isReady: boolean = false;
     private dbName: string = 'edu-policy-db'; // Name for the EntityDB instance
 
     constructor() {
         // Initialize the EntityDB instance
         // The schema definition tells EntityDB about the structure and which field contains the vector
-        this.db = new EntityDB<EmbeddedRecord>([
-            {
-                name: this.dbName,
+        try {
+            // Use the configuration object structure from the README example
+            this.db = new EntityDBConstructor({
+                vectorPath: this.dbName, // Use vectorPath instead of name in array
                 schema: {
                     id: 'string',
                     type: 'string',
@@ -28,10 +36,14 @@ export class VectorDBHandler {
                     metadata: 'json'
                 },
                 vectorField: 'embedding', // Explicitly state which field is the vector
+                embedder: null, // Explicitly tell EntityDB not to initialize a default embedder
                 // Consider adding distanceMetric if needed, default is usually cosine
-            }
-        ]);
-        console.log('VectorDBHandler: EntityDB instance created.');
+            });
+            console.log('VectorDBHandler: EntityDB instance created.');
+        } catch (error) {
+            console.error("VectorDBHandler: Failed to instantiate EntityDB:", error);
+            this.db = null;
+        }
     }
 
     /**
@@ -62,10 +74,35 @@ export class VectorDBHandler {
                 throw new Error('Fetched embedding data is not an array.');
             }
 
-            console.log(`VectorDBHandler: Adding ${data.length} records to the database...`);
-            // Add data to the database
-            // Ensure the target collection name matches the one defined in the constructor
-            await this.db.add(this.dbName, data);
+            const batchSize = 1000; // Insert in batches
+            console.log(`VectorDBHandler: Adding ${data.length} records to the database in batches of ${batchSize}...`);
+
+            for (let i = 0; i < data.length; i += batchSize) {
+                const batch = data.slice(i, i + batchSize);
+                const batchNumber = i / batchSize + 1;
+                console.log(`VectorDBHandler: Processing batch ${batchNumber}...`);
+
+                try {
+                    for (const record of batch) {
+                        // Still using insertManualVectors for each record within the batch
+                        // *** Tentatively removing id to see if it resolves ConstraintError ***
+                        await this.db.insertManualVectors({
+                            // id: record.id, // Ensure 'id' is passed if EntityDB uses it as a key
+                            text: record.text,
+                            embedding: record.embedding,
+                            metadata: record.metadata
+                        });
+                    }
+                    console.log(`VectorDBHandler: Batch ${batchNumber} processed successfully.`);
+                } catch (batchError) {
+                    console.error(`VectorDBHandler: Error processing batch ${batchNumber}:`, batchError);
+                    // Rethrow the error to stop initialization if a batch fails
+                    // Include context about the batch if possible
+                    throw new Error(`Error during batch insert (batch ${batchNumber}): ${batchError}`);
+                }
+                // Optional: Add a small delay between batches if needed, e.g.:
+                // await new Promise(resolve => setTimeout(resolve, 50)); 
+            }
 
             this.isReady = true;
             console.log('VectorDBHandler: Initialization complete. Database is ready.');
@@ -91,15 +128,16 @@ export class VectorDBHandler {
 
         console.log(`VectorDBHandler: Querying database with topK=${topK}...`);
         try {
-            // Perform the vector search
-            // Ensure the target collection name matches the one defined in the constructor
+            // Reverting to try the main query method, passing the vector in options
             const results = await this.db.query(this.dbName, {
                 vector: queryVector,
                 topK: topK,
-                // include: ['id', 'text', 'metadata'] // Specify fields to include, if needed
-                // filter: { type: 'school' } // Example filter
             });
+            // const allResults = await this.db.queryManualVectors(queryVector);
+            // Manually apply topK if the method doesn't support it directly
+            // const results = allResults.slice(0, topK);
 
+            // console.log(`VectorDBHandler: Query returned ${results.length} results (after slicing for topK=${topK}).`);
             console.log(`VectorDBHandler: Query returned ${results.length} results.`);
             return results;
         } catch (error) {

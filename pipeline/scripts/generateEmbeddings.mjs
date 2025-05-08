@@ -37,6 +37,17 @@ async function getEmbedding(extractor, text) {
 async function generateEmbeddings() {
     console.log('Starting embedding generation process...');
 
+    // Check if embeddings file already exists
+    try {
+        await fs.access(OUTPUT_EMBEDDINGS_JSON_PATH);
+        console.log(`Embeddings file already exists at ${OUTPUT_EMBEDDINGS_JSON_PATH}. Skipping generation.`);
+        console.log('To force regeneration, delete the existing file and run this script again.');
+        return; // Exit early
+    } catch (error) {
+        // File does not exist or is not accessible, proceed with generation
+        console.log('Embeddings file not found, proceeding with generation...');
+    }
+
     // 1. Ensure output directory exists
     try {
         await fs.mkdir(OUTPUT_EMBEDDINGS_DIR, { recursive: true });
@@ -256,9 +267,25 @@ async function generateEmbeddings() {
             }
         }
 
+        // Check for duplicate IDs before writing
+        const idSet = new Set();
+        const duplicates = [];
+        for (const record of allEmbeddedRecords) {
+            if (idSet.has(record.id)) {
+                duplicates.push(record.id);
+            }
+            idSet.add(record.id);
+        }
+
+        if (duplicates.length > 0) {
+            console.error(`\x1b[31mError: Found ${duplicates.length} duplicate IDs in generated data! Cannot write embeddings file.\x1b[0m`);
+            console.error('Duplicate IDs:', duplicates.slice(0, 10)); // Show first 10 duplicates
+            return; // Exit without writing the file
+        }
+
         // Write Output JSON
         await fs.writeFile(OUTPUT_EMBEDDINGS_JSON_PATH, JSON.stringify(allEmbeddedRecords, null, 2));
-        console.log(`Successfully generated ${allEmbeddedRecords.length} embeddings.`);
+        console.log(`Successfully generated ${allEmbeddedRecords.length} embeddings (checked for duplicates).`);
         console.log(`Embeddings written to: ${OUTPUT_EMBEDDINGS_JSON_PATH}`);
 
     } catch (error) {

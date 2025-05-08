@@ -150,12 +150,12 @@ import { WEBLLM_CHAT_MODEL_ID } from "../siteConfig";
 
                 // Initialize RAG Controller (silently)
                 if (!ragController && webllmHandler) {
-                    // Removed kuzuHandler dependency
                     ragController = new RAGController(webllmHandler);
                 } else if (!ragController) {
-                    // If handlers were ready but controller still not set
+                    // This case implies webllmHandler was also not ready, which should be caught by earlier checks or throw.
+                    // For robustness, ensure controller is available if webllmHandler is.
                     throw new Error(
-                        "Failed to initialize RAGController: prerequisite webllmHandler available but controller not instantiated.",
+                        "Failed to initialize RAGController: WebLLMHandler is required.",
                     );
                 }
 
