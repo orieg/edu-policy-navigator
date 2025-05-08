@@ -17,10 +17,11 @@ const INPUT_DISTRICTS_JSON_PATH = path.resolve(process.cwd(), 'public', 'assets'
 const INPUT_SCHOOLS_JSON_PATH = path.resolve(process.cwd(), 'public', 'assets', 'schools_by_district.json');
 const OUTPUT_DIR = path.resolve(process.cwd(), 'public', 'embeddings', 'school_districts');
 const OUTPUT_MANIFEST_PATH = path.join(OUTPUT_DIR, 'manifest.json');
+const RAW_EMBEDDINGS_CACHE_DIR = path.resolve(process.cwd(), 'public', 'embeddings', '.caches', 'school_districts'); // New cache directory
 const EMBEDDING_MODEL_ID = 'Snowflake/snowflake-arctic-embed-xs';
 const EMBEDDING_DIMENSIONS = 384; // For Snowflake/snowflake-arctic-embed-xs
 const MAX_CHUNK_LENGTH = 512; // Max tokens for the embedding model
-let NUM_CLUSTERS_K = 10; // Default K, will be adjusted if less documents than K
+let NUM_CLUSTERS_K = 12; // Default K, will be adjusted if less documents than K
 
 interface DocumentChunk {
     id: string; // Unique ID for the document chunk (typically CDSCode for schools/districts)
@@ -175,55 +176,44 @@ async function loadAndPrepareData(): Promise<ProcessedDocument[]> {
     return documents;
 }
 
-// Helper function for mean pooling
-async function meanPooling(last_hidden_state: Tensor, attention_mask: Tensor): Promise<Tensor> {
-    // last_hidden_state: [batch_size, sequence_length, hidden_size]
-    // attention_mask: [batch_size, sequence_length] (should be float32 by this point)
-
-    const expanded_attention_mask = await attention_mask.unsqueeze(-1);
-    if (!(expanded_attention_mask instanceof Tensor)) throw new Error("expanded_attention_mask is not a Tensor");
-
-    const Padded_Embeddings = await (last_hidden_state as any).mul(expanded_attention_mask);
-    if (!(Padded_Embeddings instanceof Tensor)) throw new Error("Padded_Embeddings is not a Tensor after mul operation");
-
-    const sum_embeddings_tensor = await Padded_Embeddings.sum(1);
-    if (!(sum_embeddings_tensor instanceof Tensor)) throw new Error("sum_embeddings_tensor is not a Tensor after sum operation");
-
-    const sum_mask_tensor = await expanded_attention_mask.sum(1);
-    if (!(sum_mask_tensor instanceof Tensor)) throw new Error("sum_mask_tensor is not a Tensor after sum operation");
-
-    const clamped_sum_mask_tensor = await sum_mask_tensor.clamp(1e-9, Number.POSITIVE_INFINITY);
-    if (!(clamped_sum_mask_tensor instanceof Tensor)) throw new Error("clamped_sum_mask_tensor is not a Tensor after clamp operation");
-
-    // Manual division to avoid issues with Tensor.div()
-    const sum_embeddings_data = await sum_embeddings_tensor.data as Float32Array;
-    const clamped_sum_mask_data = await clamped_sum_mask_tensor.data as Float32Array;
-
-    const batch_size = sum_embeddings_tensor.dims[0];
-    const hidden_size = sum_embeddings_tensor.dims[1];
-
-    if (clamped_sum_mask_tensor.dims.length === 2 && clamped_sum_mask_tensor.dims[0] !== batch_size && clamped_sum_mask_tensor.dims[1] !== 1) {
-        throw new Error(`clamped_sum_mask_tensor has unexpected dimensions: ${clamped_sum_mask_tensor.dims}. Expected [${batch_size}, 1].`);
+// Helper function to save a single embedding to a binary file
+async function saveEmbeddingToCache(filePath: string, embedding: number[]): Promise<void> {
+    try {
+        const dir = path.dirname(filePath);
+        await fs.mkdir(dir, { recursive: true }); // Ensure directory exists
+        const float32Embedding = new Float32Array(embedding);
+        await fs.writeFile(filePath, Buffer.from(float32Embedding.buffer));
+        // console.log(`Cached embedding to ${filePath}`); // Optional: for verbose logging
+    } catch (error: any) {
+        console.warn(`Warning: Could not save embedding to cache file ${filePath}: ${error.message}`);
     }
-    // If clamped_sum_mask_data is effectively [batch_size] (from a [batch_size, 1] tensor's .data)
-    if (clamped_sum_mask_data.length !== batch_size) {
-        throw new Error(`clamped_sum_mask_data length (${clamped_sum_mask_data.length}) does not match batch_size (${batch_size}). Original dims: ${clamped_sum_mask_tensor.dims}`);
-    }
+}
 
-    const result_data = new Float32Array(batch_size * hidden_size);
-
-    for (let i = 0; i < batch_size; ++i) {
-        const mask_value = clamped_sum_mask_data[i]; // Each batch item has its own mask sum value
-        if (mask_value === 0) {
-            // This case should ideally be prevented by clamp(1e-9, ...), but as a safeguard:
-            console.warn(`Warning: mask_value is zero for batch item ${i}. This might lead to NaN/Infinity if not for clamping.`);
+// Helper function to load a single embedding from a binary file
+async function loadEmbeddingFromCache(filePath: string, expectedDimensions: number): Promise<number[] | null> {
+    try {
+        const buffer = await fs.readFile(filePath);
+        // Each float32 is 4 bytes
+        if (buffer.byteLength !== expectedDimensions * 4) {
+            console.warn(`Warning: Cached embedding file ${filePath} has incorrect size. Expected ${expectedDimensions * 4} bytes, got ${buffer.byteLength}. Re-generating.`);
+            await fs.unlink(filePath); // Delete invalid cache file
+            return null;
         }
-        for (let j = 0; j < hidden_size; ++j) {
-            result_data[i * hidden_size + j] = sum_embeddings_data[i * hidden_size + j] / mask_value;
+        const float32Embedding = new Float32Array(buffer.buffer, buffer.byteOffset, buffer.byteLength / Float32Array.BYTES_PER_ELEMENT);
+        return Array.from(float32Embedding);
+    } catch (error: any) {
+        if (error.code === 'ENOENT') {
+            // File not found, which is expected if not cached
+            return null;
         }
+        console.warn(`Warning: Could not load embedding from cache file ${filePath}: ${error.message}. Re-generating.`);
+        try {
+            await fs.unlink(filePath); // Attempt to delete corrupted/unreadable cache file
+        } catch (unlinkError: any) {
+            // ignore if unlinking also fails
+        }
+        return null;
     }
-
-    return new Tensor('float32', result_data, sum_embeddings_tensor.dims);
 }
 
 // Helper function to normalize embeddings to L2 unit norm
@@ -239,50 +229,160 @@ function normalizeL2(embeddings: Float32Array | number[]): Float32Array {
     return normalized;
 }
 
-async function getEmbedding(text: string, tokenizer: any, model: any): Promise<number[]> {
-    const inputs = tokenizer(text, { padding: true, truncation: true, max_length: MAX_CHUNK_LENGTH, return_tensors: "pt" });
-
-    let processedAttentionMask = inputs.attention_mask;
-
-    if (processedAttentionMask.dtype !== 'float32') {
-        const attentionMaskData = await processedAttentionMask.data;
-        const newAttentionMaskTypedData = Float32Array.from(Array.from(attentionMaskData as any[]), (x: any) => Number(x));
-        processedAttentionMask = new Tensor('float32', newAttentionMaskTypedData, processedAttentionMask.dims);
+// Modified getEmbedding to use the pipeline
+async function getEmbedding(text: string, extractor: any): Promise<number[]> {
+    // 1. Input Text Validation
+    if (!text || text.trim().length === 0) {
+        console.warn(`\nWarning: Attempted to generate embedding for empty or whitespace-only text. Skipping.`);
+        return []; // Return empty array to signify failure
     }
 
-    const { last_hidden_state } = await model(inputs);
+    try {
+        // Use the pipeline directly for embedding, pooling, and normalization
+        const output = await extractor(text, { pooling: 'mean', normalize: true });
 
-    if (!(last_hidden_state instanceof Tensor)) {
-        console.error(`Error: last_hidden_state is not a Tensor for document text (first 100 chars): "${text.substring(0, 100)}...". Type: ${typeof last_hidden_state}, Value:`, last_hidden_state);
-        throw new Error('Embedding generation failed: last_hidden_state from model was not a Tensor.');
+        if (!(output instanceof Tensor)) {
+            console.error(`\nError: Pipeline output is not a Tensor for text (start): "${text.substring(0, 100)}...". Type: ${typeof output}, Value:`, output);
+            return [];
+        }
+
+        if (output.dims.length === 0 || output.dims[0] === 0 || output.dims[1] !== EMBEDDING_DIMENSIONS) {
+            console.error(`\nError: Pipeline output tensor has unexpected dimensions ${output.dims} for text (start): "${text.substring(0, 100)}...". Expected [1, ${EMBEDDING_DIMENSIONS}]. Skipping.`);
+            return [];
+        }
+
+        const embeddingData = await output.data as Float32Array;
+
+        // Validate final pipeline output
+        for (let i = 0; i < embeddingData.length; ++i) {
+            if (isNaN(embeddingData[i]) || !isFinite(embeddingData[i])) {
+                console.error(`\nError: NaN or Infinity detected in final pipeline output data at index ${i} for text (start): "${text.substring(0, 100)}...". Skipping.`);
+                return [];
+            }
+        }
+
+        // Check final length just in case
+        if (embeddingData.length !== EMBEDDING_DIMENSIONS) {
+            console.error(`\nError: Final pipeline embedding has unexpected length ${embeddingData.length} (expected ${EMBEDDING_DIMENSIONS}) for text: "${text.substring(0, 100)}...". Skipping.`);
+            return [];
+        }
+
+        return Array.from(embeddingData); // Return the first (and only) embedding in the batch
+
+    } catch (error: any) {
+        console.error(`\nError during pipeline execution for text (start): "${text.substring(0, 100)}...": ${error.message}`);
+        return [];
     }
-
-    if (!(processedAttentionMask instanceof Tensor)) {
-        console.error(`Error: processedAttentionMask is not a Tensor for document text (first 100 chars): "${text.substring(0, 100)}...". Type: ${typeof processedAttentionMask}, Value:`, processedAttentionMask);
-        throw new Error('Embedding generation failed: processedAttentionMask was not a Tensor.');
-    }
-
-    const pooled = await meanPooling(last_hidden_state, processedAttentionMask);
-    const pooledData = await pooled.data;
-    const normalized = normalizeL2(pooledData as Float32Array);
-    return Array.from(normalized);
 }
 
-async function performKMeans(embeddings: Float32Array[], k: number): Promise<{ centroids: Float32Array[], assignments: number[] }> {
-    console.log(`Performing K-Means clustering with K=${k}...`);
-    // Convert array of Float32Arrays to a 2D array of numbers for ml-kmeans
+async function performKMeans(embeddings: Float32Array[], k: number, allDocumentChunks: DocumentChunk[]): Promise<{ centroids: Float32Array[], assignments: number[] }> {
+    console.log(`Performing K-Means clustering with K=${k} for ${embeddings.length} embeddings.`);
     const dataForKMeans = embeddings.map(emb => Array.from(emb));
 
-    const kmeansResult = kmeans(dataForKMeans, k, { // Changed: Use kmeans (default import)
-        initialization: 'kmeans++',
-        maxIterations: 300, // Default is 300, can adjust
+    if (dataForKMeans.length === 0 && k > 0) {
+        console.error("KMeans error: dataForKMeans is empty but k > 0.");
+        throw new Error("Cannot perform K-Means on empty dataset with k > 0");
+    }
+    if (k === 0) {
+        console.warn("KMeans warning: k is 0. Returning empty results.");
+        return { centroids: [], assignments: [] };
+    }
+
+    let effectiveK = k;
+    if (effectiveK > dataForKMeans.length) {
+        console.warn(`KMeans warning: k (${effectiveK}) is greater than the number of data points (${dataForKMeans.length}). Adjusting k to ${dataForKMeans.length}.`);
+        effectiveK = dataForKMeans.length;
+        if (effectiveK === 0) {
+            console.warn("KMeans warning: k adjusted to 0 due to empty dataset. Returning empty results.");
+            return { centroids: [], assignments: [] };
+        }
+    }
+
+    console.log(`Calling ml-kmeans with (potentially filtered) ${dataForKMeans.length} points and k=${effectiveK}.`);
+
+    const validEmbeddings: number[][] = [];
+    const originalIndexToValidIndex: { [originalIndex: number]: number } = {};
+    const invalidIndices = new Set<number>();
+    let validIndexCounter = 0;
+
+    // Check for NaN/Infinity and create filtered list
+    if (dataForKMeans.length > 0) {
+        const firstEmbeddingLength = dataForKMeans[0].length;
+        if (firstEmbeddingLength === 0) {
+            throw new Error("Embeddings have zero length.");
+        }
+        for (let i = 0; i < dataForKMeans.length; ++i) {
+            const currentEmbedding = dataForKMeans[i];
+            let isValid = true;
+            if (currentEmbedding.length !== firstEmbeddingLength) {
+                console.warn(`WARNING: Embedding at index ${i} (ID: ${allDocumentChunks[i]?.id || 'N/A'}) has inconsistent length ${currentEmbedding.length}. Skipping.`);
+                isValid = false;
+            }
+            for (let j = 0; j < currentEmbedding.length; ++j) {
+                if (isNaN(currentEmbedding[j]) || !isFinite(currentEmbedding[j])) {
+                    console.warn(`WARNING: Embedding at index ${i} (ID: ${allDocumentChunks[i]?.id || 'N/A'}) contains invalid number ${currentEmbedding[j]} at dimension ${j}. Skipping.`);
+                    isValid = false;
+                    break; // No need to check further dimensions for this embedding
+                }
+            }
+
+            if (isValid) {
+                validEmbeddings.push(currentEmbedding);
+                originalIndexToValidIndex[i] = validIndexCounter++;
+            } else {
+                invalidIndices.add(i);
+            }
+        }
+        console.log(`Filtered out ${invalidIndices.size} invalid embeddings. Proceeding with ${validEmbeddings.length} valid embeddings.`);
+
+        // Adjust effectiveK again based on the *valid* number of embeddings
+        if (effectiveK > validEmbeddings.length) {
+            console.warn(`KMeans warning: effectiveK (${effectiveK}) is greater than the number of *valid* data points (${validEmbeddings.length}). Adjusting k to ${validEmbeddings.length}.`);
+            effectiveK = validEmbeddings.length;
+            if (effectiveK === 0) {
+                console.warn("KMeans warning: effectiveK adjusted to 0 due to no valid embeddings. Returning empty results.");
+                // Return assignments array matching original length, filled with -1
+                return { centroids: [], assignments: Array(embeddings.length).fill(-1) };
+            }
+        }
+
+    } else { // Original dataForKMeans was empty
+        console.warn("KMeans warning: Initial dataset was empty. Returning empty results.");
+        return { centroids: [], assignments: [] }; // Should match original length? If original was 0, this is fine.
+    }
+
+    if (validEmbeddings.length === 0) {
+        console.warn("KMeans warning: No valid embeddings left after filtering. Returning empty results.");
+        return { centroids: [], assignments: Array(embeddings.length).fill(-1) };
+    }
+
+    // Run kmeans on the filtered data
+    const kmeansResult = kmeans(validEmbeddings, effectiveK, {
+        initialization: 'random',
+        maxIterations: 300,
     });
 
-    // Centroids from ml-kmeans are number[][], convert back to Float32Array[] and normalize.
+    // Centroids are based on valid embeddings
     const normalizedCentroids = kmeansResult.centroids.map((centroidArray: number[]) => normalizeL2(new Float32Array(centroidArray)));
+    const validAssignments = kmeansResult.clusters; // Assignments for valid embeddings
+
+    // Map assignments back to the original full list length
+    const finalAssignments = Array(embeddings.length).fill(-1); // Initialize with -1 (invalid cluster)
+    for (let originalIndex = 0; originalIndex < embeddings.length; ++originalIndex) {
+        if (!invalidIndices.has(originalIndex)) {
+            const validIndex = originalIndexToValidIndex[originalIndex];
+            if (validIndex !== undefined && validIndex < validAssignments.length) {
+                finalAssignments[originalIndex] = validAssignments[validIndex];
+            } else {
+                console.error(`Error mapping assignment back: Could not find valid index for original index ${originalIndex} or valid index out of bounds.`);
+                // Keep assignment as -1
+            }
+        }
+        // Else: keep assignment as -1 for invalid embeddings
+    }
 
     console.log('K-Means clustering finished.');
-    return { centroids: normalizedCentroids, assignments: kmeansResult.clusters };
+    return { centroids: normalizedCentroids, assignments: finalAssignments }; // Return assignments matching original length
 }
 
 async function saveBinaryFloat32(filePath: string, data: Float32Array[]) {
@@ -313,16 +413,16 @@ async function main() {
         return;
     }
 
-    // Ensure output directory exists
+    // Ensure output directories exist
     await fs.mkdir(OUTPUT_DIR, { recursive: true });
+    await fs.mkdir(RAW_EMBEDDINGS_CACHE_DIR, { recursive: true }); // Ensure cache directory exists
 
-    // --- Step 0.1: Initialize Embedding Model ---
-    console.log(`Initializing embedding model: ${EMBEDDING_MODEL_ID}`);
-    const tokenizer = await AutoTokenizer.from_pretrained(EMBEDDING_MODEL_ID);
-    const model = await AutoModel.from_pretrained(EMBEDDING_MODEL_ID);
-    console.log('Embedding model initialized.');
+    // --- Step 0.1: Initialize Embedding Pipeline --- Change: Initialize pipeline
+    console.log(`Initializing feature-extraction pipeline with model: ${EMBEDDING_MODEL_ID}`);
+    const extractor = await pipeline('feature-extraction', EMBEDDING_MODEL_ID);
+    console.log('Feature-extraction pipeline initialized.');
 
-    // --- Step 0.2: Embedding Generation & Normalization ---
+    // --- Step 0.2: Embedding Generation & Normalization --- Change: Use pipeline
     const allEmbeddingsNumeric: number[][] = []; // Store L2-normalized embeddings as number arrays
     const allDocumentChunks: DocumentChunk[] = []; // Store corresponding chunk data
 
@@ -331,13 +431,34 @@ async function main() {
         const doc = documentsToProcess[i];
         process.stdout.write(`\rEmbedding document ${i + 1}/${documentsToProcess.length} (ID: ${doc.id})...`);
 
-        try {
-            const embedding = await getEmbedding(doc.text, tokenizer, model); // Returns number[]
-            if (embedding.length !== EMBEDDING_DIMENSIONS) {
-                console.warn(`\nWarning: Embedding for doc ${doc.id} has dimension ${embedding.length}, expected ${EMBEDDING_DIMENSIONS}. Skipping.`);
-                continue;
-            }
+        const cachedEmbeddingPath = path.join(RAW_EMBEDDINGS_CACHE_DIR, `${doc.id}.bin`);
+        let embedding: number[] | null = await loadEmbeddingFromCache(cachedEmbeddingPath, EMBEDDING_DIMENSIONS);
 
+        if (embedding) {
+            // Optional: log cache hit
+            // process.stdout.write(`\rLoaded embedding for document ${i + 1}/${documentsToProcess.length} (ID: ${doc.id}) from cache.`);
+        } else {
+            try {
+                embedding = await getEmbedding(doc.text, extractor); // Changed: Pass extractor instead of tokenizer/model
+
+                // Handle case where getEmbedding signalled failure by returning empty array
+                if (!embedding || embedding.length === 0) {
+                    console.warn(`\nWarning: Failed to generate a valid embedding for doc ${doc.id}. Skipping this document.`);
+                    embedding = null;
+                } else if (embedding.length !== EMBEDDING_DIMENSIONS) { // Double check final length
+                    console.warn(`\nWarning: Embedding for doc ${doc.id} has unexpected final dimension ${embedding.length}, expected ${EMBEDDING_DIMENSIONS}. Skipping.`);
+                    embedding = null; // Mark as null to skip
+                } else {
+                    // Save the newly generated and validated embedding to cache
+                    await saveEmbeddingToCache(cachedEmbeddingPath, embedding);
+                }
+            } catch (error: any) {
+                console.error(`\nError processing document ${doc.id} through pipeline: ${error.message}`);
+                embedding = null; // Mark as null to skip
+            }
+        }
+
+        if (embedding) { // Only proceed if embedding is valid (either from cache or newly generated)
             allEmbeddingsNumeric.push(embedding);
             allDocumentChunks.push({
                 id: doc.id, // This is `district_CDSCode` or `school_CDSCode`
@@ -350,8 +471,6 @@ async function main() {
                     // You can add more fields from doc.originalData here if needed for the client
                 }
             });
-        } catch (error: any) {
-            console.error(`\nError generating embedding for document ${doc.id}: ${error.message}`);
         }
     }
     process.stdout.write("\nDone generating embeddings.\n");
@@ -374,7 +493,7 @@ async function main() {
         NUM_CLUSTERS_K = Math.max(1, allEmbeddingsF32.length); // Ensure K is at least 1
     }
 
-    const { centroids, assignments } = await performKMeans(allEmbeddingsF32, NUM_CLUSTERS_K);
+    const { centroids, assignments } = await performKMeans(allEmbeddingsF32, NUM_CLUSTERS_K, allDocumentChunks);
     // centroids are Float32Array[], assignments is number[]
 
     // --- Step 0.4: Save Data Per Cluster and Centroids ---
@@ -416,40 +535,17 @@ async function main() {
         const clusterDir = path.join(OUTPUT_DIR, `cluster_${i}`);
         await fs.mkdir(clusterDir, { recursive: true });
 
-        const embeddingsPath = path.join(clusterDir, 'embeddings.bin');
-        const metadataPath = path.join(clusterDir, 'metadata.json');
+        const clusterEmbeddingsFilePath = path.join(clusterDir, 'embeddings.bin');
+        await saveBinaryFloat32(clusterEmbeddingsFilePath, clustersData[i].embeddings);
 
-        if (clustersData[i].embeddings.length > 0) {
-            await saveBinaryFloat32(embeddingsPath, clustersData[i].embeddings);
-            // Save metadata (id, text chunk, other metadata) as JSON, ordered identically to embeddings
-            // We are saving the full DocumentChunk object for each item in metadata
-            await saveJSON(metadataPath, clustersData[i].metadata);
-
-            manifest.clusters.push({
-                clusterId: i,
-                count: clustersData[i].metadata.length,
-                embeddingsFile: `cluster_${i}/embeddings.bin`,
-                metadataFile: `cluster_${i}/metadata.json`,
-            });
-        } else {
-            console.log(`Cluster ${i} is empty. No files will be saved for this cluster.`);
-            manifest.clusters.push({
-                clusterId: i,
-                count: 0,
-                embeddingsFile: null,
-                metadataFile: null,
-            });
-        }
+        const clusterMetadataFilePath = path.join(clusterDir, 'metadata.json');
+        await saveJSON(clusterMetadataFilePath, clustersData[i].metadata);
     }
 
-    // --- Step 0.5: Save Manifest File ---
+    // Save manifest
     await saveJSON(OUTPUT_MANIFEST_PATH, manifest);
-    console.log(`Manifest file saved to ${OUTPUT_MANIFEST_PATH}`);
 
-    console.log('Offline pre-computation script finished successfully!');
+    console.log('Clustering and data saving completed.');
 }
 
-main().catch(error => {
-    console.error("Script failed:", error);
-    process.exit(1);
-}); 
+main();
