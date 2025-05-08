@@ -21,7 +21,7 @@ const RAW_EMBEDDINGS_CACHE_DIR = path.resolve(process.cwd(), 'public', 'embeddin
 const EMBEDDING_MODEL_ID = 'Snowflake/snowflake-arctic-embed-xs';
 const EMBEDDING_DIMENSIONS = 384; // For Snowflake/snowflake-arctic-embed-xs
 const MAX_CHUNK_LENGTH = 512; // Max tokens for the embedding model
-let NUM_CLUSTERS_K = 12; // Default K, will be adjusted if less documents than K
+let NUM_CLUSTERS_K = 24; // Default K, will be adjusted if less documents than K
 
 interface DocumentChunk {
     id: string; // Unique ID for the document chunk (typically CDSCode for schools/districts)
@@ -358,7 +358,7 @@ async function performKMeans(embeddings: Float32Array[], k: number, allDocumentC
 
     // Run kmeans on the filtered data
     const kmeansResult = kmeans(validEmbeddings, effectiveK, {
-        initialization: 'random',
+        initialization: 'kmeans++',
         maxIterations: 300,
     });
 
