@@ -1,0 +1,50 @@
+{
+    "compilerOptions": {
+        // --- Output --- 
+        "outDir": "dist/client-libs", // Output JS files to a dedicated dist subfolder
+        "rootDir": "src", // Primary source of distinct client libs
+        "noEmitOnError": true, // Don't output JS if there are TS errors
+        "declaration": false, // Don't need .d.ts files for this build
+        "sourceMap": true, // Generate source maps for easier debugging
+        // --- Module/Target --- 
+        "module": "ESNext", // Use modern modules (suitable for workers/dynamic import)
+        "target": "ESNext", // Target modern browsers
+        "moduleResolution": "Node", // Or "Bundler" if preferred and works with deps
+        "esModuleInterop": true, // Standard compatibility setting
+        "skipLibCheck": true, // Skip checking library files
+        "forceConsistentCasingInFileNames": true,
+        "resolveJsonModule": true,
+        "isolatedModules": false, // Set to false as we are compiling multiple files together
+        // --- Strictness & Libs --- 
+        "strict": true,
+        "lib": [
+            "ESNext",
+            "DOM",
+            "DOM.Iterable",
+            "WebWorker" // Add WebWorker lib
+        ],
+        "baseUrl": ".", // Allow non-relative imports based on root
+        "paths": { // Copy paths from main tsconfig if needed
+            "@/*": [
+                "src/*"
+            ]
+            // Add other paths if required by src/lib files
+        }
+        // jsx/jsxImportSource are not needed here as we aren't compiling Astro/JSX files
+    },
+    "include": [
+        // "public/rag_test_main.ts", // Removed, will be handled by Astro
+        // "public/rag_worker.ts",   // Removed, will be handled by Astro
+        "src/lib/**/*.ts", // More explicit path
+        "src/types/**/*.ts", // More explicit path
+        "src/siteConfig.ts" // More explicit path
+    ],
+    "exclude": [
+        "node_modules",
+        "dist",
+        "pipeline", // Exclude pipeline scripts
+        "tests", // Exclude tests
+        "e2e"
+        // Exclude other non-client related TS files
+    ]
+}

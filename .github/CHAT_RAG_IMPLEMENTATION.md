@@ -126,6 +126,19 @@ The data in the browser will be read-only after initial load.
 
 ## Phase 1: Client-Side Setup and Initialization (TypeScript)
 
+**Status: [✅] Completed**
+
+**Summary of Implementation:**
+*   Created `src/lib/WebLLMService.ts`.
+*   The service manages two separate `MLCEngine` instances: one for query embedding (`Snowflake/snowflake-arctic-embed-xs`) and one for chat completions (`SmolLM2-135M-Instruct-q0f16-MLC`), with model IDs sourced from `src/siteConfig.ts`.
+*   Implemented `initializeEmbeddingEngine()` and `initializeChatEngine()` methods.
+*   Implemented `getQueryEmbedding(text: string): Promise<Float32Array | null>` which:
+    *   Ensures the embedding engine is initialized.
+    *   Uses `embeddingEngine.embeddings.create()` to get raw embeddings.
+    *   Includes a private `normalizeL2(vector: Float32Array)` method to L2-normalize the embeddings.
+*   Implemented `getChatCompletion(messages: Array<...>): Promise<string | null>` for non-streaming chat responses, ensuring the chat engine is initialized and using `chatEngine.chat.completions.create()`.
+*   Added `disposeChatEngine()`, `disposeEmbeddingEngine()`, and `disposeAllEngines()` methods to unload models.
+
 *(Starts AFTER Phase 0.5 Cleanup)*
 
 ### Task 1.1: Initialize WebLLM Engine for Query Embedding
@@ -137,6 +150,26 @@ The data in the browser will be read-only after initial load.
 ---
 
 ## Phase 2: Client-Side Data Loading and Vector Store Setup (TypeScript)
+
+**Status: [✅] Completed**
+
+**Summary of Implementation:**
+*   **Task 2.1 (Define Client-Side Data Structures):**
+    *   Created `src/types/vectorStore.d.ts` defining interfaces: `DocumentMetadata`, `ClusterEmbeddingData`, `ClusterData`, `ClusterCentroidData`, `SearchResult`, `ManifestClusterEntry`, and `ManifestData`.
+    *   These types align with the structure of `manifest.json` and the per-cluster binary/JSON files.
+*   **Task 2.2 (Implement Data Loader):**
+    *   Created `src/lib/dataLoader.ts` with:
+        *   `loadManifest(manifestUrl)`: Fetches and parses `manifest.json`.
+        *   `loadCentroids(manifest, manifestDirUrl)`: Fetches `centroids.json`, parses, and converts centroid vectors to `Float32Array`.
+        *   `loadSingleClusterData(clusterManifestEntry, embeddingDimensions, manifestDirUrl)`: Fetches a cluster's `metadata.json` and `embeddings.bin`, converting binary data to `Float32Array` and performing validation.
+        *   `loadAllRAGData(manifestUrl, progressCallback?)`: Orchestrates loading of all data, handling relative paths and providing progress updates.
+*   **Task 2.3 (Implement Lightweight Vector Search Logic):**
+    *   Created `src/lib/clusteredSearchService.ts` with the `ClusteredSearchService` class:
+        *   Constructor takes loaded `centroids`, `clustersData` (Map), and `embeddingDimensions`.
+        *   `dotProduct(vecA, vecB)`: Utility for calculating dot product (cosine similarity for normalized vectors).
+        *   `findTopKClusters(queryEmbedding, topM)`: Finds top M clusters based on similarity to query embedding.
+        *   `searchInCluster(queryEmbedding, clusterData, topKPerCluster)`: Searches within a single cluster for top K documents.
+        *   `search(queryEmbedding, topMClusters, topKDocsPerCluster, finalTopN)`: Public method orchestrating the two-stage search, aggregating, and re-sorting results.
 
 ### Task 2.1: Define Client-Side Data Structures
 * **File:** `src/types/vectorStore.d.ts` (or `vectorStore.types.ts`).
@@ -226,6 +259,26 @@ The data in the browser will be read-only after initial load.
 ---
 
 ## Phase 4: User Interface & Integration (Initial Testbed, TypeScript)
+
+**Status: [✅] Completed**
+
+**Summary of Implementation:**
+*   **Task 4.1 (Basic UI):**
+    *   Created `public/rag_test.html` with basic HTML structure including an input area for queries, a submit button, a response display area, a status label, and a progress bar.
+*   **Task 4.2 (Integrate RAG with UI - Web Workers):**
+    *   Created `public/rag_worker.ts`:
+        *   This script runs in a Web Worker.
+        *   It imports `WebLLMService`, `loadAllRAGData`, `ClusteredSearchService`, and `RAGManager`.
+        *   Handles `initialize` messages from the main thread to set up all RAG components (load data, init WebLLM engines).
+        *   Handles `query` messages to process user queries through `ragManager.getRagResponse()`.
+        *   Handles `dispose` messages to unload WebLLM engines.
+        *   Posts `status`, `progress`, and `response` messages back to the main thread.
+    *   Created `public/rag_test_main.ts`:
+        *   This script runs on the main UI thread, linked from `rag_test.html`.
+        *   Initializes and manages the `rag_worker.ts`.
+        *   Handles UI updates based on messages received from the worker (status, progress, response display).
+        *   Sends user queries to the worker.
+        *   Includes a `beforeunload` listener to request engine disposal in the worker.
 
 ### Task 4.1: Basic UI
 * **Action:** Create `public/rag_test.html`.

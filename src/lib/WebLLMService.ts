@@ -1,217 +1,193 @@
-// src/lib/webllmHandler.ts
+import { MLCEngine, type MLCEngineConfig, type ChatOptions, CreateMLCEngine, type InitProgressReport, ModelType } from '@mlc-ai/web-llm';
+import { WEBLLM_CHAT_MODEL_ID, WEBLLM_EMBEDDING_MODEL_ID } from '../siteConfig';
 
-import {
-    // Corrected imports based on documentation examples
-    MLCEngine, // The main engine class
-    // CreateMLCEngine, // Factory function also exists, but example uses constructor + reload
-    type ChatOptions,
-    type AppConfig,
-    type InitProgressReport,
-    type ChatCompletion, // Type for non-streaming response
-    type ChatCompletionChunk, // Type for streaming chunk
-    type ChatCompletionRequestStreaming, // Type for streaming request
-    type ChatCompletionRequestNonStreaming // Type for non-streaming request
-} from "@mlc-ai/web-llm";
+class WebLLMService {
+    private chatEngine: MLCEngine | null = null;
+    private embeddingEngine: MLCEngine | null = null;
 
-// Local definition based on OpenAI API structure
-export type ChatMessage = {
-    role: "system" | "user" | "assistant";
-    content: string;
-};
+    private chatModelId: string = WEBLLM_CHAT_MODEL_ID;
+    private embeddingModelId: string = WEBLLM_EMBEDDING_MODEL_ID;
 
+    private initProgressCallback?: (report: InitProgressReport) => void;
 
-/**
- * Interface for callbacks during initialization.
- */
-export interface InitializationCallbacks {
-    onProgress: (report: InitProgressReport) => void;
-}
+    constructor(initProgressCallback?: (report: InitProgressReport) => void) {
+        this.initProgressCallback = initProgressCallback;
+        console.log("WebLLMService: Instance created.");
+    }
 
-/**
- * Interface for callbacks during generation (if streaming).
- * Provides the delta content from the chunk.
- */
-interface GenerationStreamCallbacks {
-    onUpdate: (delta: string, finalMessage: string | null) => void;
-}
-
-
-/**
- * Service for interacting with the WebLLM library.
- * Manages initialization and interaction with different WebLLM engines
- * (e.g., for chat completion, query embedding).
- */
-export class WebLLMHandler {
-    private engine: MLCEngine | null = null;
-    private selectedModelId: string | null = null;
-    private isInitialized: boolean = false;
-    private isInitializing: boolean = false;
-    private initProgressCallback: ((report: InitProgressReport) => void) | undefined;
-    private currentAppConfig: AppConfig | undefined;
-    private currentChatOptions: ChatOptions | undefined;
-
-    constructor() { }
-
-    /**
-     * Initializes the WebLLM engine and loads a specific model.
-     */
-    public async initialize(
-        modelId: string,
-        callbacks?: InitializationCallbacks,
-        chatOpts?: ChatOptions,
-        appConfig?: AppConfig,
-    ): Promise<void> {
-        // Store callbacks and config for potential reload later
-        this.initProgressCallback = callbacks?.onProgress;
-        this.currentChatOptions = chatOpts;
-        this.currentAppConfig = appConfig;
-
-        if (this.isInitialized && this.selectedModelId === modelId) {
-            console.log(`WebLLMHandler: Already initialized with model ${modelId}.`);
+    public async initializeEmbeddingEngine(config?: Omit<MLCEngineConfig, 'appConfig'>): Promise<void> {
+        if (this.embeddingEngine) {
+            console.log("WebLLMService: Embedding engine already initialized.");
             return;
         }
-        if (this.isInitializing) {
-            console.warn(`WebLLMHandler: Initialization/Reload already in progress.`);
-            throw new Error("Initialization/Reload already in progress.");
-        }
-
-        this.isInitializing = true;
-        this.isInitialized = false;
-        console.log(`WebLLMHandler: Initializing/Reloading model ${modelId}...`);
-
+        console.log(`WebLLMService: Initializing embedding engine with model: ${this.embeddingModelId}...`);
         try {
-            if (!this.engine) {
-                console.log("WebLLMHandler: Creating MLCEngine instance...");
-                // Pass constructor options if needed - check MLCEngine docs
-                this.engine = new MLCEngine({
-                    initProgressCallback: this.initProgressCallback
-                });
-                console.log("WebLLMHandler: MLCEngine instance created.");
-            }
+            const embeddingModelRecord = {
+                model_id: this.embeddingModelId,
+                model: this.embeddingModelId, // For pre-built MLC models, use the ID directly
+                model_lib: `${this.embeddingModelId.includes('/') ? this.embeddingModelId.split('/').pop() : this.embeddingModelId}-webllm`,
+                model_type: ModelType.embedding // Use ModelType.embedding
+            };
 
-            // Load or reload the specified model - assumes reload takes only modelId
-            console.log(`WebLLMHandler: Reloading engine with model ${modelId}...`);
-            // NOTE: chatOpts and appConfig might need to be applied differently, e.g. via engine constructor or setOptions methods.
-            await this.engine.reload(modelId);
-            this.selectedModelId = modelId;
-            this.isInitialized = true;
-            console.log(`WebLLMHandler: Successfully initialized/reloaded model ${modelId}.`);
+            const appConfigForEngine = {
+                model_list: [embeddingModelRecord]
+            };
 
+            const engineConfig: MLCEngineConfig = {
+                ...(config || {}),
+                initProgressCallback: this.initProgressCallback,
+                appConfig: appConfigForEngine
+            };
+
+            this.embeddingEngine = await CreateMLCEngine(
+                this.embeddingModelId, // Specifies which model from the list to load
+                engineConfig
+            );
+            console.log("WebLLMService: Embedding engine initialized successfully.");
         } catch (error) {
-            console.error(`WebLLMHandler: Failed to initialize/reload model ${modelId}:`, error);
-            this.selectedModelId = null;
-            this.isInitialized = false;
-            throw new Error(`WebLLM initialization/reload failed: ${(error as Error).message}`);
-        } finally {
-            this.isInitializing = false;
+            console.error("WebLLMService: Error initializing embedding engine:", error);
+            this.embeddingEngine = null;
+            throw error;
         }
     }
 
-    /**
-     * Generates a response using the OpenAI-compatible chat completion API.
-     */
-    public async chatCompletion(
-        messages: ChatMessage[],
-        stream: boolean,
-        streamCallbacks?: GenerationStreamCallbacks,
-        options?: Partial<ChatCompletionRequestStreaming | ChatCompletionRequestNonStreaming>
-    ): Promise<string | null> {
-        if (!this.isInitialized || !this.engine) {
-            throw new Error("WebLLMHandler: Not initialized. Please initialize first.");
+    public async initializeChatEngine(config?: Omit<MLCEngineConfig, 'appConfig'>): Promise<void> {
+        if (this.chatEngine) {
+            console.log("WebLLMService: Chat engine already initialized.");
+            return;
         }
-        if (this.isInitializing) {
-            throw new Error("WebLLMHandler: Initialization/Reload still in progress.");
-        }
-
-        console.log(`WebLLMHandler: Generating chat completion (stream=${stream})...`);
-
+        console.log(`WebLLMService: Initializing chat engine with model: ${this.chatModelId}...`);
         try {
-            if (stream) {
-                // Explicitly define options for streaming request
-                const requestOptions: ChatCompletionRequestStreaming = {
-                    messages,
-                    ...options, // Spread options first
-                    stream: true, // Explicitly set stream after spread
-                    stream_options: { include_usage: true },
-                };
-                const chunks: AsyncIterable<ChatCompletionChunk> = await this.engine.chat.completions.create(requestOptions);
+            const chatModelRecord = {
+                model_id: this.chatModelId,
+                model: this.chatModelId, // For prebuilt/known MLC models
+                model_lib: `${this.chatModelId}-webllm` // e.g., SmolLM2-135M-Instruct-q0f16-MLC-webllm
+            };
 
-                let fullReply = "";
-                for await (const chunk of chunks) {
-                    const delta = chunk.choices[0]?.delta?.content || "";
-                    fullReply += delta;
-                    streamCallbacks?.onUpdate(delta, null); // Provide delta
-                    if (chunk.usage) {
-                        console.log("WebLLMHandler: Final usage stats:", chunk.usage);
-                        streamCallbacks?.onUpdate("", fullReply); // Signal completion with final message
-                    }
+            const appConfigForEngine = {
+                model_list: [chatModelRecord]
+            };
+
+            const engineConfig: MLCEngineConfig = {
+                ...(config || {}),
+                initProgressCallback: this.initProgressCallback,
+                appConfig: appConfigForEngine
+            };
+
+            this.chatEngine = await CreateMLCEngine(
+                this.chatModelId, // Specifies which model from the list to load
+                engineConfig
+            );
+            console.log("WebLLMService: Chat engine initialized successfully.");
+        } catch (error) {
+            console.error("WebLLMService: Error initializing chat engine:", error);
+            this.chatEngine = null;
+            throw error;
+        }
+    }
+
+    public async getQueryEmbedding(text: string): Promise<Float32Array | null> {
+        if (!this.embeddingEngine) {
+            console.error("WebLLMService: Embedding engine not initialized. Call initializeEmbeddingEngine() first.");
+            return null;
+        }
+        try {
+            // console.log(`WebLLMService: Generating embedding for text (start): "${text.substring(0, 100)}..."`);
+            const embeddingResponse = await this.embeddingEngine.embeddings.create({
+                input: text,
+            });
+            let rawEmbedding: Float32Array | undefined;
+            if (embeddingResponse && embeddingResponse.data && embeddingResponse.data.length > 0 && embeddingResponse.data[0].embedding) {
+                if (embeddingResponse.data[0].embedding instanceof Float32Array) {
+                    rawEmbedding = embeddingResponse.data[0].embedding;
+                } else if (Array.isArray(embeddingResponse.data[0].embedding)) {
+                    rawEmbedding = new Float32Array(embeddingResponse.data[0].embedding);
+                } else {
+                    console.error("WebLLMService: Unexpected embedding format.", embeddingResponse.data[0]);
+                    return null;
                 }
-                console.log(`WebLLMHandler: Streaming finished.`);
+            } else {
+                console.error("WebLLMService: Could not find embedding in response.", embeddingResponse);
                 return null;
-
-            } else {
-                // Explicitly define options for non-streaming request
-                const requestOptions: ChatCompletionRequestNonStreaming = {
-                    messages,
-                    ...options, // Spread options first
-                    stream: false, // Explicitly set stream after spread
-                };
-                const reply: ChatCompletion = await this.engine.chat.completions.create(requestOptions);
-                const responseText = reply.choices[0]?.message?.content || "";
-                console.log(`WebLLMHandler: Non-streaming response received.`);
-                console.log(`WebLLMHandler: Usage:`, reply.usage);
-                return responseText;
             }
-
+            if (!rawEmbedding) return null;
+            return this.normalizeL2(rawEmbedding);
         } catch (error) {
-            console.error("WebLLMHandler: Error during chat completion:", error);
-            throw new Error(`WebLLM chat completion failed: ${(error as Error).message}`);
+            console.error("WebLLMService: Error generating query embedding:", error);
+            return null;
         }
     }
 
-
-    /**
-     * Disposes of the current WebLLM engine instance.
-     */
-    public async dispose(): Promise<void> {
-        if (this.isInitializing) {
-            console.warn("WebLLMHandler: Cannot dispose while initialization/reload is in progress.");
-            return;
+    public async getChatCompletion(
+        messages: Array<{ role: "system" | "user" | "assistant", content: string }>,
+        chatOptions?: ChatOptions
+    ): Promise<string | null> {
+        if (!this.chatEngine) {
+            console.error("WebLLMService: Chat engine not initialized. Call initializeChatEngine() first.");
+            return null;
         }
-        if (!this.engine) {
-            console.log("WebLLMHandler: Already disposed or never initialized.");
-            return;
-        }
-
-        console.log(`WebLLMHandler: Disposing engine (unload model ${this.selectedModelId})...`);
         try {
-            if (typeof this.engine.unload === 'function') {
-                await this.engine.unload();
-                console.log(`WebLLMHandler: Engine unloaded successfully.`);
+            const response = await this.chatEngine.chat.completions.create({
+                messages,
+                ...chatOptions,
+                stream: false, // Non-streaming implementation
+            });
+            if (response && response.choices && response.choices.length > 0 && response.choices[0].message) {
+                return response.choices[0].message.content || "";
             } else {
-                console.warn("WebLLMHandler: engine.unload method not found. Cannot explicitly unload model.");
+                console.error("WebLLMService: Could not find assistant message in response.", response);
+                return null;
             }
-
         } catch (error) {
-            console.error("WebLLMHandler: Error during unload:", error);
-        } finally {
-            this.engine = null;
-            this.isInitialized = false;
-            this.selectedModelId = null;
+            console.error("WebLLMService: Error generating chat completion:", error);
+            return null;
         }
     }
 
-    /**
-     * Gets the ID of the currently loaded model.
-     */
-    public getSelectedModelId(): string | null {
-        return this.selectedModelId;
+    // Add streaming chat completion method if needed later
+    // public async getChatCompletionStream(...) { ... }
+
+    private normalizeL2(vector: Float32Array): Float32Array {
+        if (!vector || vector.length === 0) return new Float32Array(0);
+        let norm = 0;
+        for (let i = 0; i < vector.length; i++) norm += vector[i] * vector[i];
+        if (norm === 0) return new Float32Array(vector.length);
+        norm = Math.sqrt(norm);
+        const normalizedVector = new Float32Array(vector.length);
+        for (let i = 0; i < vector.length; i++) normalizedVector[i] = vector[i] / norm;
+        return normalizedVector;
     }
 
-    /**
-    * Checks if the handler has successfully initialized an engine.
-    */
-    public getIsInitialized(): boolean {
-        return this.isInitialized;
+    public async disposeChatEngine(): Promise<void> {
+        if (this.chatEngine) {
+            try {
+                await this.chatEngine.unload();
+                this.chatEngine = null;
+                console.log("WebLLMService: Chat engine disposed.");
+            } catch (error) {
+                console.error("WebLLMService: Error disposing chat engine:", error);
+                this.chatEngine = null;
+            }
+        }
     }
-} 
+
+    public async disposeEmbeddingEngine(): Promise<void> {
+        if (this.embeddingEngine) {
+            try {
+                await this.embeddingEngine.unload();
+                this.embeddingEngine = null;
+                console.log("WebLLMService: Embedding engine disposed.");
+            } catch (error) {
+                console.error("WebLLMService: Error disposing embedding engine:", error);
+                this.embeddingEngine = null;
+            }
+        }
+    }
+
+    public async disposeAllEngines(): Promise<void> {
+        await this.disposeChatEngine();
+        await this.disposeEmbeddingEngine();
+    }
+}
+
+export default WebLLMService; 

@@ -8,7 +8,7 @@ interface Props {}
 const {} = Astro.props;
 
 import ChatWindow from "./ChatWindow.astro"; // <-- IMPORT ChatWindow
-import { WEBLLM_CHAT_MODEL_ID } from "../siteConfig";
+import { WEBLLM_CHAT_MODEL_ID } from "../siteConfig.ts";
 
 // Later, we might import the actual ChatWindow component
 // import ChatWindow from './ChatWindow.astro';
@@ -43,15 +43,14 @@ import { WEBLLM_CHAT_MODEL_ID } from "../siteConfig";
 
 <script>
     // Client-side imports for the handlers and controller
-    import { WebLLMHandler } from "../lib/webllmHandler";
-    import { RAGController } from "../lib/ragController";
-    import { WEBLLM_CHAT_MODEL_ID } from "../siteConfig"; // Client-side import for MODEL_ID
+    import { WebLLMHandler } from "../lib/webllmHandler.ts";
+    // import { RAGController } from "../lib/ragController";
+    import { WEBLLM_CHAT_MODEL_ID } from "../siteConfig.ts"; // Client-side import for MODEL_ID
     // Import InitializationCallbacks for typing the onProgress callback's 'report' parameter
-    import type { InitializationCallbacks } from "../lib/webllmHandler";
+    import type { InitializationCallbacks } from "../lib/webllmHandler.ts";
     // No need for separate type imports if runtime imports are used for types too
 
     let webllmHandler: WebLLMHandler | null = null;
-    let ragController: RAGController | null = null;
     let servicesInitialized = false;
 
     // Variable to hold the chat window wrapper element, methods are attached to this in ChatWindow.astro
@@ -149,6 +148,8 @@ import { WEBLLM_CHAT_MODEL_ID } from "../siteConfig";
                 }
 
                 // Initialize RAG Controller (silently)
+                // --- TEMPORARILY COMMENTED OUT RAGController Initialization ---
+                /*
                 if (!ragController && webllmHandler) {
                     ragController = new RAGController(webllmHandler);
                 } else if (!ragController) {
@@ -158,6 +159,8 @@ import { WEBLLM_CHAT_MODEL_ID } from "../siteConfig";
                         "Failed to initialize RAGController: WebLLMHandler is required.",
                     );
                 }
+                */
+                // --- END OF TEMPORARY COMMENT OUT ---
 
                 servicesInitialized = true;
                 // Final success messages
@@ -239,19 +242,17 @@ import { WEBLLM_CHAT_MODEL_ID } from "../siteConfig";
         // --- handleQueryRequest will later use ragController ---
         // Temporarily adapt to check RAG readiness
         async function handleQueryRequest(event: Event) {
-            if (!(event instanceof CustomEvent) || !chatWindowInstance)
-                // Use chatWindowInstance
-                return;
+            if (!(event instanceof CustomEvent) || !chatWindowInstance) return;
             const query = event.detail?.query as string;
 
             if (typeof query !== "string") return;
 
-            // Check if essential services and controller are ready
+            // Check if essential services are ready
             if (
                 !currentDistrictId || // Placeholder, will adapt for Vector RAG
                 !webllmHandler ||
-                !webllmHandler.getIsInitialized() || // Corrected check
-                !ragController // Added null check for ragController
+                !webllmHandler.getIsInitialized()
+                // !ragController // Commented out
             ) {
                 showChatWindowStatus(
                     "AI services not ready or controller missing. Please try reopening the chat.",
@@ -265,35 +266,43 @@ import { WEBLLM_CHAT_MODEL_ID } from "../siteConfig";
             enableChatInput(false);
 
             try {
-                // RAGController is checked for null above
-                await ragController!.processQuery(
-                    query,
-                    currentDistrictId, // Pass currentDistrictId
-                    (
-                        message: string,
-                        type: "ai" | "system" | "error" | "loading",
-                        replaceLast = false,
-                    ) => {
-                        // If ChatWindow.astro's addMessage doesn't support replaceLast directly,
-                        // we ensure that the call to it from here includes it.
-                        // The previous implementation of addMessage in ChatWindow was:
-                        // addMessage(content, type, id = undefined, replaceLastId = undefined)
-                        // We might need to adjust ChatWindow if this new `replaceLast` boolean isn't directly compatible.
-                        // For now, assuming chatWindowInstance.addMessage can take a boolean `replaceLast`.
-                        (chatWindowInstance as any).addMessage(
-                            message,
-                            type,
-                            replaceLast,
-                        );
-                    },
-                );
+                // --- START: Temporary Non-RAG Logic ---
+                console.log("Using direct WebLLMHandler for query:", query);
+                // Define messages array using the current query
+                const messages: {
+                    role: "user" | "system" | "assistant";
+                    content: string;
+                }[] = [
+                    // Optional: Add a system prompt if desired
+                    // { role: "system", content: "You are a helpful assistant." },
+                    { role: "user", content: query },
+                ];
 
-                // No need to handle a return value from processQuery anymore.
-                // const answer = await ragController.processQuery(...)
-                // if (answer && !answer.startsWith("Sorry, I encountered an error")) { ... }
+                const response = await webllmHandler.chatCompletion(
+                    messages,
+                    false, // Non-streaming for simplicity here
+                );
+                if (response !== null) {
+                    showChatWindowStatus(response, "ai");
+                } else {
+                    showChatWindowStatus(
+                        "Sorry, I couldn't get a response.",
+                        "error",
+                    );
+                }
+                // --- END: Temporary Non-RAG Logic ---
+
+                // Original RAG call commented out:
+                /*
+                // await ragController!.processQuery(
+                //     query,
+                //     currentDistrictId, 
+                //     (message, type, replaceLast) => { ... callback ... },
+                // );
+                */
             } catch (error) {
                 console.error(
-                    "Error processing query with RAGController:",
+                    "Error processing query (Direct Handler):",
                     error,
                 );
                 const errorMessage =
@@ -304,10 +313,10 @@ import { WEBLLM_CHAT_MODEL_ID } from "../siteConfig";
                 (chatWindowInstance as any).addMessage(
                     `Error: ${errorMessage}`,
                     "error",
-                    true,
+                    true, // replaceLast = true
                 );
             } finally {
-                (chatWindowInstance as any).enableInput(true); // Use chatWindowInstance
+                enableChatInput(true); // Re-enable input after processing
             }
         }
 
@@ -320,7 +329,9 @@ import { WEBLLM_CHAT_MODEL_ID } from "../siteConfig";
                 handleQueryRequest,
             );
         }
-    });
+
+        // Removed the misplaced direct call block from here
+    }); // End of DOMContentLoaded listener
 </script>
 
 <style>

@@ -1,0 +1,119 @@
+---
+// src/pages/rag-test.astro
+// No server-side processing needed for this basic test page yet.
+---
+
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>RAG Test Page - Astro</title>
+        <style>
+            body {
+                font-family: sans-serif;
+                margin: 20px;
+                background-color: #f4f4f4;
+                color: #333;
+            }
+            .container {
+                max-width: 800px;
+                margin: auto;
+                background-color: #fff;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            }
+            h1 {
+                text-align: center;
+                color: #333;
+            }
+            textarea {
+                width: 98%;
+                padding: 10px;
+                margin-bottom: 10px;
+                border-radius: 4px;
+                border: 1px solid #ddd;
+                font-size: 16px;
+                min-height: 60px;
+            }
+            button {
+                padding: 10px 20px;
+                background-color: #007bff;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 16px;
+            }
+            button:hover {
+                background-color: #0056b3;
+            }
+            button:disabled {
+                background-color: #ccc;
+                cursor: not-allowed;
+            }
+            #responseArea {
+                margin-top: 20px;
+                padding: 15px;
+                border: 1px solid #eee;
+                border-radius: 4px;
+                background-color: #f9f9f9;
+                min-height: 100px;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+            }
+            .status {
+                margin-top: 15px;
+                font-style: italic;
+                color: #555;
+                text-align: center;
+            }
+            .progress-bar-container {
+                width: 100%;
+                background-color: #e0e0e0;
+                border-radius: 4px;
+                margin-bottom: 10px;
+                display: none;
+            }
+            .progress-bar {
+                width: 0%;
+                height: 20px;
+                background-color: #007bff;
+                border-radius: 4px;
+                text-align: center;
+                line-height: 20px;
+                color: white;
+                transition: width 0.3s ease;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>In-Browser RAG Test (Astro Page)</h1>
+
+            <div class="progress-bar-container" id="progressBarContainer">
+                <div class="progress-bar" id="progressBar">0%</div>
+            </div>
+            <div class="status" id="statusLabel">
+                Initializing... please wait.
+            </div>
+
+            <div>
+                <label for="queryInput">Enter your query:</label><br />
+                <textarea id="queryInput" placeholder="Ask something..."
+                ></textarea>
+            </div>
+            <button id="submitQueryBtn" disabled>Submit Query</button>
+
+            <h2>Response:</h2>
+            <div id="responseArea">
+                <!-- AI response will appear here -->
+            </div>
+        </div>
+
+        <!-- Astro will handle the .ts import and compilation -->
+        <script type="module" src="../rag-testing/rag_test_main.ts"></script>
+    </body>
+</html>
+

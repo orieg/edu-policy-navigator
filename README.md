@@ -63,7 +63,7 @@ This project uses [Vitest](https://vitest.dev/) for unit and component testing. 
 
 ## License
 
-This project is licensed under the terms of the [LICENSE](LICENSE) file.
+This project is licensed under the terms of the [LICENSE](LICENSE) file. 
 
 ## Embedding Pipeline
 
