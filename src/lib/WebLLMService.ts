@@ -37,8 +37,9 @@ interface GenerationStreamCallbacks {
 
 
 /**
- * Manages the WebLLM engine, model loading, and text generation.
- * Uses the OpenAI-compatible chat completion API.
+ * Service for interacting with the WebLLM library.
+ * Manages initialization and interaction with different WebLLM engines
+ * (e.g., for chat completion, query embedding).
  */
 export class WebLLMHandler {
     private engine: MLCEngine | null = null;

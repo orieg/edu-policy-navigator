@@ -88,6 +88,8 @@ The data in the browser will be read-only after initial load.
 
 ## Phase 0.5: Client-Side Code & Dependency Cleanup
 
+**Status: [x] Completed**
+
 *   **Goal:** Remove obsolete code and dependencies from previous RAG experiments before starting the new implementation.
 *   **Actions:**
     1.  **Remove Dependencies:**
@@ -246,7 +248,7 @@ The data in the browser will be read-only after initial load.
 **Next Steps (Focus Areas):**
 
 1.  **Offline Pipeline Enhancement (Phase 0):** Output L2-normalized embeddings in per-cluster `.bin` files, ordered metadata (**JSON**), L2-normalized centroids (as `.bin` with ID mapping in manifest, or structured **JSON**), and `manifest.json`.
-2.  **Client-Side Cleanup (Phase 0.5):** Remove old code/dependencies.
+2.  **[x] Client-Side Cleanup (Phase 0.5):** Old code/dependencies removed.
 3.  **Implement Client-Side RAG Core (Phases 1-3 in TypeScript):** `WebLLMService`, `VectorStoreTypes.ts`, `DataLoader.ts`, `ClusteredSearchService.ts`, `RAGManager.ts`.
 4.  **Basic UI Testing with Web Workers (Phases 4-5):** Test core logic and performance.
 5.  **Astro Integration (Phase 6):** Integrate into `ExpandableChatWidget.astro`.
