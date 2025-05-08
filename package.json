@@ -1,7 +1,8 @@
 {
   "name": "edu-policy-navigator",
   "version": "1.0.0",
-  "description": "",
+  "description": "Multi-District Policy Navigator Website",
+  "private": true,
   "type": "module",
   "main": "index.js",
   "scripts": {
@@ -15,11 +16,13 @@
     "build:data": "tsc pipeline/scripts/generateDistrictJson.ts --module nodenext --outDir dist/pipeline/scripts && node dist/pipeline/scripts/generateDistrictJson.js",
     "build:boundaries": "tsc pipeline/scripts/splitBoundaries.ts --module nodenext --outDir dist/pipeline/scripts && node dist/pipeline/scripts/splitBoundaries.js",
     "build:embeddings": "tsc pipeline/scripts/generateClusteredEmbeddings.ts --module nodenext --outDir dist/pipeline/scripts && node dist/pipeline/scripts/generateClusteredEmbeddings.js",
+    "validate:embeddings": "tsc pipeline/scripts/validateEmbeddings.ts --module nodenext --outDir dist/pipeline/scripts && node dist/pipeline/scripts/validateEmbeddings.js",
     "prepare": "pnpm run convert:xlsx && pnpm run build:data && pnpm run build:boundaries && pnpm run build:embeddings",
     "download:osm": "mkdir -p pipeline/data && curl -L -o pipeline/data/california-latest.osm.pbf https://download.geofabrik.de/north-america/us/california-latest.osm.pbf",
     "docker:nominatim": "docker run -it --rm -v ./pipeline/data:/data -v nominatim-data:/var/lib/postgresql/16/main -e PBF_PATH=/data/california-latest.osm.pbf -p 8080:8080 --shm-size=1g --name nominatim mediagis/nominatim:5.1",
     "clean": "rm -rf dist public/assets/boundaries public/assets/districts.json public/assets/schools_by_district.json public/assets/prerender-slugs.json public/embeddings",
     "dev": "pnpm run prepare && astro dev",
+    "start": "astro dev",
     "build": "pnpm run prepare && astro build",
     "preview": "astro preview"
   },

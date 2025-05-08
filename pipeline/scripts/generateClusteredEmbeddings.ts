@@ -540,6 +540,24 @@ async function main() {
 
         const clusterMetadataFilePath = path.join(clusterDir, 'metadata.json');
         await saveJSON(clusterMetadataFilePath, clustersData[i].metadata);
+
+        // Add cluster info to manifest
+        if (clustersData[i].metadata.length > 0) {
+            manifest.clusters.push({
+                clusterId: i,
+                count: clustersData[i].metadata.length,
+                embeddingsFile: path.relative(OUTPUT_DIR, clusterEmbeddingsFilePath),
+                metadataFile: path.relative(OUTPUT_DIR, clusterMetadataFilePath),
+            });
+        } else {
+            manifest.clusters.push({
+                clusterId: i,
+                count: 0,
+                embeddingsFile: null,
+                metadataFile: null,
+            });
+            console.log(`Cluster ${i} is empty. No files were saved.`);
+        }
     }
 
     // Save manifest
