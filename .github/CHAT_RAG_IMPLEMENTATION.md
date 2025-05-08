@@ -245,16 +245,28 @@ The data in the browser will be read-only after initial load.
 
 ## Phase 3: RAG Pipeline Implementation (Client-Side, TypeScript)
 
+**Status: [✅] Completed**
+
+**Summary of Implementation:**
+*   Created `src/lib/ragManager.ts` with the `RAGManager` class.
+*   **Task 3.1 (Query Embedding):** Implemented `RAGManager.getQueryEmbedding()` which delegates to `WebLLMService` for L2-normalized query embeddings.
+*   **Task 3.2 (Two-Stage Document Retrieval):** Implemented `RAGManager.retrieveRelevantDocuments()` which uses the `ClusteredSearchService` to perform a two-stage search (top M clusters, then top K documents per cluster) and returns aggregated, re-sorted results.
+*   **Task 3.3 (Augment Prompt & Generate Response):** Implemented `RAGManager.getRagResponse()` which:
+    *   Orchestrates the RAG flow: gets query embedding, retrieves documents, formats context.
+    *   Constructs a prompt including the retrieved context and the user's query.
+    *   Uses `WebLLMService` (chat engine) to generate a response based on the augmented prompt.
+    *   Includes basic context formatting and handling for cases with no/few documents.
+
 * **Module:** `src/lib/ragManager.ts`.
 
 ### Task 3.1: Query Embedding
-* **Action:** Implement `async getQueryEmbedding(query: string): Promise<Float32Array>` (gets embedding from `webLLMService` and L2-normalizes it).
+* **Action:** Implement `async getQueryEmbedding(query: string): Promise<Float32Array>` (gets embedding from `webLLMService` and L2-normalizes it). **[✅] Done in RAGManager**
 
 ### Task 3.2: Two-Stage Document Retrieval
-* **Action:** Implement `async retrieveRelevantDocuments(...)` using `ClusteredSearchService`.
+* **Action:** Implement `async retrieveRelevantDocuments(...)` using `ClusteredSearchService`. **[✅] Done in RAGManager**
 
 ### Task 3.3: Augment Prompt & Generate Response
-* **Action:** Implement `async getRagResponse(...)` using `webLLMService` (chat engine).
+* **Action:** Implement `async getRagResponse(...)` using `webLLMService` (chat engine). **[✅] Done in RAGManager**
 
 ---
 
@@ -262,39 +274,42 @@ The data in the browser will be read-only after initial load.
 
 **Status: [✅] Completed**
 
-**Summary of Implementation:**
-*   **Task 4.1 (Basic UI):**
-    *   Created `public/rag_test.html` with basic HTML structure including an input area for queries, a submit button, a response display area, a status label, and a progress bar.
-*   **Task 4.2 (Integrate RAG with UI - Web Workers):**
-    *   Created `public/rag_worker.ts`:
-        *   This script runs in a Web Worker.
-        *   It imports `WebLLMService`, `loadAllRAGData`, `ClusteredSearchService`, and `RAGManager`.
-        *   Handles `initialize` messages from the main thread to set up all RAG components (load data, init WebLLM engines).
-        *   Handles `query` messages to process user queries through `ragManager.getRagResponse()`.
-        *   Handles `dispose` messages to unload WebLLM engines.
+**Summary of Implementation (Refactored for Astro Integration):**
+*   **Task 4.1 (Basic UI - Astro Page):**
+    *   Converted `public/rag_test.html` into an Astro page: `src/pages/rag-test.astro`.
+    *   The page retains the basic HTML structure for query input, response display, status, and progress.
+*   **Task 4.2 (Integrate RAG with UI - Web Workers in `src`):**
+    *   Moved and refactored `public/rag_worker.ts` to `src/rag-testing/rag_worker.ts`:
+        *   Runs in a Web Worker, imported by `rag_test_main.ts`.
+        *   Imports `WebLLMService`, `loadAllRAGData` (from `dataLoader.ts`), `ClusteredSearchService`, and `RAGManager`.
+        *   Handles `initialize` messages to set up all RAG components (data loading via `loadAllRAGData`, WebLLM engine initialization via `WebLLMService`, and RAGManager instantiation).
+        *   Handles `query` messages, processing them through `ragManager.getRagResponse()`.
+        *   Handles `dispose` messages to unload WebLLM engines via `WebLLMService`.
         *   Posts `status`, `progress`, and `response` messages back to the main thread.
-    *   Created `public/rag_test_main.ts`:
-        *   This script runs on the main UI thread, linked from `rag_test.html`.
-        *   Initializes and manages the `rag_worker.ts`.
-        *   Handles UI updates based on messages received from the worker (status, progress, response display).
+    *   Moved and refactored `public/rag_test_main.ts` to `src/rag-testing/rag_test_main.ts`:
+        *   This script is imported as a module by `src/pages/rag-test.astro`.
+        *   Initializes and manages `src/rag-testing/rag_worker.ts`.
+        *   Handles UI updates (status, progress, response display) based on messages from the worker.
         *   Sends user queries to the worker.
         *   Includes a `beforeunload` listener to request engine disposal in the worker.
 
 ### Task 4.1: Basic UI
-* **Action:** Create `public/rag_test.html`.
+* **Action:** Create `public/rag_test.html`. (Now `src/pages/rag-test.astro`) **[✅] Done**
 
 ### Task 4.2: Integrate RAG with UI (Web Workers)
-* **Action:** Implement `public/rag_test_main.ts`. Ensure computationally intensive client-side tasks (query embedding, `findTopKClusters`, and especially `searchInCluster` within `retrieveRelevantDocuments`) are offloaded to Web Workers.
+* **Action:** Implement `public/rag_test_main.ts`. Ensure computationally intensive client-side tasks (query embedding, `findTopKClusters`, and especially `searchInCluster` within `retrieveRelevantDocuments`) are offloaded to Web Workers. (Now `src/rag-testing/rag_test_main.ts` and `src/rag-testing/rag_worker.ts`) **[✅] Done**
 
 ---
 
 ## Phase 5: Testing and Refinement (Initial Testbed)
 
+**Status: [In Progress]**
+
 ### Task 5.1: Core Functionality Testing
-* **Action:** Test data loading, binary parsing, normalization, search, RAG.
+* **Action:** Test data loading, binary parsing, normalization, search, RAG. **[✅] Largely completed with successful run of `rag-test.astro`. Further specific edge cases might be tested as part of Phase 6/7.**
 
 ### Task 5.2: Performance & UX
-* **Action:** Profile and optimize.
+* **Action:** Profile and optimize. **[ ] To Do**
 
 ---
 
