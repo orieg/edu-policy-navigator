@@ -30,6 +30,24 @@ The data in the browser will be read-only after initial load.
 
 ## Phase 0: Offline Data Preparation (Pre-computation - Outputs for Client)
 
+**Status: [✅] Completed**
+
+**Summary of Actual Implementation & Key Decisions:**
+*   A new TypeScript pipeline script `pipeline/scripts/generateClusteredEmbeddings.ts` was created and refined.
+*   It uses `@xenova/transformers` (specifically the `Snowflake/snowflake-arctic-embed-xs` model via the `'feature-extraction'` pipeline) for generating L2-normalized embeddings and `ml-kmeans` for clustering.
+*   The script processes data from `public/assets/districts.json` and `public/assets/schools_by_district.json`.
+*   **Outputs in `public/embeddings/school_districts/`:**
+    *   L2-normalized cluster centroids are saved to `centroids.json`.
+    *   For each cluster:
+        *   Embeddings are saved as a flat raw binary file (`<cluster_id>/embeddings.bin`).
+        *   Metadata is saved in a companion JSON file (`<cluster_id>/metadata.json`), ordered consistently with the embeddings.
+    *   A `manifest.json` file is generated, detailing all files, parameters (embedding model, dimensions, K), and cluster information.
+*   K-Means clustering was tuned to `K=24` with `'kmeans++'` initialization for better cluster balance after initial issues with `'random'` initialization and NaN values in embeddings were resolved.
+*   A validation script `pipeline/scripts/validateEmbeddings.ts` was created to ensure the integrity and correctness of all generated files (manifest, centroids, cluster embeddings, and metadata), including checks for dimensions, normalization, and NaN/Infinity values.
+*   Embedding caching (`public/embeddings/.caches/`) was implemented to speed up development iterations.
+
+*(The section below describes the originally intended outputs and structure, which the implementation largely follows.)*
+
 *(This phase is done beforehand by a separate pipeline, e.g., an enhanced `pipeline/scripts/generateEmbeddings.mjs`. The client-side agent needs to understand these output formats.)*
 
 ### Task 0.1: Document Chunking (Offline)
