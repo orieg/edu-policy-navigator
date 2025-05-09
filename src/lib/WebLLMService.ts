@@ -33,24 +33,37 @@ class WebLLMService {
                     model_type: ModelType.embedding,
                 };
             } else {
-                // Default to original logic for MLC-provided/named models
-                console.log(`Configuring MLC-style embedding model: ${this.embeddingModelId}`);
-                // Determine the base name, removing potential HuggingFace org prefix
-                const modelBaseName = this.embeddingModelId.includes('/') ? this.embeddingModelId.split('/')[1] : this.embeddingModelId;
-                // Ensure the -MLC suffix is present for constructing the mlc-ai path
-                const mlcModelName = modelBaseName.endsWith("-MLC") ? modelBaseName : `${modelBaseName}-MLC`;
+                // Logic for MLC-formatted models (can be under mlc-ai or user-hosted)
+                console.log(`Configuring MLC-formatted embedding model: ${this.embeddingModelId}`);
+                let modelHFPath: string;    // Full HuggingFace path, e.g., "mlc-ai/Llama-2-7b-chat-hf-q4f16_1" OR "orieg/my-model-mlc"
+                let wasmNamePart: string; // The part used to construct the WASM filename, e.g., "Llama-2-7b-chat-hf-q4f16_1" OR "my-model-mlc"
 
-                const modelUrlBase = `https://huggingface.co/mlc-ai/${mlcModelName}/resolve/main/`;
-                // For MLC models, model_lib is typically <mlcModelName>-webllm.wasm
-                const modelLibWasm = `${mlcModelName}-webllm.wasm`;
+                if (this.embeddingModelId.includes('/')) {
+                    // Full HF ID provided, e.g., "orieg/snowflake-arctic-embed-xs-mlc"
+                    modelHFPath = this.embeddingModelId;
+                    wasmNamePart = this.embeddingModelId.split('/')[1]; // Takes "snowflake-arctic-embed-xs-mlc"
+                } else {
+                    // Short name, assume it's an mlc-ai model.
+                    // For user-hosted models, always prefer the full "username/modelname" ID.
+                    console.warn(`MLC model ID "${this.embeddingModelId}" does not contain '/'. Assuming it's an mlc-ai model. For user-hosted models, please use the full 'username/modelname' ID.`);
+                    // Ensure -MLC suffix for pathing under mlc-ai for their conventionally named models
+                    wasmNamePart = this.embeddingModelId.endsWith("-MLC")
+                        ? this.embeddingModelId
+                        : `${this.embeddingModelId}-MLC`;
+                    modelHFPath = `mlc-ai/${wasmNamePart}`;
+                }
+
+                const modelUrlBase = `https://huggingface.co/${modelHFPath}/resolve/main/`;
+                // Standard MLC WASM naming convention: <repo_name_or_wasmNamePart>-webllm.wasm
+                const modelLibWasmFileName = `${wasmNamePart}-webllm.wasm`;
 
                 console.log(`  Using model URL base: ${modelUrlBase}`);
-                console.log(`  Using model lib WASM: ${modelLibWasm}`);
+                console.log(`  Using model lib WASM: ${modelUrlBase}${modelLibWasmFileName}`);
 
                 modelRecord = {
-                    model_id: this.embeddingModelId, // This ID is used to select the model from the list
-                    model: modelUrlBase,             // Path to the directory containing model files and model_lib
-                    model_lib: modelLibWasm,         // Filename of the WASM, relative to modelUrlBase
+                    model_id: this.embeddingModelId, // The ID used to initially select this model config
+                    model: modelUrlBase,             // Full path to model files directory
+                    model_lib: `${modelUrlBase}${modelLibWasmFileName}`, // FULL URL to the WASM file
                     model_type: ModelType.embedding,
                 };
             }
@@ -80,32 +93,30 @@ class WebLLMService {
         }
     }
 
-    public async initializeChatEngine(config?: Omit<MLCEngineConfig, 'appConfig'>): Promise<void> {
+    public async initializeChatEngine(engineConfigOverride?: MLCEngineConfig): Promise<void> {
         if (this.chatEngine) {
             console.log("WebLLMService: Chat engine already initialized.");
             return;
         }
-        console.log(`WebLLMService: Initializing chat engine with model: ${this.chatModelId}...`);
+        console.log(`WebLLMService: Initializing chat engine with model ID: ${this.chatModelId}...`);
         try {
-            const chatModelRecord = {
-                model_id: this.chatModelId,
-                model: this.chatModelId, // For prebuilt/known MLC models
-                model_lib: `${this.chatModelId}-webllm` // e.g., SmolLM2-135M-Instruct-q0f16-MLC-webllm
+            // For prebuilt models, rely on WebLLM's internal config.
+            // We primarily pass initProgressCallback if it was set on the service instance,
+            // and allow other MLCEngineConfig properties to be overridden.
+            const finalEngineConfig: MLCEngineConfig = {
+                initProgressCallback: this.initProgressCallback, // from constructor
+                ...(engineConfigOverride || {}), // Allow overriding initProgressCallback or other top-level props
             };
 
-            const appConfigForEngine = {
-                model_list: [chatModelRecord]
-            };
-
-            const engineConfig: MLCEngineConfig = {
-                ...(config || {}),
-                initProgressCallback: this.initProgressCallback,
-                appConfig: appConfigForEngine
-            };
+            // Explicitly remove appConfig if it came from engineConfigOverride, 
+            // to ensure WebLLM uses its internal prebuiltAppConfig for the chat model.
+            if (finalEngineConfig.appConfig) {
+                delete finalEngineConfig.appConfig;
+            }
 
             this.chatEngine = await CreateMLCEngine(
-                this.chatModelId, // Specifies which model from the list to load
-                engineConfig
+                this.chatModelId, // WebLLM uses this to find the model in its prebuiltAppConfig
+                finalEngineConfig
             );
             console.log("WebLLMService: Chat engine initialized successfully.");
         } catch (error) {
