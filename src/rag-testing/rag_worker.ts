@@ -14,6 +14,16 @@ let webLLMService: WebLLMService | null = null;
 // a root-relative path from the domain should work.
 const MANIFEST_URL = '/embeddings/school_districts/manifest.json';
 
+// Helper for cosine similarity (dot product of L2 normalized vectors)
+function calculateCosineSimilarity(vecA: Float32Array, vecB: Float32Array): number {
+    if (vecA.length !== vecB.length) return 0;
+    let dotProduct = 0;
+    for (let i = 0; i < vecA.length; i++) {
+        dotProduct += vecA[i] * vecB[i];
+    }
+    return dotProduct; // Assumes vectors are already L2 normalized by getQueryEmbedding
+}
+
 self.onmessage = async (event: MessageEvent) => {
     console.log("RAG Worker: Message received from main thread:", event.data);
     const { type, payload } = event.data;
@@ -81,6 +91,46 @@ self.onmessage = async (event: MessageEvent) => {
                 console.error("RAG Worker: Error processing query:", error);
                 self.postMessage({ type: 'response', payload: { error: `Error processing query: ${(error as Error).message}` } });
                 self.postMessage({ type: 'status', payload: { message: 'Error processing query. Ready for new query.', isError: true, isReady: true } });
+            }
+            break;
+
+        case 'GET_EMBEDDING_SIMILARITY':
+            if (!webLLMService) {
+                self.postMessage({
+                    type: 'SIMILARITY_RESULT',
+                    payload: { sampleId: payload.sampleId, webLLMSimilarity: null, error: 'WebLLMService not initialized.' }
+                });
+                return;
+            }
+            if (!payload || !payload.text1 || !payload.text2 || !payload.sampleId) {
+                self.postMessage({
+                    type: 'SIMILARITY_RESULT',
+                    payload: { sampleId: payload.sampleId, webLLMSimilarity: null, error: 'Invalid payload for similarity test.' }
+                });
+                return;
+            }
+            try {
+                const embedding1 = await webLLMService.getQueryEmbedding(payload.text1);
+                const embedding2 = await webLLMService.getQueryEmbedding(payload.text2);
+
+                if (!embedding1 || !embedding2) {
+                    throw new Error('Failed to generate one or both embeddings using WebLLM.');
+                }
+
+                // getQueryEmbedding should already L2 normalize.
+                const similarity = calculateCosineSimilarity(embedding1, embedding2);
+
+                self.postMessage({
+                    type: 'SIMILARITY_RESULT',
+                    payload: { sampleId: payload.sampleId, webLLMSimilarity: similarity, error: null }
+                });
+
+            } catch (error) {
+                console.error("RAG Worker: Error calculating WebLLM similarity:", error);
+                self.postMessage({
+                    type: 'SIMILARITY_RESULT',
+                    payload: { sampleId: payload.sampleId, webLLMSimilarity: null, error: (error as Error).message }
+                });
             }
             break;
 

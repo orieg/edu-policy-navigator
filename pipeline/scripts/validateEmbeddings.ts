@@ -3,6 +3,7 @@
 
 import { promises as fs } from 'fs';
 import path from 'path';
+import { pipeline, env } from '@xenova/transformers';
 
 // --- Configuration (Should match generateClusteredEmbeddings.ts) ---
 const OUTPUT_DIR = path.resolve(process.cwd(), 'public', 'embeddings', 'school_districts');
@@ -10,6 +11,7 @@ const MANIFEST_PATH = path.join(OUTPUT_DIR, 'manifest.json');
 const EXPECTED_EMBEDDING_MODEL_ID = 'Snowflake/snowflake-arctic-embed-xs';
 const EXPECTED_EMBEDDING_DIMENSIONS = 384;
 const NORMALIZATION_TOLERANCE = 1e-5; // Tolerance for checking L2 norm
+const SIMILARITY_SAMPLES_OUTPUT_PATH = path.join(OUTPUT_DIR, '..', 'similarity_validation_samples.json'); // Save one level up from school_districts
 
 // --- Interfaces (Should match generateClusteredEmbeddings.ts output) ---
 interface DocumentChunkMetadata {
@@ -34,8 +36,8 @@ interface ClusterInfo {
 }
 
 interface Manifest {
-    model: string;
-    dimensions: number;
+    embeddingModelId: string;
+    embeddingDimensions: number;
     clusterAlgorithm: string;
     k: number;
     centroidsFile: string;
@@ -72,6 +74,24 @@ function checkArrayForNaNInf(arr: number[] | Float32Array, context: string): boo
     return true;
 }
 
+function cosineSimilarity(vecA: number[], vecB: number[]): number {
+    if (vecA.length !== vecB.length) {
+        throw new Error('Vectors must be of the same length to compute cosine similarity.');
+    }
+    let dotProduct = 0;
+    let normA = 0;
+    let normB = 0;
+    for (let i = 0; i < vecA.length; i++) {
+        dotProduct += vecA[i] * vecB[i];
+        normA += vecA[i] * vecA[i];
+        normB += vecB[i] * vecB[i];
+    }
+    if (normA === 0 || normB === 0) {
+        return 0; // Avoid division by zero if one vector is zero
+    }
+    return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+}
+
 // --- Main Validation Logic ---
 async function validateEmbeddings(): Promise<boolean> {
     console.log(`Starting validation of embeddings in: ${OUTPUT_DIR}`);
@@ -90,14 +110,14 @@ async function validateEmbeddings(): Promise<boolean> {
     }
 
     // Validate manifest content
-    if (manifest.model !== EXPECTED_EMBEDDING_MODEL_ID) {
-        console.error(`❌ Manifest Error: Unexpected model ID. Expected ${EXPECTED_EMBEDDING_MODEL_ID}, found ${manifest.model}`);
+    if (manifest.embeddingModelId !== EXPECTED_EMBEDDING_MODEL_ID) {
+        console.error(`❌ Manifest Error: Unexpected model ID. Expected ${EXPECTED_EMBEDDING_MODEL_ID}, found ${manifest.embeddingModelId}`);
         overallSuccess = false;
     } else {
         console.log(`  ✅ Model ID matches expected (${EXPECTED_EMBEDDING_MODEL_ID}).`);
     }
-    if (manifest.dimensions !== EXPECTED_EMBEDDING_DIMENSIONS) {
-        console.error(`❌ Manifest Error: Unexpected dimensions. Expected ${EXPECTED_EMBEDDING_DIMENSIONS}, found ${manifest.dimensions}`);
+    if (manifest.embeddingDimensions !== EXPECTED_EMBEDDING_DIMENSIONS) {
+        console.error(`❌ Manifest Error: Unexpected dimensions. Expected ${EXPECTED_EMBEDDING_DIMENSIONS}, found ${manifest.embeddingDimensions}`);
         overallSuccess = false;
     } else {
         console.log(`  ✅ Dimensions match expected (${EXPECTED_EMBEDDING_DIMENSIONS}).`);
@@ -144,8 +164,8 @@ async function validateEmbeddings(): Promise<boolean> {
                 overallSuccess = false;
                 continue;
             }
-            if (entry.centroid.length !== manifest.dimensions) {
-                console.error(`❌ Centroids Error: Incorrect dimensions for ${context}. Expected ${manifest.dimensions}, found ${entry.centroid.length}.`);
+            if (entry.centroid.length !== manifest.embeddingDimensions) {
+                console.error(`❌ Centroids Error: Incorrect dimensions for ${context}. Expected ${manifest.embeddingDimensions}, found ${entry.centroid.length}.`);
                 overallSuccess = false;
             }
             if (!checkArrayForNaNInf(entry.centroid, context)) {
@@ -227,7 +247,7 @@ async function validateEmbeddings(): Promise<boolean> {
         try {
             const buffer = await fs.readFile(embeddingsPath);
             console.log(`    ✅ Embeddings file (${path.basename(embeddingsPath)}) read successfully.`);
-            const expectedSizeBytes = clusterInfo.count * manifest.dimensions * 4; // Float32 = 4 bytes
+            const expectedSizeBytes = clusterInfo.count * manifest.embeddingDimensions * 4;
             if (buffer.byteLength !== expectedSizeBytes) {
                 console.error(`    ❌ Embeddings Error: Incorrect file size. Expected ${expectedSizeBytes} bytes, found ${buffer.byteLength}.`);
                 clusterSuccess = false;
@@ -239,14 +259,14 @@ async function validateEmbeddings(): Promise<boolean> {
 
             // Check each embedding
             let numEmbeddingsInFile = 0;
-            for (let i = 0; i < embeddingsArray.length; i += manifest.dimensions) {
+            for (let i = 0; i < embeddingsArray.length; i += manifest.embeddingDimensions) {
                 numEmbeddingsInFile++;
-                const embedding = embeddingsArray.slice(i, i + manifest.dimensions);
+                const embedding = embeddingsArray.slice(i, i + manifest.embeddingDimensions);
                 const context = `cluster ${clusterInfo.clusterId}, embedding ${numEmbeddingsInFile - 1}`;
 
-                if (embedding.length !== manifest.dimensions) {
+                if (embedding.length !== manifest.embeddingDimensions) {
                     // This check should be redundant if file size is correct, but good practice
-                    console.error(`    ❌ Embeddings Error: Incorrect dimensions for ${context}. Expected ${manifest.dimensions}, found ${embedding.length}.`);
+                    console.error(`    ❌ Embeddings Error: Incorrect dimensions for ${context}. Expected ${manifest.embeddingDimensions}, found ${embedding.length}.`);
                     clusterSuccess = false;
                     break; // Stop checking this file if dimensions are wrong early
                 }
@@ -289,12 +309,130 @@ async function validateEmbeddings(): Promise<boolean> {
     return overallSuccess;
 }
 
-// Run the validation
-validateEmbeddings()
-    .then(success => {
-        process.exit(success ? 0 : 1);
-    })
-    .catch(error => {
-        console.error("\nUnhandled error during validation:", error);
-        process.exit(1);
-    }); 
+// --- New Section: Similarity Validation and Sample Generation ---
+interface SimilaritySample {
+    id: string;
+    text1: string;
+    text2: string;
+    embedding1?: number[]; // Optional, for debugging or direct use
+    embedding2?: number[]; // Optional
+    transformersJsSimilarity: number | null;
+}
+
+async function validateSimilarityAndGenerateSamples(): Promise<boolean> {
+    console.log(`\n--- Validating Similarity & Generating Samples (${path.basename(SIMILARITY_SAMPLES_OUTPUT_PATH)}) ---`);
+    let success = true;
+
+    const sampleTexts: Omit<SimilaritySample, 'transformersJsSimilarity'>[] = [
+        {
+            id: 'sample1_similar',
+            text1: 'The weather is sunny and warm today.',
+            text2: 'It is a beautiful day with clear skies and high temperatures.'
+        },
+        {
+            id: 'sample2_dissimilar',
+            text1: 'Apples are a type of fruit.',
+            text2: 'A bicycle is a mode of transportation.'
+        },
+        {
+            id: 'sample3_identical',
+            text1: 'The quick brown fox jumps over the lazy dog.',
+            text2: 'The quick brown fox jumps over the lazy dog.'
+        },
+        {
+            id: 'sample4_edge_case_short',
+            text1: 'hi',
+            text2: 'hello'
+        }
+    ];
+
+    const outputSamples: SimilaritySample[] = [];
+
+    try {
+        // Configure transformers.js for Node.js environment
+        env.allowLocalModels = true; // Assuming model might be cached locally by previous runs
+        env.allowRemoteModels = true;
+        env.useBrowserCache = false; // Not in browser
+        env.localModelPath = path.resolve(process.cwd(), 'models'); // If you have a dedicated local model path
+        env.cacheDir = path.resolve(process.cwd(), '.cache', 'transformers-cache'); // Cache for node
+
+        console.log(`  Initializing feature-extraction pipeline with model: ${EXPECTED_EMBEDDING_MODEL_ID}`);
+        const extractor = await pipeline('feature-extraction', EXPECTED_EMBEDDING_MODEL_ID, {
+            quantized: false, // Ensure we get float32 for best comparison initially
+            progress_callback: (progress: any) => {
+                if (progress.status === 'progress') {
+                    // console.log(`    Model loading progress: ${progress.file} ${Math.round(progress.loaded / progress.total * 100)}%`);
+                } else if (progress.status === 'ready') {
+                    console.log('    Feature extraction pipeline ready.');
+                }
+            }
+        });
+        console.log('  ✅ Feature extraction pipeline initialized.');
+
+        for (const sample of sampleTexts) {
+            console.log(`    Processing sample: ${sample.id}`);
+            let emb1: number[] | undefined;
+            let emb2: number[] | undefined;
+            let similarity: number | null = null;
+
+            try {
+                const output1 = await extractor(sample.text1, { pooling: 'cls', normalize: true });
+                emb1 = Array.from(output1.data as Float32Array);
+
+                const output2 = await extractor(sample.text2, { pooling: 'cls', normalize: true });
+                emb2 = Array.from(output2.data as Float32Array);
+
+                if (emb1.length !== EXPECTED_EMBEDDING_DIMENSIONS || emb2.length !== EXPECTED_EMBEDDING_DIMENSIONS) {
+                    console.error(`    ❌ Sample ${sample.id} Error: Embedding dimension mismatch. Got ${emb1.length}, ${emb2.length}. Expected ${EXPECTED_EMBEDDING_DIMENSIONS}`);
+                    success = false;
+                    // Continue to next sample but mark this one as failed.
+                } else {
+                    similarity = cosineSimilarity(emb1, emb2);
+                    console.log(`      Text 1: "${sample.text1.substring(0, 30)}..."`);
+                    console.log(`      Text 2: "${sample.text2.substring(0, 30)}..."`);
+                    console.log(`      Similarity (transformers.js): ${similarity?.toFixed(6)}`);
+                }
+            } catch (e: any) {
+                console.error(`    ❌ Sample ${sample.id} Error generating embeddings or similarity: ${e.message}`);
+                success = false;
+            }
+            outputSamples.push({ ...sample, embedding1: emb1, embedding2: emb2, transformersJsSimilarity: similarity });
+        }
+
+        // Save the samples to JSON
+        await fs.writeFile(SIMILARITY_SAMPLES_OUTPUT_PATH, JSON.stringify(outputSamples, null, 2));
+        console.log(`  ✅ Similarity samples saved to ${SIMILARITY_SAMPLES_OUTPUT_PATH}`);
+
+    } catch (error: any) {
+        console.error(`❌ Error during similarity validation setup or processing: ${error.message}`);
+        success = false;
+    }
+
+    return success;
+}
+
+// --- Main Execution ---
+async function main() {
+    const validationSuccess = await validateEmbeddings();
+    if (!validationSuccess) {
+        console.error('\nCore embedding validation failed. Some tests were unsuccessful.');
+        // process.exit(1); // Decide if core failure should halt everything
+    }
+
+    const similarityTestSuccess = await validateSimilarityAndGenerateSamples();
+    if (!similarityTestSuccess) {
+        console.error('\nSimilarity validation and sample generation encountered errors.');
+    }
+
+    if (validationSuccess && similarityTestSuccess) {
+        console.log('\nAll validation checks and sample generation completed successfully!');
+    } else {
+        console.warn('\nSome validation checks or sample generation steps failed. Please review logs.');
+        process.exit(1); // Exit with error if any part failed.
+    }
+}
+
+main().catch(error => {
+    console.error('Unhandled error during validation script execution:', error);
+    process.exit(1);
+}); 

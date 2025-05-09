@@ -405,165 +405,154 @@ async function saveJSON(filePath: string, data: any) {
 
 async function main() {
     console.log("Starting embedding generation and clustering process...");
+    await fs.mkdir(OUTPUT_DIR, { recursive: true });
+    await fs.mkdir(RAW_EMBEDDINGS_CACHE_DIR, { recursive: true });
 
-    // --- Step 0.0: Load and Prepare Data ---
-    const documentsToProcess = await loadAndPrepareData();
-    if (documentsToProcess.length === 0) {
-        console.log("No documents found to process. Exiting.");
+    // Initialize the feature extraction pipeline
+    console.log(`Initializing feature extraction pipeline with model: ${EMBEDDING_MODEL_ID}`);
+    const extractor = await pipeline('feature-extraction', EMBEDDING_MODEL_ID, {
+        quantized: false, // Using float32 for best quality embeddings
+        progress_callback: (progress: any) => {
+            if (progress.status === 'progress') {
+                // console.log(`  Model loading progress: ${progress.file} ${Math.round(progress.loaded / progress.total * 100)}%`);
+            } else if (progress.status === 'ready') {
+                console.log('  Feature extraction pipeline ready.');
+            }
+        }
+    });
+    console.log("Feature extraction pipeline initialized.");
+
+    const documents = await loadAndPrepareData();
+    if (documents.length === 0) {
+        console.error("No documents found after loading and preparation. Exiting.");
         return;
     }
 
-    // Ensure output directories exist
-    await fs.mkdir(OUTPUT_DIR, { recursive: true });
-    await fs.mkdir(RAW_EMBEDDINGS_CACHE_DIR, { recursive: true }); // Ensure cache directory exists
+    console.log("Generating or loading embeddings for all documents...");
+    const allEmbeddings: Float32Array[] = [];
+    const allDocumentChunks: DocumentChunk[] = [];
 
-    // --- Step 0.1: Initialize Embedding Pipeline --- Change: Initialize pipeline
-    console.log(`Initializing feature-extraction pipeline with model: ${EMBEDDING_MODEL_ID}`);
-    const extractor = await pipeline('feature-extraction', EMBEDDING_MODEL_ID);
-    console.log('Feature-extraction pipeline initialized.');
+    for (let i = 0; i < documents.length; i++) {
+        const doc = documents[i];
+        const cacheFileName = `${doc.id.replace(/\//g, '_')}.emb.bin`; // Sanitize ID for filename
+        const cacheFilePath = path.join(RAW_EMBEDDINGS_CACHE_DIR, cacheFileName);
 
-    // --- Step 0.2: Embedding Generation & Normalization --- Change: Use pipeline
-    const allEmbeddingsNumeric: number[][] = []; // Store L2-normalized embeddings as number arrays
-    const allDocumentChunks: DocumentChunk[] = []; // Store corresponding chunk data
+        let embedding = await loadEmbeddingFromCache(cacheFilePath, EMBEDDING_DIMENSIONS);
 
-    console.log(`Generating embeddings for ${documentsToProcess.length} documents...`);
-    for (let i = 0; i < documentsToProcess.length; i++) {
-        const doc = documentsToProcess[i];
-        process.stdout.write(`\rEmbedding document ${i + 1}/${documentsToProcess.length} (ID: ${doc.id})...`);
-
-        const cachedEmbeddingPath = path.join(RAW_EMBEDDINGS_CACHE_DIR, `${doc.id}.bin`);
-        let embedding: number[] | null = await loadEmbeddingFromCache(cachedEmbeddingPath, EMBEDDING_DIMENSIONS);
-
-        if (embedding) {
-            // Optional: log cache hit
-            // process.stdout.write(`\rLoaded embedding for document ${i + 1}/${documentsToProcess.length} (ID: ${doc.id}) from cache.`);
-        } else {
-            try {
-                embedding = await getEmbedding(doc.text, extractor); // Changed: Pass extractor instead of tokenizer/model
-
-                // Handle case where getEmbedding signalled failure by returning empty array
-                if (!embedding || embedding.length === 0) {
-                    console.warn(`\nWarning: Failed to generate a valid embedding for doc ${doc.id}. Skipping this document.`);
-                    embedding = null;
-                } else if (embedding.length !== EMBEDDING_DIMENSIONS) { // Double check final length
-                    console.warn(`\nWarning: Embedding for doc ${doc.id} has unexpected final dimension ${embedding.length}, expected ${EMBEDDING_DIMENSIONS}. Skipping.`);
-                    embedding = null; // Mark as null to skip
-                } else {
-                    // Save the newly generated and validated embedding to cache
-                    await saveEmbeddingToCache(cachedEmbeddingPath, embedding);
-                }
-            } catch (error: any) {
-                console.error(`\nError processing document ${doc.id} through pipeline: ${error.message}`);
-                embedding = null; // Mark as null to skip
+        if (!embedding) {
+            const generatedEmbedding = await getEmbedding(doc.text, extractor);
+            if (generatedEmbedding && generatedEmbedding.length > 0) {
+                embedding = generatedEmbedding;
+                await saveEmbeddingToCache(cacheFilePath, embedding);
+            } else {
+                console.warn(`Failed to generate embedding for document ${doc.id}. Skipping.`);
+                continue; // Skip this document if embedding fails
             }
         }
 
-        if (embedding) { // Only proceed if embedding is valid (either from cache or newly generated)
-            allEmbeddingsNumeric.push(embedding);
+        if (embedding) {
+            if (embedding.length !== EMBEDDING_DIMENSIONS) {
+                console.warn(`Embedding for ${doc.id} has incorrect dimensions (${embedding.length}). Expected ${EMBEDDING_DIMENSIONS}. Skipping.`);
+                continue;
+            }
+            // Check for NaN/Infinity in the final embedding before adding
+            const float32Embedding = embedding instanceof Float32Array ? embedding : new Float32Array(embedding);
+            if (Array.from(float32Embedding).some(val => isNaN(val) || !isFinite(val))) {
+                console.error(`Embedding for document ID ${doc.id} contains NaN or Infinity values. Text: ${doc.text.substring(0, 100)}... Skipping.`);
+                continue;
+            }
+
+            allEmbeddings.push(float32Embedding);
             allDocumentChunks.push({
-                id: doc.id, // This is `district_CDSCode` or `school_CDSCode`
-                text: doc.text, // Full text that was embedded
+                id: doc.id,
+                text: doc.text,
                 metadata: {
                     type: doc.type,
                     cdsCode: doc.cdsCode,
                     name: doc.originalData.District || doc.originalData.School || 'N/A',
                     city: doc.originalData['Street City'] || 'N/A',
-                    // You can add more fields from doc.originalData here if needed for the client
+                    ...doc.originalData // Spread original data for any other useful fields
                 }
             });
         }
-    }
-    process.stdout.write("\nDone generating embeddings.\n");
-
-    if (allEmbeddingsNumeric.length === 0) {
-        console.error("No valid embeddings were generated. Exiting.");
-        return;
-    }
-    if (allEmbeddingsNumeric.length !== allDocumentChunks.length) {
-        console.error("Mismatch between embeddings count and document chunks count. Exiting.");
-        return;
-    }
-
-    // Convert to Float32Array for k-means and binary saving
-    const allEmbeddingsF32: Float32Array[] = allEmbeddingsNumeric.map(emb => new Float32Array(emb));
-
-    // --- Step 0.3: Clustering Embeddings ---
-    if (allEmbeddingsF32.length < NUM_CLUSTERS_K) {
-        console.warn(`Number of embeddings (${allEmbeddingsF32.length}) is less than K=${NUM_CLUSTERS_K}. Adjusting K.`);
-        NUM_CLUSTERS_K = Math.max(1, allEmbeddingsF32.length); // Ensure K is at least 1
-    }
-
-    const { centroids, assignments } = await performKMeans(allEmbeddingsF32, NUM_CLUSTERS_K, allDocumentChunks);
-    // centroids are Float32Array[], assignments is number[]
-
-    // --- Step 0.4: Save Data Per Cluster and Centroids ---
-    console.log('Saving clustered data...');
-    const manifest = {
-        model: EMBEDDING_MODEL_ID,
-        dimensions: EMBEDDING_DIMENSIONS,
-        clusterAlgorithm: 'ml-kmeans',
-        k: NUM_CLUSTERS_K,
-        centroidsFile: 'centroids.json', // Or .bin, based on final decision
-        clusters: [] as any[],
-    };
-
-    // Save L2-normalized centroids
-    // Option 1: Save as structured JSON (easier to inspect, contains IDs if we map them)
-    // Option 2: Save as raw binary .bin (more compact) with an ordered ID list in manifest or separate JSON.
-    // Current plan: "Save L2-normalized centroids (either as raw binary .bin with an ordered ID list, or as structured .json)"
-    // Let's go with structured JSON for centroids for easier debugging for now.
-    const centroidObjects = centroids.map((centroid, i) => ({
-        clusterId: i,
-        centroid: Array.from(centroid) // Convert Float32Array to number[] for JSON
-    }));
-    await saveJSON(path.join(OUTPUT_DIR, manifest.centroidsFile), centroidObjects);
-
-    // Group documents by cluster and save
-    const clustersData: { embeddings: Float32Array[], metadata: DocumentChunk[] }[] = Array.from({ length: NUM_CLUSTERS_K }, () => ({ embeddings: [], metadata: [] }));
-
-    for (let i = 0; i < allDocumentChunks.length; i++) {
-        const clusterIndex = assignments[i];
-        if (clusterIndex >= 0 && clusterIndex < NUM_CLUSTERS_K) {
-            clustersData[clusterIndex].embeddings.push(allEmbeddingsF32[i]);
-            clustersData[clusterIndex].metadata.push(allDocumentChunks[i]); // Push the full DocumentChunk object
-        } else {
-            console.warn(`Warning: Document chunk ${allDocumentChunks[i].id} has invalid cluster assignment (${clusterIndex}). Skipping.`);
+        if ((i + 1) % 100 === 0) {
+            console.log(`Processed ${i + 1}/${documents.length} documents...`);
         }
     }
+
+    if (allEmbeddings.length === 0) {
+        console.error("No embeddings were successfully generated. Exiting.");
+        return;
+    }
+    console.log(`Successfully generated/loaded ${allEmbeddings.length} embeddings with ${EMBEDDING_DIMENSIONS} dimensions.`);
+
+    const { centroids, assignments } = await performKMeans(allEmbeddings, NUM_CLUSTERS_K, allDocumentChunks);
+
+    if (centroids.length < NUM_CLUSTERS_K) {
+        console.warn(`KMeans resulted in ${centroids.length} clusters, which is less than the requested K=${NUM_CLUSTERS_K}. Updating K.`);
+        NUM_CLUSTERS_K = centroids.length;
+    }
+    if (NUM_CLUSTERS_K === 0 && allEmbeddings.length > 0) {
+        console.error("KMeans failed to produce any clusters, but embeddings were present. Exiting.");
+        return;
+    }
+
+    console.log(`Clustering complete. Found ${NUM_CLUSTERS_K} clusters.`);
+
+    const manifestData = {
+        embeddingModelId: EMBEDDING_MODEL_ID,       // Corrected key
+        embeddingDimensions: EMBEDDING_DIMENSIONS,  // Corrected key
+        clusterAlgorithm: "ml-kmeans", // Or your specific algorithm
+        k: NUM_CLUSTERS_K,
+        centroidsFile: "centroids.json",
+        clusters: [] as any[] // Initialize as any[] for now, will be populated correctly
+    };
+
+    const centroidsOutput = centroids.map((centroid, index) => ({
+        clusterId: index, // Ensure clusterId is a number as expected by validation
+        centroid: Array.from(centroid)
+    }));
+    await saveJSON(path.join(OUTPUT_DIR, "centroids.json"), centroidsOutput);
 
     for (let i = 0; i < NUM_CLUSTERS_K; i++) {
         const clusterDir = path.join(OUTPUT_DIR, `cluster_${i}`);
         await fs.mkdir(clusterDir, { recursive: true });
 
-        const clusterEmbeddingsFilePath = path.join(clusterDir, 'embeddings.bin');
-        await saveBinaryFloat32(clusterEmbeddingsFilePath, clustersData[i].embeddings);
+        const clusterIndices = assignments.reduce((acc, label, idx) => {
+            if (label === i) acc.push(idx);
+            return acc;
+        }, [] as number[]);
 
-        const clusterMetadataFilePath = path.join(clusterDir, 'metadata.json');
-        await saveJSON(clusterMetadataFilePath, clustersData[i].metadata);
+        const clusterEmbeddings: Float32Array[] = [];
+        const clusterMetadata: DocumentChunk[] = [];
 
-        // Add cluster info to manifest
-        if (clustersData[i].metadata.length > 0) {
-            manifest.clusters.push({
-                clusterId: i,
-                count: clustersData[i].metadata.length,
-                embeddingsFile: path.relative(OUTPUT_DIR, clusterEmbeddingsFilePath),
-                metadataFile: path.relative(OUTPUT_DIR, clusterMetadataFilePath),
-            });
+        if (clusterIndices.length === 0) {
+            console.warn(`Cluster ${i} has no documents assigned.`);
+            // Save empty files for consistency if expected by loader
+            await saveBinaryFloat32(path.join(clusterDir, "embeddings.bin"), []);
+            await saveJSON(path.join(clusterDir, "metadata.json"), []);
         } else {
-            manifest.clusters.push({
-                clusterId: i,
-                count: 0,
-                embeddingsFile: null,
-                metadataFile: null,
-            });
-            console.log(`Cluster ${i} is empty. No files were saved.`);
+            for (const docIdx of clusterIndices) {
+                clusterEmbeddings.push(allEmbeddings[docIdx]);
+                clusterMetadata.push(allDocumentChunks[docIdx]);
+            }
+            await saveBinaryFloat32(path.join(clusterDir, "embeddings.bin"), clusterEmbeddings);
+            await saveJSON(path.join(clusterDir, "metadata.json"), clusterMetadata);
         }
+
+        manifestData.clusters.push({
+            clusterId: i, // Ensure clusterId is a number
+            count: clusterIndices.length,
+            embeddingsFile: clusterIndices.length > 0 ? `cluster_${i}/embeddings.bin` : null,
+            metadataFile: clusterIndices.length > 0 ? `cluster_${i}/metadata.json` : null,
+        });
+        console.log(`Saved data for cluster ${i} with ${clusterIndices.length} embeddings.`);
     }
 
-    // Save manifest
-    await saveJSON(OUTPUT_MANIFEST_PATH, manifest);
-
-    console.log('Clustering and data saving completed.');
+    await saveJSON(OUTPUT_MANIFEST_PATH, manifestData);
+    console.log("Process completed successfully.");
 }
 
-main();
+main().catch(error => {
+    console.error("Error in main function:", error);
+});

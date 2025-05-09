@@ -9,7 +9,7 @@
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
         <title>RAG Test Page - Astro</title>
-        <style>
+        <style is:global>
             body {
                 font-family: sans-serif;
                 margin: 20px;
@@ -86,6 +86,35 @@
                 color: white;
                 transition: width 0.3s ease;
             }
+
+            /* Styles for the similarity validation table */
+            #similarityResultsArea table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 15px;
+                font-size: 0.9em;
+            }
+            #similarityResultsArea th,
+            #similarityResultsArea td {
+                border: 1px solid #ddd;
+                padding: 8px;
+                text-align: left;
+            }
+            #similarityResultsArea th {
+                background-color: #f0f0f0;
+                font-weight: bold;
+            }
+            #similarityResultsArea tbody tr:nth-child(even) {
+                background-color: #f9f9f9;
+            }
+            #similarityResultsArea tbody tr:hover {
+                background-color: #f1f1f1;
+            }
+            #similarityResultsArea td.webllm-score,
+            #similarityResultsArea td.inbrowser-transformers-score {
+                font-family: monospace;
+            }
+            /* End of styles for similarity table */
         </style>
     </head>
     <body>
@@ -110,6 +139,24 @@
             <div id="responseArea">
                 <!-- AI response will appear here -->
             </div>
+
+            <hr style="margin: 30px 0;" />
+
+            <!-- New Section for Similarity Validation -->
+            <div id="similarityTestSection">
+                <h2>Embedding Similarity Validation</h2>
+                <p>
+                    Compare cosine similarity of sample text pairs using
+                    different embedding methods.
+                </p>
+                <button id="runSimilarityTestBtn" disabled
+                    >Run Similarity Comparison</button
+                >
+                <div id="similarityResultsArea" style="margin-top: 15px;">
+                    <!-- Similarity results will be populated here by JavaScript -->
+                </div>
+            </div>
+            <!-- End of New Section -->
         </div>
 
         <!-- Astro will handle the .ts import and compilation -->
