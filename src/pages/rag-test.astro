@@ -115,6 +115,37 @@
                 font-family: monospace;
             }
             /* End of styles for similarity table */
+
+            .intermediate-output {
+                margin-top: 5px;
+                margin-bottom: 15px;
+                padding: 10px;
+                border: 1px solid #e0e0e0;
+                border-radius: 4px;
+                background-color: #f9f9f9;
+                min-height: 30px;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+            }
+
+            /* Basic styling for accordion */
+            .accordion-section summary {
+                cursor: pointer;
+                padding: 10px;
+                background-color: #f0f0f0;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                margin-bottom: 5px;
+                font-weight: bold;
+            }
+            .accordion-section summary:hover {
+                background-color: #e9e9e9;
+            }
+            .accordion-section fieldset {
+                border-top: none; /* Remove top border of fieldset as summary acts as header */
+                margin-top: -5px; /* Pull fieldset up slightly */
+            }
+
         </style>
     </head>
     <body>
@@ -128,34 +159,116 @@
                 Initializing... please wait.
             </div>
 
-            <div>
-                <label for="queryInput">Enter your query:</label><br />
-                <textarea id="queryInput" placeholder="Ask something..."
-                ></textarea>
-            </div>
-            <button id="submitQueryBtn" disabled>Submit Query</button>
+            <details class="accordion-section">
+                <summary>Prompt Configuration</summary>
+                <fieldset>
+                    <div>
+                        <label for="systemPromptInput">System Prompt (optional):</label
+                        ><br />
+                        <textarea
+                            id="systemPromptInput"
+                            placeholder="e.g., You are a helpful AI assistant specializing in education policy."
+                        ></textarea>
+                    </div>
 
-            <h2>Response:</h2>
+                    <div>
+                        <label for="rephrasePromptTemplateInput"
+                            >Rephrase Prompt Template (use &lbrace;query&rbrace; for user query):</label
+                        ><br />
+                        <textarea id="rephrasePromptTemplateInput" style="height: 80px;"
+                        ></textarea>
+                    </div>
+
+                    <div>
+                        <label for="finalRagPromptTemplateInput"
+                            >Final RAG Prompt Template (use &lbrace;context&rbrace; and &lbrace;query&rbrace;):</label
+                        ><br />
+                        <textarea
+                            id="finalRagPromptTemplateInput"
+                            style="height: 120px;"></textarea>
+                    </div>
+                </fieldset>
+            </details>
+
+            <details class="accordion-section" open>
+                <summary>Chat Model Settings</summary>
+                <fieldset>
+                    <div id="chatModelConfigSection" style="margin-top: 5px; margin-bottom: 5px;">
+                        <div>
+                            <label for="temperatureSlider">Temperature: <span id="temperatureValue">0.7</span></label><br />
+                            <input type="range" id="temperatureSlider" min="0" max="2" value="0.7" step="0.01" style="width: 98%;">
+                        </div>
+                        <!-- Add other controls here later e.g., top_p -->
+                    </div>
+                </fieldset>
+            </details>
+            
+            <fieldset>
+                <legend>Main Query & Execution</legend>
+                <div>
+                    <label for="queryInput">Enter your query:</label><br />
+                    <textarea id="queryInput" placeholder="Ask something..."
+                    ></textarea>
+                </div>
+                <button id="submitQueryBtn" disabled>Run Full RAG Pipeline</button>
+            </fieldset>
+
+            <hr style="margin-top: 20px; margin-bottom: 20px;" />
+
+            <fieldset>
+                <legend>Step-by-Step RAG Control</legend>
+                <button id="rephraseQueryBtn" disabled style="margin-right: 10px;"
+                    >1. Rephrase Query Only</button
+                >
+                <h4>Rephrased Query:</h4>
+                <div id="rephrasedQueryArea" class="intermediate-output">
+                    <!-- Rephrased query will appear here -->
+                </div>
+
+                <button
+                    id="retrieveContextBtn"
+                    disabled
+                    style="margin-right: 10px; margin-top:10px;"
+                    >2. Retrieve Context Only</button
+                >
+                <h4>Retrieved Context:</h4>
+                <div
+                    id="retrievedContextArea"
+                    class="intermediate-output"
+                    style="max-height: 200px; overflow-y: auto;"
+                >
+                    <!-- Retrieved context will appear here -->
+                </div>
+
+                <button
+                    id="generateFinalAnswerBtn"
+                    disabled
+                    style="margin-top:10px;">3. Generate Final Answer</button
+                >
+            </fieldset>
+
+            <h2 style="margin-top: 20px;">Response:</h2>
             <div id="responseArea">
                 <!-- AI response will appear here -->
             </div>
 
             <hr style="margin: 30px 0;" />
 
-            <!-- New Section for Similarity Validation -->
-            <div id="similarityTestSection">
-                <h2>Embedding Similarity Validation</h2>
-                <p>
-                    Compare cosine similarity of sample text pairs using
-                    different embedding methods.
-                </p>
-                <button id="runSimilarityTestBtn" disabled
-                    >Run Similarity Comparison</button
-                >
-                <div id="similarityResultsArea" style="margin-top: 15px;">
-                    <!-- Similarity results will be populated here by JavaScript -->
-                </div>
-            </div>
+            <details class="accordion-section">
+                <summary>Embedding Similarity Validation</summary>
+                <fieldset>
+                    <p>
+                        Compare cosine similarity of sample text pairs using
+                        different embedding methods.
+                    </p>
+                    <button id="runSimilarityTestBtn" disabled
+                        >Run Similarity Comparison</button
+                    >
+                    <div id="similarityResultsArea" style="margin-top: 15px;">
+                        <!-- Similarity results will be populated here by JavaScript -->
+                    </div>
+                </fieldset>
+            </details>
             <!-- End of New Section -->
         </div>
 

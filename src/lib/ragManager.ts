@@ -8,6 +8,7 @@ import type {
     SearchResult,
     DocumentMetadata
 } from '../types/vectorStore.d.ts';
+import type { ChatCompletionRequest, ChatOptions } from '@mlc-ai/web-llm';
 
 interface RAGManagerConfig {
     webLLMService: WebLLMService;
@@ -25,9 +26,12 @@ export class RAGManager {
 
     // Default RAG parameters (can be overridden by config)
     private MAX_CONTEXT_TOKENS: number = 1500; // Example value, adjust based on chat model
-    private TOP_M_CLUSTERS: number = 3;        // Default number of clusters to check
-    private TOP_K_DOCS_PER_CLUSTER: number = 5; // Default docs per cluster
-    private FINAL_TOP_N_DOCS: number = 5;       // Final number of docs for context
+    private TOP_M_CLUSTERS: number = 3;
+    private TOP_K_DOCS_PER_CLUSTER: number = 5;
+    private FINAL_TOP_N_DOCS: number = 5;
+    private DEFAULT_SYSTEM_PROMPT: string = "You are a helpful AI assistant. Answer the user's question based on the provided context. If the context is empty or not relevant, try to answer generally but indicate that the answer is not based on specific provided documents.";
+    private DEFAULT_REPHRASE_QUERY_PROMPT_TEMPLATE: string = "Rephrase the following user query to be concise and optimized for semantic search against a document database. Focus on key entities and concepts. Output only the rephrased query and nothing else. User query: {query}";
+    private DEFAULT_FINAL_RAG_PROMPT_TEMPLATE: string = "Context:\n{context}\n\nQuestion: {query}\n\nAnswer:";
 
     constructor(config: RAGManagerConfig) {
         if (!config.webLLMService) {
@@ -149,17 +153,155 @@ export class RAGManager {
         return contextString.trim();
     }
 
-    /**
-     * Processes a user query through the RAG pipeline to generate a response.
-     * @param query The user's query string.
-     * @param chatOptions Optional chat parameters for the LLM.
-     * @returns A Promise that resolves to the LLM's response string, or null if an error occurs.
-     */
-    public async getRagResponse(query: string, chatOptions?: any /* Adjust to actual ChatOptions from WebLLMService if defined */): Promise<string | null> {
-        console.log(`RAGManager: Starting RAG process for query: "${query}"`);
+    // --- Public methods for step-by-step execution ---
 
-        // 1. Get Query Embedding
-        const queryEmbedding = await this.getQueryEmbedding(query);
+    public async rephraseQuery(
+        originalQuery: string,
+        rephrasePromptTemplate?: string,
+        systemPromptText?: string,
+        temperature?: number
+    ): Promise<string> {
+        console.log("RAGManager: Rephrasing query:", originalQuery, "Temp:", temperature);
+        const template = rephrasePromptTemplate || this.DEFAULT_REPHRASE_QUERY_PROMPT_TEMPLATE;
+
+        const rephraseSystemPrompt = systemPromptText || "You are a query optimization assistant.";
+
+        // Explicitly type messages for WebLLMService.getChatCompletion
+        const messages: Array<{ role: "system" | "user" | "assistant", content: string }> = [
+            { role: 'system', content: rephraseSystemPrompt },
+            { role: 'user', content: template.replace("{query}", originalQuery) }
+        ];
+
+        const chatOpts: ChatOptions = { temperature: temperature ?? 0.2 };
+
+        const rephrasedQueryText = await this.webLLMService.getChatCompletion(
+            messages,
+            chatOpts
+        );
+        console.log("RAGManager: Rephrased query text:", rephrasedQueryText);
+        if (!rephrasedQueryText) {
+            throw new Error("Query rephrasing failed to produce text.");
+        }
+        // Clean up the rephrased query: remove potential quotes, newlines etc.
+        return rephrasedQueryText.trim().replace(/^"|"$/g, '');
+    }
+
+    public async retrieveContext(
+        queryForContext: string
+    ): Promise<string | null> { // Context can be a string or null if nothing is found
+        console.log("RAGManager: Retrieving context for query:", queryForContext);
+        const queryEmbedding = await this.webLLMService.getQueryEmbedding(queryForContext);
+        if (!queryEmbedding) {
+            console.warn("RAGManager: Could not generate query embedding for context retrieval.");
+            return null;
+        }
+
+        const searchResults = await this.searchService.search(
+            queryEmbedding,
+            this.TOP_M_CLUSTERS,
+            this.TOP_K_DOCS_PER_CLUSTER,
+            this.FINAL_TOP_N_DOCS
+        );
+
+        if (!searchResults || searchResults.length === 0) {
+            console.log("RAGManager: No relevant documents found for context.");
+            return null;
+        }
+
+        // For now, returning combined text content. Could be more structured later.
+        const contextText = searchResults.map(doc => doc.text).join("\n\n---\n\n");
+        console.log("RAGManager: Retrieved context text based on query:", queryForContext, "Context length:", contextText.length);
+        return contextText;
+    }
+
+    public async generateFinalAnswer(
+        originalQuery: string,
+        context: string | null, // Context can be null
+        finalRagPromptTemplate?: string,
+        systemPromptText?: string,
+        temperature?: number
+    ): Promise<string> {
+        console.log("RAGManager: Generating final answer for query:", originalQuery, "Temp:", temperature);
+        const finalTemplate = finalRagPromptTemplate || this.DEFAULT_FINAL_RAG_PROMPT_TEMPLATE;
+        const effectiveSystemPrompt = systemPromptText || this.DEFAULT_SYSTEM_PROMPT;
+
+        const contextStr = context || "No specific context documents were found.";
+        const finalPrompt = finalTemplate
+            .replace("{context}", contextStr)
+            .replace("{query}", originalQuery);
+
+        // Explicitly type messages for WebLLMService.getChatCompletion
+        const messages: Array<{ role: "system" | "user" | "assistant", content: string }> = [
+            { role: 'system', content: effectiveSystemPrompt },
+            { role: 'user', content: finalPrompt }
+        ];
+
+        const chatOpts: ChatOptions = { temperature: temperature ?? undefined };
+
+        const finalAnswerText = await this.webLLMService.getChatCompletion(
+            messages,
+            chatOpts
+        );
+        console.log("RAGManager: Generated final answer text:", finalAnswerText);
+        if (!finalAnswerText) {
+            throw new Error("Final answer generation failed to produce text.");
+        }
+        return finalAnswerText;
+    }
+
+    // --- Existing full pipeline method ---
+    public async getRagResponse(
+        originalQuery: string,
+        options?: {
+            systemPrompt?: string;
+            rephrasePromptTemplate?: string;
+            finalRagPromptTemplate?: string;
+            temperature?: number; // Example of other ChatOptions
+            top_p?: number;       // Example of other ChatOptions
+            // Add other valid ChatOptions fields here as needed
+            [key: string]: any; // Allow other properties but they might not be used by getChatCompletion if not valid ChatOptions
+        }
+    ): Promise<string | null> {
+        console.log(`RAGManager: Starting RAG process for original query: "${originalQuery}"`);
+
+        const systemPrompt = options?.systemPrompt || this.DEFAULT_SYSTEM_PROMPT;
+        const rephraseTemplate = options?.rephrasePromptTemplate?.includes("{query}")
+            ? options.rephrasePromptTemplate
+            : this.DEFAULT_REPHRASE_QUERY_PROMPT_TEMPLATE;
+        const finalRagTemplate = (options?.finalRagPromptTemplate?.includes("{context}") && options?.finalRagPromptTemplate?.includes("{query}"))
+            ? options.finalRagPromptTemplate
+            : this.DEFAULT_FINAL_RAG_PROMPT_TEMPLATE;
+
+        // Extract known ChatOptions for clarity, pass the rest if webLLMService handles them
+        const chatCompletionOptions: ChatOptions = {};
+        if (options?.temperature !== undefined) chatCompletionOptions.temperature = options.temperature;
+        if (options?.top_p !== undefined) chatCompletionOptions.top_p = options.top_p;
+        // Add other specific ChatOptions here if they are part of the ChatOptions interface
+        // For unknown options, they would need to be handled by a more generic type if passed through
+
+        // --- Stage 1: Rephrase Query for RAG retrieval ---
+        let queryForRetrieval = originalQuery;
+        try {
+            console.log(`RAGManager: Rephrasing query for retrieval using template: "${rephraseTemplate.replace("{query}", originalQuery)}"`);
+            const rephrasePrompt = rephraseTemplate.replace("{query}", originalQuery);
+
+            const rephrasedQueryResponse = await this.webLLMService.getChatCompletion(
+                [{ role: "user", content: rephrasePrompt }], // System prompt handled by default or options
+                { temperature: 0.3, system_prompt: systemPrompt } as ChatOptions // Pass system prompt via options if preferred for this call
+            );
+
+            if (rephrasedQueryResponse && rephrasedQueryResponse.trim().length > 0) {
+                queryForRetrieval = rephrasedQueryResponse.trim();
+                console.log(`RAGManager: Query rephrased to: "${queryForRetrieval}"`);
+            } else {
+                console.warn("RAGManager: Query rephrasing did not return a valid response. Using original query for retrieval.");
+            }
+        } catch (error) {
+            console.warn("RAGManager: Error during query rephrasing. Using original query for retrieval.", error);
+        }
+
+        // 1. Get Embedding for (potentially rephrased) Query
+        const queryEmbedding = await this.getQueryEmbedding(queryForRetrieval);
         if (!queryEmbedding) {
             return "I apologize, but I encountered an issue processing your query's embedding. Please try again.";
         }
@@ -176,28 +318,22 @@ export class RAGManager {
         // 3. Format Context
         const context = this.formatContextFromDocuments(relevantDocuments);
 
-        // 4. Construct Prompt and Get LLM Response
-        // Basic prompt structure. This can be significantly improved.
-        const systemPrompt = "You are a helpful AI assistant. Answer the user's question based on the provided context. If the context is empty or not relevant, try to answer generally but indicate that the answer is not based on specific provided documents.";
+        // 4. Construct Final Prompt and Get LLM Response (using original query and custom system prompt)
+        const userPromptWithContext = finalRagTemplate
+            .replace("{context}", context)
+            .replace("{query}", originalQuery);
 
-        const userPromptWithContext =
-            `Context:
-${context}
-
-Question: ${query}
-
-Answer:`;
-
-        console.log("RAGManager: Sending request to chat model with prompt (context + query).");
-        // console.debug("RAGManager: Full prompt being sent:\n", userPromptWithContext); // For deep debugging
+        console.log("RAGManager: Sending request to chat model with system prompt, context, and original query.");
+        // console.debug("RAGManager: System Prompt: ", systemPrompt);
+        // console.debug("RAGManager: User Prompt with Context:\n", userPromptWithContext);
 
         try {
             const llmResponse = await this.webLLMService.getChatCompletion(
                 [
-                    { role: "system", content: systemPrompt },
+                    { role: "system", content: systemPrompt }, // Ensure system prompt is part of messages if not in options
                     { role: "user", content: userPromptWithContext }
                 ],
-                chatOptions
+                chatCompletionOptions
             );
 
             if (llmResponse === null) {

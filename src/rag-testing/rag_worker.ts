@@ -84,13 +84,81 @@ self.onmessage = async (event: MessageEvent) => {
             }
             try {
                 self.postMessage({ type: 'status', payload: { message: 'Processing query...', isError: false, isReady: true } });
-                const response = await ragManager.getRagResponse(payload.query, payload.chatOptions || {});
+                const response = await ragManager.getRagResponse(payload.query, {
+                    systemPrompt: payload.systemPrompt || undefined,
+                    rephrasePromptTemplate: payload.rephrasePromptTemplate,
+                    finalRagPromptTemplate: payload.finalRagPromptTemplate,
+                    temperature: payload.temperature
+                });
                 self.postMessage({ type: 'response', payload: { result: response } });
                 self.postMessage({ type: 'status', payload: { message: 'Ready for new query.', isError: false, isReady: true } });
             } catch (error) {
                 console.error("RAG Worker: Error processing query:", error);
                 self.postMessage({ type: 'response', payload: { error: `Error processing query: ${(error as Error).message}` } });
                 self.postMessage({ type: 'status', payload: { message: 'Error processing query. Ready for new query.', isError: true, isReady: true } });
+            }
+            break;
+
+        case 'REPHRASE_QUERY':
+            if (!ragManager || !webLLMService) {
+                self.postMessage({ type: 'REPHRASED_QUERY_RESULT', payload: { error: 'RAG system not initialized.' } });
+                return;
+            }
+            if (!payload || !payload.originalQuery || !payload.rephrasePromptTemplate) {
+                self.postMessage({ type: 'REPHRASED_QUERY_RESULT', payload: { error: 'Missing originalQuery or rephrasePromptTemplate for rephrasing.' } });
+                return;
+            }
+            try {
+                self.postMessage({ type: 'status', payload: { message: 'Rephrasing query in worker...', isError: false, isReady: false } });
+                const rephrasedQuery = await ragManager.rephraseQuery(payload.originalQuery, payload.rephrasePromptTemplate, payload.systemPrompt, payload.temperature);
+                self.postMessage({ type: 'REPHRASED_QUERY_RESULT', payload: { rephrasedQuery } });
+                self.postMessage({ type: 'status', payload: { message: 'Query rephrased.', isError: false, isReady: true } });
+            } catch (error) {
+                console.error("RAG Worker: Error rephrasing query:", error);
+                self.postMessage({ type: 'REPHRASED_QUERY_RESULT', payload: { error: `Error rephrasing query: ${(error as Error).message}` } });
+                self.postMessage({ type: 'status', payload: { message: 'Error rephrasing query.', isError: true, isReady: true } });
+            }
+            break;
+
+        case 'RETRIEVE_CONTEXT':
+            if (!ragManager || !webLLMService) {
+                self.postMessage({ type: 'RETRIEVED_CONTEXT_RESULT', payload: { error: 'RAG system not initialized.' } });
+                return;
+            }
+            if (!payload || !payload.queryForContext) {
+                self.postMessage({ type: 'RETRIEVED_CONTEXT_RESULT', payload: { error: 'Missing queryForContext for context retrieval.' } });
+                return;
+            }
+            try {
+                self.postMessage({ type: 'status', payload: { message: 'Retrieving context in worker...', isError: false, isReady: false } });
+                const context = await ragManager.retrieveContext(payload.queryForContext);
+                self.postMessage({ type: 'RETRIEVED_CONTEXT_RESULT', payload: { context } });
+                self.postMessage({ type: 'status', payload: { message: 'Context retrieved.', isError: false, isReady: true } });
+            } catch (error) {
+                console.error("RAG Worker: Error retrieving context:", error);
+                self.postMessage({ type: 'RETRIEVED_CONTEXT_RESULT', payload: { error: `Error retrieving context: ${(error as Error).message}` } });
+                self.postMessage({ type: 'status', payload: { message: 'Error retrieving context.', isError: true, isReady: true } });
+            }
+            break;
+
+        case 'GENERATE_FINAL_ANSWER':
+            if (!ragManager || !webLLMService) {
+                self.postMessage({ type: 'FINAL_ANSWER_RESULT', payload: { error: 'RAG system not initialized.' } });
+                return;
+            }
+            if (!payload || !payload.originalQuery || payload.context === undefined || !payload.finalRagPromptTemplate) { // context can be null (empty)
+                self.postMessage({ type: 'FINAL_ANSWER_RESULT', payload: { error: 'Missing data for final answer generation.' } });
+                return;
+            }
+            try {
+                self.postMessage({ type: 'status', payload: { message: 'Generating final answer in worker...', isError: false, isReady: false } });
+                const finalAnswer = await ragManager.generateFinalAnswer(payload.originalQuery, payload.context, payload.finalRagPromptTemplate, payload.systemPrompt, payload.temperature);
+                self.postMessage({ type: 'FINAL_ANSWER_RESULT', payload: { finalAnswer } });
+                self.postMessage({ type: 'status', payload: { message: 'Final answer generated.', isError: false, isReady: true } });
+            } catch (error) {
+                console.error("RAG Worker: Error generating final answer:", error);
+                self.postMessage({ type: 'FINAL_ANSWER_RESULT', payload: { error: `Error generating final answer: ${(error as Error).message}` } });
+                self.postMessage({ type: 'status', payload: { message: 'Error generating final answer.', isError: true, isReady: true } });
             }
             break;
 
