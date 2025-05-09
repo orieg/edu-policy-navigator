@@ -1,5 +1,5 @@
-import { MLCEngine, type MLCEngineConfig, type ChatOptions, CreateMLCEngine, type InitProgressReport, ModelType } from '@mlc-ai/web-llm';
-import { WEBLLM_CHAT_MODEL_ID, WEBLLM_EMBEDDING_MODEL_ID } from '../siteConfig';
+import { MLCEngine, type MLCEngineConfig, type ChatOptions, CreateMLCEngine, type InitProgressReport, ModelType, type ModelRecord } from '@mlc-ai/web-llm';
+import { WEBLLM_CHAT_MODEL_ID, WEBLLM_EMBEDDING_MODEL_ID } from '../siteConfig.ts';
 
 class WebLLMService {
     private chatEngine: MLCEngine | null = null;
@@ -20,27 +20,56 @@ class WebLLMService {
             console.log("WebLLMService: Embedding engine already initialized.");
             return;
         }
-        console.log(`WebLLMService: Initializing embedding engine with model: ${this.embeddingModelId}...`);
+        console.log(`WebLLMService: Initializing embedding engine with actual model ID: ${this.embeddingModelId}...`);
         try {
-            const embeddingModelRecord = {
-                model_id: this.embeddingModelId,
-                model: this.embeddingModelId, // For pre-built MLC models, use the ID directly
-                model_lib: `${this.embeddingModelId.includes('/') ? this.embeddingModelId.split('/').pop() : this.embeddingModelId}-webllm`,
-                model_type: ModelType.embedding // Use ModelType.embedding
-            };
+            let modelRecord: ModelRecord; // Ensure ModelRecord is a recognized type
+
+            if (this.embeddingModelId.startsWith("Snowflake/")) {
+                console.log(`Configuring ONNX/Transformers.js embedding model (e.g., Snowflake): ${this.embeddingModelId}`);
+                modelRecord = {
+                    model_id: this.embeddingModelId, // "Snowflake/snowflake-arctic-embed-xs"
+                    model: `https://huggingface.co/${this.embeddingModelId}/resolve/main/`, // Full base URL
+                    model_lib: "ort.wasm", // Revert to "ort.wasm" as model_lib cannot be empty and must be a string
+                    model_type: ModelType.embedding,
+                };
+            } else {
+                // Default to original logic for MLC-provided/named models
+                console.log(`Configuring MLC-style embedding model: ${this.embeddingModelId}`);
+                // Determine the base name, removing potential HuggingFace org prefix
+                const modelBaseName = this.embeddingModelId.includes('/') ? this.embeddingModelId.split('/')[1] : this.embeddingModelId;
+                // Ensure the -MLC suffix is present for constructing the mlc-ai path
+                const mlcModelName = modelBaseName.endsWith("-MLC") ? modelBaseName : `${modelBaseName}-MLC`;
+
+                const modelUrlBase = `https://huggingface.co/mlc-ai/${mlcModelName}/resolve/main/`;
+                // For MLC models, model_lib is typically <mlcModelName>-webllm.wasm
+                const modelLibWasm = `${mlcModelName}-webllm.wasm`;
+
+                console.log(`  Using model URL base: ${modelUrlBase}`);
+                console.log(`  Using model lib WASM: ${modelLibWasm}`);
+
+                modelRecord = {
+                    model_id: this.embeddingModelId, // This ID is used to select the model from the list
+                    model: modelUrlBase,             // Path to the directory containing model files and model_lib
+                    model_lib: modelLibWasm,         // Filename of the WASM, relative to modelUrlBase
+                    model_type: ModelType.embedding,
+                };
+            }
 
             const appConfigForEngine = {
-                model_list: [embeddingModelRecord]
+                model_list: [modelRecord],
+                // Explicitly declare "ort.wasm" as a known model library for WebLLM
+                // This helps WebLLM use it for models that specify it, without defaulting to MLC-specific lib naming
+                model_libs: this.embeddingModelId.startsWith("Snowflake/") ? ["ort.wasm"] : undefined,
             };
 
             const engineConfig: MLCEngineConfig = {
                 ...(config || {}),
                 initProgressCallback: this.initProgressCallback,
-                appConfig: appConfigForEngine
+                appConfig: appConfigForEngine,
             };
 
             this.embeddingEngine = await CreateMLCEngine(
-                this.embeddingModelId, // Specifies which model from the list to load
+                this.embeddingModelId, // This should match modelRecord.model_id
                 engineConfig
             );
             console.log("WebLLMService: Embedding engine initialized successfully.");

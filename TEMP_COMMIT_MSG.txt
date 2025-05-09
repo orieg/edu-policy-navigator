@@ -1,0 +1,16 @@
+feat(rag): Configure WebLLM for Snowflake embedding model
+
+Updates WebLLMService to differentiate between MLC-style models
+and standard HuggingFace ONNX models (e.g., Snowflake).
+
+- Modifies `initializeEmbeddingEngine` to construct `modelRecord`
+  conditionally:
+  - For "Snowflake/" prefixed models:
+    - Sets `model` to the full HuggingFace URL.
+    - Sets `model_lib` to "ort.wasm".
+    - Includes `model_libs: ["ort.wasm"]` in `appConfigForEngine`.
+  - Otherwise, uses existing logic for MLC models.
+- Imports `ModelRecord` type from `@mlc-ai/web-llm`.
+
+Updates `siteConfig.ts`:
+- Changes `WEBLLM_EMBEDDING_MODEL_ID` to "Snowflake/snowflake-arctic-embed-xs". 

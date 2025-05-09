@@ -1,21 +1,112 @@
-console.log("RAG Worker: Minimal script loaded.");
+import WebLLMService from '../lib/WebLLMService.ts';
+import { loadAllRAGData } from '../lib/dataLoader.ts';
+import { ClusteredSearchService } from '../lib/clusteredSearchService.ts';
+import { RAGManager } from '../lib/ragManager.ts';
+
+console.log("RAG Worker: Script loaded. All services imported.");
+
+let ragManager: RAGManager | null = null;
+let webLLMService: WebLLMService | null = null;
+
+// MANIFEST_URL should be relative to the public directory if served statically,
+// or an absolute path if constructed dynamically.
+// Given it's from public/, and Astro base path is currently off for dev,
+// a root-relative path from the domain should work.
+const MANIFEST_URL = '/embeddings/school_districts/manifest.json';
 
 self.onmessage = async (event: MessageEvent) => {
-    console.log("RAG Worker (Minimal): Message received from main thread:", event.data);
-    const { type } = event.data;
+    console.log("RAG Worker: Message received from main thread:", event.data);
+    const { type, payload } = event.data;
 
-    if (type === 'initialize') {
-        console.log("RAG Worker (Minimal): Initialize message received.");
-        self.postMessage({
-            type: 'status',
-            payload: { message: 'Minimal worker initialized successfully.', isError: false, isReady: true }
-        });
-    } else {
-        console.warn("RAG Worker (Minimal): Unknown message type received:", type);
-        self.postMessage({ type: 'error', payload: { message: `Unknown command: ${type}` } });
+    switch (type) {
+        case 'initialize':
+            if (ragManager) {
+                self.postMessage({ type: 'status', payload: { message: 'RAG system already initialized.', isError: false, isReady: true } });
+                return;
+            }
+            try {
+                self.postMessage({ type: 'status', payload: { message: 'Initializing RAG system...', isError: false, isReady: false } });
+                self.postMessage({ type: 'progress', payload: { message: 'Initializing WebLLM Service...', loaded: 0, total: 100 } });
+
+                webLLMService = new WebLLMService();
+                await webLLMService.initializeEmbeddingEngine();
+                self.postMessage({ type: 'progress', payload: { message: 'Embedding engine initialized. Initializing chat engine...', loaded: 33, total: 100 } });
+                await webLLMService.initializeChatEngine();
+                self.postMessage({ type: 'progress', payload: { message: 'Chat engine initialized. Loading RAG data...', loaded: 66, total: 100 } });
+
+                const dataLoaderProgress = (progress: { message: string, loaded: number, total: number }) => {
+                    const overallLoaded = 66 + Math.floor((progress.loaded / progress.total) * 34);
+                    self.postMessage({ type: 'progress', payload: { message: `Loading data: ${progress.message}`, loaded: overallLoaded, total: 100 } });
+                };
+
+                const manifestFullUrl = new URL(MANIFEST_URL, self.location.origin).href;
+                const ragData = await loadAllRAGData(manifestFullUrl, dataLoaderProgress);
+
+                const searchService = new ClusteredSearchService(
+                    ragData.centroids,
+                    ragData.clustersData,
+                    ragData.embeddingDimensions
+                );
+
+                ragManager = new RAGManager({
+                    webLLMService: webLLMService,
+                    clusteredSearchService: searchService,
+                });
+
+                self.postMessage({ type: 'progress', payload: { message: 'RAG System Ready.', loaded: 100, total: 100 } });
+                self.postMessage({ type: 'status', payload: { message: 'RAG system initialized and ready.', isError: false, isReady: true } });
+                console.log("RAG Worker: System initialized successfully.");
+
+            } catch (error) {
+                console.error("RAG Worker: Initialization error:", error);
+                self.postMessage({ type: 'status', payload: { message: `Initialization failed: ${(error as Error).message}`, isError: true, isReady: false } });
+            }
+            break;
+
+        case 'query':
+            if (!ragManager || !webLLMService) { // Ensure webLLMService is also checked
+                self.postMessage({ type: 'response', payload: { error: 'RAG system not initialized.' } });
+                return;
+            }
+            if (!payload || !payload.query) {
+                self.postMessage({ type: 'response', payload: { error: 'No query provided.' } });
+                return;
+            }
+            try {
+                self.postMessage({ type: 'status', payload: { message: 'Processing query...', isError: false, isReady: true } });
+                const response = await ragManager.getRagResponse(payload.query, payload.chatOptions || {});
+                self.postMessage({ type: 'response', payload: { result: response } });
+                self.postMessage({ type: 'status', payload: { message: 'Ready for new query.', isError: false, isReady: true } });
+            } catch (error) {
+                console.error("RAG Worker: Error processing query:", error);
+                self.postMessage({ type: 'response', payload: { error: `Error processing query: ${(error as Error).message}` } });
+                self.postMessage({ type: 'status', payload: { message: 'Error processing query. Ready for new query.', isError: true, isReady: true } });
+            }
+            break;
+
+        case 'dispose':
+            if (webLLMService) {
+                try {
+                    self.postMessage({ type: 'status', payload: { message: 'Disposing WebLLM engines...', isError: false, isReady: false } });
+                    await webLLMService.disposeAllEngines();
+                    webLLMService = null;
+                    ragManager = null;
+                    self.postMessage({ type: 'status', payload: { message: 'Engines disposed. System is no longer ready.', isError: false, isReady: false } });
+                    console.log("RAG Worker: Engines disposed.");
+                } catch (error) {
+                    console.error("RAG Worker: Error disposing engines:", error);
+                    self.postMessage({ type: 'status', payload: { message: `Error disposing: ${(error as Error).message}`, isError: true, isReady: false } });
+                }
+            } else {
+                self.postMessage({ type: 'status', payload: { message: 'Engines already disposed or never initialized.', isError: false, isReady: false } });
+            }
+            break;
+
+        default:
+            console.warn("RAG Worker: Unknown message type received:", type);
+            self.postMessage({ type: 'error', payload: { message: `Unknown command: ${type}` } });
     }
 };
 
-console.log("RAG Worker (Minimal): Event listener attached.");
-// Send an initial status message to indicate the script itself has loaded and attached the listener
-self.postMessage({ type: 'status', payload: { message: 'Minimal worker script ready for commands.', isError: false, isReady: false } }); 
+console.log("RAG Worker: Event listener attached.");
+self.postMessage({ type: 'status', payload: { message: 'Worker script loaded. Ready for initialization command.', isError: false, isReady: false } }); 

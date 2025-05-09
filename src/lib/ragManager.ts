@@ -1,13 +1,13 @@
 // src/lib/ragManager.ts
 
-import WebLLMService from './WebLLMService';
-import { ClusteredSearchService } from './clusteredSearchService';
+import WebLLMService from './WebLLMService.ts';
+import { ClusteredSearchService } from './clusteredSearchService.ts';
 import type {
     ClusterCentroidData,
     ClusterData,
     SearchResult,
     DocumentMetadata
-} from '../types/vectorStore';
+} from '../types/vectorStore.d.ts';
 
 interface RAGManagerConfig {
     webLLMService: WebLLMService;

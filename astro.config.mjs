@@ -16,6 +16,6 @@ export default defineConfig({
     },
     integrations: [sitemap()],
     site: 'https://orieg.github.io/edu-policy-navigator',
-    base: '/edu-policy-navigator/',
+    // base: '/edu-policy-navigator/', // Temporarily commented out for local dev worker path issues
     // outDir: 'dist', // This is the default, so not strictly needed
 }); 

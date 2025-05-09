@@ -1,5 +1,8 @@
 console.log("RAG Test Main: Script loaded.");
 
+// Import the worker using Vite's ?worker syntax
+import RagWorker from '/src/rag-testing/rag_worker.ts?worker';
+
 document.addEventListener('DOMContentLoaded', () => {
     const queryInput = document.getElementById('queryInput') as HTMLTextAreaElement;
     const submitQueryBtn = document.getElementById('submitQueryBtn') as HTMLButtonElement;
@@ -39,11 +42,10 @@ document.addEventListener('DOMContentLoaded', () => {
             (window as any).ragWorker = undefined;
         }
 
-        console.log("RAG Test Main: Creating Web Worker...");
+        console.log("RAG Test Main: Creating Web Worker using imported constructor...");
         try {
-            // Ensure this path points to the compiled JS file for the worker
-            // Astro will handle the '.ts' to '.js' mapping for the worker import.
-            worker = new Worker(new URL('./rag_worker.ts', import.meta.url), { type: 'module' });
+            // Instantiate the worker from the import
+            worker = new RagWorker();
             console.log("RAG Test Main: Web Worker created.");
 
             worker.onmessage = (event: MessageEvent) => {
