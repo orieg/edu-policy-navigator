@@ -1,0 +1,27 @@
+---
+// src/pages/basic-pipeline-test.astro
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Basic Pipeline Test</title>
+    <!-- Style block temporarily removed for debugging server error -->
+</head>
+<body>
+    <div class="container">
+        <h1>Basic Transformers.js Pipeline Test</h1>
+        <p>This page attempts to run a minimal text-generation pipeline using Transformers.js.</p>
+        <p><strong>Model:</strong> HuggingFaceTB/SmolLM2-135M-Instruct</p>
+        <p><strong>Pipeline Options:</strong> &#123; dtype: 'q4' &#125;</p>
+        <p><em>Before running, it's highly recommended to clear your browser's cache (IndexedDB and Cache Storage for this site) if you have experienced issues with Transformers.js previously.</em></p>
+        <button id="runTestBtn">Run Test</button>
+        <div id="status">Ready to test.</div>
+        <h3>Output:</h3>
+        <div id="output"></div>
+    </div>
+
+    <script type="module" src="/src/basic-pipeline-test-main.ts"></script>
+</body>
+</html> 

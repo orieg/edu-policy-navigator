@@ -3,7 +3,7 @@
 
 import { promises as fs } from 'fs';
 import path from 'path';
-import { pipeline, env } from '@xenova/transformers';
+import { pipeline, env } from '@huggingface/transformers';
 
 // --- Configuration (Should match generateClusteredEmbeddings.ts) ---
 const OUTPUT_DIR = path.resolve(process.cwd(), 'public', 'embeddings', 'school_districts');

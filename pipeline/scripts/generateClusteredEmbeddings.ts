@@ -3,7 +3,7 @@
 
 // Note: Run this script from the project root directory.
 
-import { pipeline, env, AutoTokenizer, AutoModel, Tensor } from "@xenova/transformers";
+import { pipeline, env, AutoTokenizer, AutoModel, Tensor } from "@huggingface/transformers";
 import { kmeans } from "ml-kmeans"; // Changed: Use named import
 import { promises as fs } from 'fs';
 import path from 'path';
@@ -411,7 +411,6 @@ async function main() {
     // Initialize the feature extraction pipeline
     console.log(`Initializing feature extraction pipeline with model: ${EMBEDDING_MODEL_ID}`);
     const extractor = await pipeline('feature-extraction', EMBEDDING_MODEL_ID, {
-        quantized: false, // Using float32 for best quality embeddings
         progress_callback: (progress: any) => {
             if (progress.status === 'progress') {
                 // console.log(`  Model loading progress: ${progress.file} ${Math.round(progress.loaded / progress.total * 100)}%`);

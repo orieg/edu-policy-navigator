@@ -3,7 +3,7 @@ console.log("RAG Test Main: Script loaded.");
 // Import the worker using Vite's ?worker syntax
 import RagWorker from '/src/rag-testing/rag_worker.ts?worker';
 // Dynamically import transformers.js for in-browser use
-import { pipeline, env as CjsEnv } from '@xenova/transformers';
+import { pipeline, env as CjsEnv } from '@huggingface/transformers';
 
 interface SimilaritySampleData {
     id: string;
@@ -67,6 +67,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const temperatureSlider = document.getElementById('temperatureSlider') as HTMLInputElement;
     const temperatureValueSpan = document.getElementById('temperatureValue') as HTMLSpanElement;
 
+    // New Chat Engine UI
+    const chatEngineWebLLMRadio = document.getElementById('chatEngineWebLLM') as HTMLInputElement;
+    const chatEngineTransformersJSRadio = document.getElementById('chatEngineTransformersJS') as HTMLInputElement;
+    const transformersModelInputDiv = document.getElementById('transformersModelInputDiv') as HTMLDivElement;
+    const transformersModelInput = document.getElementById('transformersModelInput') as HTMLInputElement;
+
     let worker: Worker | undefined;
     let inBrowserExtractor: any = null; // For in-browser transformers.js pipeline
 
@@ -99,6 +105,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         temperatureValueSpan.textContent = temperatureSlider.value;
     }
 
+    // Event listeners for chat engine selection
+    if (chatEngineWebLLMRadio && chatEngineTransformersJSRadio && transformersModelInputDiv && transformersModelInput) {
+        chatEngineWebLLMRadio.addEventListener('change', () => {
+            if (chatEngineWebLLMRadio.checked) {
+                transformersModelInputDiv.style.display = 'none';
+                transformersModelInput.disabled = true;
+            }
+        });
+        chatEngineTransformersJSRadio.addEventListener('change', () => {
+            if (chatEngineTransformersJSRadio.checked) {
+                transformersModelInputDiv.style.display = 'block';
+                transformersModelInput.disabled = submitQueryBtn.disabled; // Only enable if system is ready
+            }
+        });
+        // Set initial state based on default checked (WebLLM)
+        transformersModelInputDiv.style.display = 'none';
+        transformersModelInput.disabled = true;
+    }
+
     // Set default prompt template values
     if (rephrasePromptTemplateInput) {
         rephrasePromptTemplateInput.value = `**Objective:** Transform the User Query into a concise, factual query that will have high semantic similarity with records in our school database when used for RAG retrieval (vector cosine similarity).
@@ -122,7 +147,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 ** Output Mandate:**
 Return * only * the rephrased, optimized query.Do not include any explanations, labels, or introductory text.
 
-User Query: { query } `;
+User Query: {query}`;
     }
     if (finalRagPromptTemplateInput) {
         finalRagPromptTemplateInput.value = "Context:\n{context}\n\nQuestion: {query}\n\nAnswer:";
@@ -142,6 +167,14 @@ User Query: { query } `;
             if (retrieveContextBtn) retrieveContextBtn.disabled = true;
             if (generateFinalAnswerBtn) generateFinalAnswerBtn.disabled = true;
             if (temperatureSlider) temperatureSlider.disabled = !isReady;
+
+            // New chat engine UI elements
+            if (chatEngineWebLLMRadio) chatEngineWebLLMRadio.disabled = !isReady;
+            if (chatEngineTransformersJSRadio) chatEngineTransformersJSRadio.disabled = !isReady;
+            if (transformersModelInput) {
+                transformersModelInput.disabled = !isReady || !chatEngineTransformersJSRadio.checked;
+            }
+
             if (isReady) progressBarContainer.style.display = 'none';
         }
     }
@@ -165,7 +198,7 @@ User Query: { query } `;
             // For feature-extraction, model name is usually sufficient.
             // Explicitly using Snowflake model ID from your validation script
             inBrowserExtractor = await pipeline('feature-extraction', 'Snowflake/snowflake-arctic-embed-xs', {
-                quantized: false, // Match node.js validation setting
+                device: "webgpu",
                 progress_callback: (progress: any) => {
                     if (similarityResultsArea && progress.status === 'progress') {
                         similarityResultsArea.innerHTML += `<p style="font-size:0.8em; color:grey;">Loading model file: ${progress.file} (${Math.round(progress.loaded / progress.total * 100)}%)</p>`;
@@ -197,7 +230,7 @@ User Query: { query } `;
             console.log("RAG Test Main: Web Worker created.");
 
             worker.onmessage = (event: MessageEvent) => {
-                console.log("RAG Test Main: Message received from worker:", event.data);
+                // console.log("RAG Test Main: Message received from worker:", event.data);
                 const { type, payload } = event.data;
 
                 switch (type) {
@@ -311,6 +344,10 @@ User Query: { query } `;
         const finalRagTemplate = finalRagPromptTemplateInput.value.trim();
         const temperature = parseFloat(temperatureSlider.value); // Get temperature
 
+        // Get chat engine config
+        const chatEngineType = chatEngineTransformersJSRadio.checked ? 'transformers' : 'webllm';
+        const transformersModelId = transformersModelInput.value.trim();
+
         if (!query) {
             alert("Please enter a query.");
             return;
@@ -321,6 +358,10 @@ User Query: { query } `;
         }
         if (!finalRagTemplate.includes('{context}') || !finalRagTemplate.includes('{query}')) {
             alert("Final RAG prompt template must include '{context}' and '{query}' placeholders.");
+            return;
+        }
+        if (chatEngineType === 'transformers' && !transformersModelId) {
+            alert("Please enter a Transformers.js model ID or URL.");
             return;
         }
 
@@ -343,7 +384,9 @@ User Query: { query } `;
                     systemPrompt: systemPrompt || null,
                     rephrasePromptTemplate: rephraseTemplate,
                     finalRagPromptTemplate: finalRagTemplate,
-                    temperature // Pass temperature
+                    temperature, // Pass temperature
+                    chatEngineType, // Pass chat engine type
+                    transformersModelId: chatEngineType === 'transformers' ? transformersModelId : null // Pass model ID if transformers
                 }
             });
         }
@@ -438,6 +481,10 @@ User Query: { query } `;
             const systemPrompt = systemPromptInput.value.trim(); // System prompt might influence rephrasing
             const temperature = parseFloat(temperatureSlider.value); // Get temperature
 
+            // Get chat engine config
+            const chatEngineType = chatEngineTransformersJSRadio.checked ? 'transformers' : 'webllm';
+            const transformersModelId = transformersModelInput.value.trim();
+
             if (!originalQuery) {
                 alert("Please enter an original query.");
                 return;
@@ -446,6 +493,11 @@ User Query: { query } `;
                 alert("Rephrase prompt template must include '{query}' placeholder.");
                 return;
             }
+            if (chatEngineType === 'transformers' && !transformersModelId) {
+                alert("Please enter a Transformers.js model ID or URL for rephrasing.");
+                return;
+            }
+
             if (worker) {
                 currentOriginalQuery = originalQuery; // Store original query
                 updateStatus('Rephrasing query...', false, false);
@@ -460,7 +512,9 @@ User Query: { query } `;
                         originalQuery,
                         rephrasePromptTemplate: rephraseTemplate,
                         systemPrompt: systemPrompt || null,
-                        temperature // Pass temperature
+                        temperature, // Pass temperature
+                        chatEngineType,
+                        transformersModelId: chatEngineType === 'transformers' ? transformersModelId : null
                     }
                 });
             }
@@ -499,6 +553,10 @@ User Query: { query } `;
             const systemPrompt = systemPromptInput.value.trim();
             const temperature = parseFloat(temperatureSlider.value); // Get temperature
 
+            // Get chat engine config
+            const chatEngineType = chatEngineTransformersJSRadio.checked ? 'transformers' : 'webllm';
+            const transformersModelId = transformersModelInput.value.trim();
+
             if (!finalQuery) {
                 alert("Original query is missing for final answer generation.");
                 return;
@@ -509,6 +567,10 @@ User Query: { query } `;
             }
             if (!finalRagTemplate.includes('{context}') || !finalRagTemplate.includes('{query}')) {
                 alert("Final RAG prompt template must include '{context}' and '{query}' placeholders.");
+                return;
+            }
+            if (chatEngineType === 'transformers' && !transformersModelId) {
+                alert("Please enter a Transformers.js model ID or URL for final answer generation.");
                 return;
             }
 
@@ -524,7 +586,9 @@ User Query: { query } `;
                         context,
                         finalRagPromptTemplate: finalRagTemplate,
                         systemPrompt: systemPrompt || null,
-                        temperature // Pass temperature
+                        temperature, // Pass temperature
+                        chatEngineType,
+                        transformersModelId: chatEngineType === 'transformers' ? transformersModelId : null
                     }
                 });
             }

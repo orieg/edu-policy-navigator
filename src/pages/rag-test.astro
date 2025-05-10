@@ -160,6 +160,24 @@
             </div>
 
             <details class="accordion-section">
+                <summary>Chat Engine Configuration</summary>
+                <fieldset>
+                    <div>
+                        <input type="radio" id="chatEngineWebLLM" name="chatEngine" value="webllm" checked />
+                        <label for="chatEngineWebLLM">WebLLM (Current MLC Setup)</label>
+                    </div>
+                    <div>
+                        <input type="radio" id="chatEngineTransformersJS" name="chatEngine" value="transformers" />
+                        <label for="chatEngineTransformersJS">Transformers.js (Hugging Face Model)</label>
+                    </div>
+                    <div id="transformersModelInputDiv" style="margin-top: 10px; display: none;">
+                        <label for="transformersModelInput">Transformers.js Model ID or URL:</label><br />
+                        <input type="text" id="transformersModelInput" placeholder="e.g., Xenova/distilgpt2" style="width: 98%;" />
+                    </div>
+                </fieldset>
+            </details>
+
+            <details class="accordion-section">
                 <summary>Prompt Configuration</summary>
                 <fieldset>
                     <div>
