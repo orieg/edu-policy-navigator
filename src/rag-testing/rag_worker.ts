@@ -34,57 +34,26 @@ function calculateCosineSimilarity(vecA: Float32Array, vecB: Float32Array): numb
  * Caches the pipeline to avoid reloading the same model.
  * Sends progress messages during model loading.
  * @param modelId The Hugging Face model ID or URL.
+ * @param onnxFile Optional ONNX file path or URL.
  * @returns The initialized text-generation pipeline.
  */
-async function getTransformersChatPipeline(modelId: string) {
-    if (activeTransformersPipeline && activeTransformersModelId === modelId) {
+async function getTransformersChatPipeline(modelId: string, onnxFile?: string) {
+    if (activeTransformersPipeline && activeTransformersModelId === (onnxFile ? `${modelId}|${onnxFile}` : modelId)) {
         return activeTransformersPipeline;
     }
 
-    let effectiveModelId = modelId;
-    if (modelId.startsWith('http://') || modelId.startsWith('https://')) {
-        try {
-            const url = new URL(modelId);
-            if (url.hostname === 'huggingface.co') {
-                let path = url.pathname;
-                if (path.startsWith('/')) path = path.substring(1);
-                if (path.endsWith('/')) path = path.substring(0, path.length - 1);
+    let modelPath = modelId;
+    let pipelineOptions: any = {};
 
-                const parts = path.split('/');
-                if (parts.length >= 2) { // org/model is minimum
-                    const orgOrUser = parts[0];
-                    const modelName = parts[1];
-                    let basePath = `${orgOrUser}/${modelName}`;
-                    let subPathIndex = 2;
-
-                    // Check for /tree/main, /blob/main, /raw/main, /resolve/main, or common revision names/hashes
-                    if (parts.length > subPathIndex + 1 &&
-                        (parts[subPathIndex] === 'tree' || parts[subPathIndex] === 'blob' || parts[subPathIndex] === 'raw' || parts[subPathIndex] === 'resolve') &&
-                        (parts[subPathIndex + 1] === 'main' || parts[subPathIndex + 1].match(/^[0-9a-f]{7,40}$/i) || parts[subPathIndex + 1] === 'HEAD')) {
-                        subPathIndex += 2; // Skip over the revision part like tree/main
-                    }
-
-                    if (parts.length > subPathIndex) {
-                        const subfolder = parts.slice(subPathIndex).join('/');
-                        if (subfolder) {
-                            basePath += `/${subfolder}`;
-                        }
-                    }
-                    effectiveModelId = basePath;
-                    console.log(`RAG Worker: Parsed Hugging Face URL "${modelId}" to model ID: "${effectiveModelId}"`);
-                } else {
-                    console.warn(`RAG Worker: Hugging Face URL "${modelId}" could not be parsed into a standard model ID. Using it directly.`);
-                }
-            } else {
-                console.log(`RAG Worker: Non-Hugging Face URL provided: "${modelId}". Using it directly with pipeline.`);
-            }
-        } catch (e) {
-            console.warn(`RAG Worker: Could not parse "${modelId}" as a URL. Treating as a plain model ID. Error: ${e}`);
-            // effectiveModelId remains modelId (original input)
+    if (onnxFile) {
+        if (onnxFile.startsWith('http://') || onnxFile.startsWith('https://')) {
+            modelPath = onnxFile;
+        } else {
+            pipelineOptions.fileName = onnxFile;
         }
     }
 
-    self.postMessage({ type: 'status', payload: { message: `Initializing Transformers.js with model: ${effectiveModelId}...`, isError: false, isReady: false } });
+    self.postMessage({ type: 'status', payload: { message: `Initializing Transformers.js with model: ${modelPath}...`, isError: false, isReady: false } });
     const { pipeline, env } = await import('@huggingface/transformers');
     // Optional: Disable local models if you only want to use HF hub models and avoid indexDB interactions for model caching by Transformers.js
     // env.allowLocalModels = false;
@@ -92,16 +61,17 @@ async function getTransformersChatPipeline(modelId: string) {
     // env.remoteHost = 'https://your-model-hosting.com/';
     // env.remotePathTemplate = '{model}'; // Adjust if model files are directly at remoteHost/modelId
 
-    self.postMessage({ type: 'status', payload: { message: `Loading Transformers.js model: ${effectiveModelId}...`, isError: false, isReady: false } });
+    self.postMessage({ type: 'status', payload: { message: `Loading Transformers.js model: ${modelPath}...`, isError: false, isReady: false } });
 
     try {
-        activeTransformersPipeline = await pipeline('text-generation', effectiveModelId, {
+        activeTransformersPipeline = await pipeline('text-generation', modelPath, {
+            ...pipelineOptions,
             progress_callback: (progress: any) => {
                 if (progress.status === 'progress' || progress.status === 'download') {
                     self.postMessage({
                         type: 'progress',
                         payload: {
-                            stage: `Loading ${effectiveModelId} (${progress.status})`,
+                            stage: `Loading ${modelPath} (${progress.status})`,
                             file: progress.file,
                             loaded: progress.loaded,
                             total: progress.total,
@@ -112,12 +82,12 @@ async function getTransformersChatPipeline(modelId: string) {
                 // console.log("Transformers.js progress:", progress);
             }
         });
-        activeTransformersModelId = effectiveModelId;
-        self.postMessage({ type: 'status', payload: { message: `Transformers.js model ${effectiveModelId} loaded.`, isError: false, isReady: true } });
+        activeTransformersModelId = onnxFile ? `${modelId}|${onnxFile}` : modelId;
+        self.postMessage({ type: 'status', payload: { message: `Transformers.js model ${modelPath} loaded.`, isError: false, isReady: true } });
         return activeTransformersPipeline;
     } catch (error) {
         console.error("RAG Worker: Error loading Transformers.js pipeline:", error);
-        self.postMessage({ type: 'status', payload: { message: `Error loading model ${effectiveModelId}: ${(error as Error).message}`, isError: true, isReady: true } });
+        self.postMessage({ type: 'status', payload: { message: `Error loading model ${modelPath}: ${(error as Error).message}`, isError: true, isReady: true } });
         activeTransformersPipeline = null;
         activeTransformersModelId = null;
         throw error; // Re-throw to be caught by the caller
@@ -157,10 +127,12 @@ self.onmessage = async (event: MessageEvent) => {
                     ragData.clustersData,
                     ragData.embeddingDimensions
                 );
+                // Assign the created service to the global variable
+                clusteredSearchService = searchService;
 
                 ragManager = new RAGManager({
                     webLLMService: webLLMService,
-                    clusteredSearchService: searchService,
+                    clusteredSearchService: clusteredSearchService, // Use the now-assigned global variable
                 });
 
                 self.postMessage({ type: 'progress', payload: { message: 'RAG System Ready.', loaded: 100, total: 100 } });
@@ -183,73 +155,150 @@ self.onmessage = async (event: MessageEvent) => {
                 return;
             }
 
-            const { query: originalQuery, systemPrompt, rephrasePromptTemplate, finalRagPromptTemplate, temperature, chatEngineType, transformersModelId } = payload;
+            const { query: originalQuery, systemPrompt, rephrasePromptTemplate, finalRagPromptTemplate, temperature, chatEngineType, transformersModelId, transformersOnnxFile, rephraseSettings, answerSettings } = payload;
 
             try {
+                const totalPipelineStart = performance.now();
                 self.postMessage({ type: 'status', payload: { message: 'Processing query (full RAG)...', isError: false, isReady: false } });
 
                 let queryForRetrieval = originalQuery;
+                let rephraseDuration = 0;
+                let contextDuration = 0;
+                let finalAnswerDuration = 0;
+
                 // --- Stage 1: Rephrase Query ---
+                const rephraseStart = performance.now();
                 if (chatEngineType === 'transformers') {
                     if (!transformersModelId) {
                         throw new Error("Transformers.js model ID not provided for rephrasing.");
                     }
-                    const rephrasePipeline = await getTransformersChatPipeline(transformersModelId);
+                    const rephrasePipeline = await getTransformersChatPipeline(transformersModelId, transformersOnnxFile);
                     const rephraseFullPrompt = (rephrasePromptTemplate || "Rephrase: {query}").replace("{query}", originalQuery);
-                    // Note: Transformers.js pipeline might have different API for system prompt.
-                    // For basic text-generation, it's part of the main prompt or handled by model fine-tuning.
                     self.postMessage({ type: 'status', payload: { message: `Rephrasing query with Transformers.js (${transformersModelId})...`, isError: false, isReady: false } });
-                    const rephrasedOutput = await rephrasePipeline(rephraseFullPrompt, { temperature: temperature ?? 0.3, max_new_tokens: 100 });
-                    // Assuming rephrasedOutput is an array and we take the first generated text
+                    console.log("RAG Worker: Using Transformers.js settings:", rephraseSettings);
+
+                    // Determine if sampling should be enabled
+                    const rephraseShouldSample = (rephraseSettings?.temperature ?? 0) > 0 ||
+                        (rephraseSettings?.top_k ?? 0) > 1 ||
+                        ((rephraseSettings?.top_p ?? 1.0) < 1.0);
+
+                    const tjsSettings: any = {
+                        temperature: rephraseSettings?.temperature ?? 0.2,
+                        top_p: rephraseSettings?.top_p,
+                        top_k: rephraseSettings?.top_k,
+                        max_new_tokens: rephraseSettings?.max_new_tokens ?? 100,
+                        max_length: undefined, // Initialize max_length
+                        do_sample: rephraseShouldSample // Explicitly set sampling
+                    };
+                    if (tjsSettings.max_new_tokens) tjsSettings.max_length = tjsSettings.max_new_tokens;
+                    console.log("RAG Worker: Final settings for Transformers.js rephrase:", tjsSettings);
+                    const rephrasedOutput = await rephrasePipeline(rephraseFullPrompt, tjsSettings);
+                    // Log raw output
                     if (Array.isArray(rephrasedOutput) && rephrasedOutput.length > 0 && rephrasedOutput[0].generated_text) {
-                        queryForRetrieval = rephrasedOutput[0].generated_text.replace(rephraseFullPrompt, '').trim(); // Remove prompt from output
-                        if (!queryForRetrieval) queryForRetrieval = originalQuery; // Fallback if stripping prompt results in empty
+                        console.log("RAG Worker: RAW rephrasedOutput from Transformers.js:", rephrasedOutput[0].generated_text);
+                    }
+                    if (Array.isArray(rephrasedOutput) && rephrasedOutput.length > 0 && rephrasedOutput[0].generated_text) {
+                        queryForRetrieval = rephrasedOutput[0].generated_text.replace(rephraseFullPrompt, '').trim();
+                        if (!queryForRetrieval) queryForRetrieval = originalQuery;
                         console.log("RAG Worker: Rephrased with Transformers.js to:", queryForRetrieval);
                     } else {
                         console.warn("RAG Worker: Transformers.js rephrasing produced unexpected output or no text. Using original query.");
                     }
-                } else { // Default to WebLLM
+                } else {
                     self.postMessage({ type: 'status', payload: { message: `Rephrasing query with WebLLM...`, isError: false, isReady: false } });
-                    queryForRetrieval = await ragManager.rephraseQuery(originalQuery, rephrasePromptTemplate, systemPrompt, temperature);
+                    console.log("RAG Worker: Using WebLLM settings:", rephraseSettings);
+                    queryForRetrieval = await ragManager.rephraseQuery(
+                        originalQuery,
+                        rephrasePromptTemplate,
+                        systemPrompt,
+                        rephraseSettings?.temperature,
+                        rephraseSettings
+                    );
                     console.log("RAG Worker: Rephrased with WebLLM to:", queryForRetrieval);
                 }
-                self.postMessage({ type: 'rephrased_query_for_pipeline', payload: { rephrasedQuery: queryForRetrieval } }); // For potential UI update
+                self.postMessage({ type: 'rephrased_query_for_pipeline', payload: { rephrasedQuery: queryForRetrieval } });
+
+                rephraseDuration = performance.now() - rephraseStart;
 
                 // --- Stage 2: Retrieve Context ---
+                const contextStart = performance.now();
                 self.postMessage({ type: 'status', payload: { message: `Retrieving context for: "${queryForRetrieval}"...`, isError: false, isReady: false } });
                 const context = await ragManager.retrieveContext(queryForRetrieval);
-                self.postMessage({ type: 'retrieved_context_for_pipeline', payload: { context: context } }); // For potential UI update
+                self.postMessage({ type: 'retrieved_context_for_pipeline', payload: { context: context } });
+
+                contextDuration = performance.now() - contextStart;
 
                 // --- Stage 3: Generate Final Answer ---
                 let finalAnswer: string | null;
+                const finalAnswerStart = performance.now();
                 if (chatEngineType === 'transformers') {
                     if (!transformersModelId) {
                         throw new Error("Transformers.js model ID not provided for final answer.");
                     }
-                    const finalAnswerPipeline = await getTransformersChatPipeline(transformersModelId);
+                    const finalAnswerPipeline = await getTransformersChatPipeline(transformersModelId, transformersOnnxFile);
                     const finalPrompt = (finalRagPromptTemplate || "Context: {context}\nQuery: {query}\nAnswer:")
                         .replace("{context}", context || "No context provided.")
                         .replace("{query}", originalQuery);
                     self.postMessage({ type: 'status', payload: { message: `Generating final answer with Transformers.js (${transformersModelId})...`, isError: false, isReady: false } });
-                    const finalAnswerOutput = await finalAnswerPipeline(finalPrompt, { temperature: temperature ?? 0.7, max_new_tokens: 500 });
+
+                    // Determine if sampling should be enabled for final answer
+                    const answerShouldSample = (answerSettings?.temperature ?? 0) > 0 ||
+                        (answerSettings?.top_k ?? 0) > 1 ||
+                        ((answerSettings?.top_p ?? 1.0) < 1.0);
+
+                    const tjsSettings: any = {
+                        temperature: answerSettings?.temperature ?? 0.7,
+                        top_p: answerSettings?.top_p,
+                        top_k: answerSettings?.top_k,
+                        max_new_tokens: answerSettings?.max_new_tokens ?? 500,
+                        max_length: undefined, // Initialize max_length
+                        do_sample: answerShouldSample // Explicitly set sampling
+                    };
+                    if (tjsSettings.max_new_tokens) tjsSettings.max_length = tjsSettings.max_new_tokens;
+                    console.log("RAG Worker: Final settings for Transformers.js final answer:", tjsSettings);
+                    const finalAnswerOutput = await finalAnswerPipeline(finalPrompt, tjsSettings);
+                    // Log raw output
                     if (Array.isArray(finalAnswerOutput) && finalAnswerOutput.length > 0 && finalAnswerOutput[0].generated_text) {
-                        finalAnswer = finalAnswerOutput[0].generated_text.replace(finalPrompt, '').trim(); // Remove prompt from output
-                        if (!finalAnswer && finalAnswerOutput[0].generated_text.length > 0) finalAnswer = finalAnswerOutput[0].generated_text.trim(); // If prompt was not in output
+                        console.log("RAG Worker: RAW finalAnswerOutput from Transformers.js:", finalAnswerOutput[0].generated_text);
+                    }
+                    if (Array.isArray(finalAnswerOutput) && finalAnswerOutput.length > 0 && finalAnswerOutput[0].generated_text) {
+                        finalAnswer = finalAnswerOutput[0].generated_text.replace(finalPrompt, '').trim();
+                        if (!finalAnswer && finalAnswerOutput[0].generated_text.length > 0) finalAnswer = finalAnswerOutput[0].generated_text.trim();
                     } else {
                         finalAnswer = "Transformers.js generation produced unexpected output or no text.";
                     }
-                } else { // Default to WebLLM
+                } else {
                     self.postMessage({ type: 'status', payload: { message: `Generating final answer with WebLLM...`, isError: false, isReady: false } });
-                    finalAnswer = await ragManager.generateFinalAnswer(originalQuery, context, finalRagPromptTemplate, systemPrompt, temperature);
+                    finalAnswer = await ragManager.generateFinalAnswer(
+                        originalQuery,
+                        context,
+                        finalRagPromptTemplate,
+                        systemPrompt,
+                        temperature,
+                        answerSettings
+                    );
                 }
 
-                self.postMessage({ type: 'response', payload: { result: finalAnswer } });
-                self.postMessage({ type: 'status', payload: { message: 'Full RAG pipeline complete. Ready for new query.', isError: false, isReady: true } });
+                finalAnswerDuration = performance.now() - finalAnswerStart;
+                const totalPipelineDuration = performance.now() - totalPipelineStart;
+
+                self.postMessage({
+                    type: 'response', payload: {
+                        result: finalAnswer,
+                        metrics: {
+                            rephraseDuration,
+                            contextDuration,
+                            finalAnswerDuration,
+                            totalPipelineDuration
+                        }
+                    }
+                });
+                self.postMessage({ type: 'status', payload: { message: 'Full RAG pipeline complete. Ready for new query.', isError: false } });
 
             } catch (error) {
                 console.error("RAG Worker: Error in full RAG pipeline:", error);
-                self.postMessage({ type: 'response', payload: { error: `Error in RAG pipeline: ${(error as Error).message}` } });
-                self.postMessage({ type: 'status', payload: { message: 'Error in RAG pipeline. Ready for new query.', isError: true, isReady: true } });
+                self.postMessage({ type: 'response', payload: { error: `Error in RAG pipeline: ${(error as Error).message}`, metrics: null } });
+                self.postMessage({ type: 'status', payload: { message: 'Error in RAG pipeline. Ready for new query.', isError: true } });
             }
             break;
 
@@ -263,7 +312,8 @@ self.onmessage = async (event: MessageEvent) => {
                 return;
             }
             try {
-                const { originalQuery, rephrasePromptTemplate, systemPrompt, temperature, chatEngineType, transformersModelId } = payload;
+                const { originalQuery, rephrasePromptTemplate, systemPrompt, temperature, chatEngineType, transformersModelId, transformersOnnxFile, rephraseSettings } = payload;
+                const rephraseStart = performance.now();
                 self.postMessage({ type: 'status', payload: { message: 'Rephrasing query in worker...', isError: false, isReady: false } });
                 let rephrasedQuery;
 
@@ -271,28 +321,74 @@ self.onmessage = async (event: MessageEvent) => {
                     if (!transformersModelId) {
                         throw new Error("Transformers.js model ID not provided for rephrasing.");
                     }
-                    const pipeline = await getTransformersChatPipeline(transformersModelId);
+                    const pipeline = await getTransformersChatPipeline(transformersModelId, transformersOnnxFile);
                     const fullPrompt = rephrasePromptTemplate.replace("{query}", originalQuery);
                     // System prompt handling for transformers.js is tricky, often baked into the prompt or model fine-tuning
                     self.postMessage({ type: 'status', payload: { message: `Rephrasing with TJS (${transformersModelId})...`, isError: false, isReady: false } });
                     const output = await pipeline(fullPrompt, { temperature: temperature ?? 0.3, max_new_tokens: 100 });
                     if (Array.isArray(output) && output.length > 0 && output[0].generated_text) {
-                        rephrasedQuery = output[0].generated_text.replace(fullPrompt, '').trim(); // Attempt to remove prompt
-                        if (!rephrasedQuery) rephrasedQuery = output[0].generated_text.trim(); // Fallback if prompt wasn't in output
+                        let rawGeneratedText = output[0].generated_text;
+
+                        if (transformersModelId === 'transformers_pleias') {
+                            console.log("RAG Worker: Attempting Pleias-specific parsing for rephrase output.");
+                            // Attempt to parse structured Pleias output for query report
+                            const queryReportMatch = rawGeneratedText.match(/<\|query_report_start\|>([\s\S]*?)<\|query_report_end\|>/);
+                            if (queryReportMatch && queryReportMatch[1]) {
+                                const queryReportContent = queryReportMatch[1].trim();
+                                console.log("RAG Worker: Extracted Query Report content:", queryReportContent);
+                                // Further attempt to find a reformulated query within the report
+                                const reformulatedMatch = queryReportContent.match(/(?:Reformulated Query|query_reformulation):\s*([\s\S]+)/i);
+                                if (reformulatedMatch && reformulatedMatch[1]) {
+                                    rephrasedQuery = reformulatedMatch[1].trim();
+                                    console.log("RAG Worker: Parsed Reformulated Query (Pleias):", rephrasedQuery);
+                                } else {
+                                    console.warn("RAG Worker: Could not find 'Reformulated Query:' in Pleias query report. Using full report content as fallback.");
+                                    rephrasedQuery = queryReportContent; // Fallback to the whole report content if specific line not found
+                                }
+                            } else {
+                                // Fallback for Pleias if query_report tags are missing but source_analysis_start was the stop
+                                const promptEndMarker = "<|source_analysis_start|>";
+                                const promptEndIndex = rawGeneratedText.indexOf(promptEndMarker);
+                                if (promptEndIndex !== -1) {
+                                    // Take text after the input prompt, up to where source_analysis_start would be in the output
+                                    // This assumes the model output the reformulation before this implicit stop
+                                    rephrasedQuery = rawGeneratedText.substring(fullPrompt.length, promptEndIndex).trim();
+                                    console.log("RAG Worker: Pleias rephrase (fallback, text before source_analysis_start):", rephrasedQuery);
+                                } else {
+                                    // Generic fallback: remove the prompt part and hope the rest is the reformulation
+                                    rephrasedQuery = rawGeneratedText.replace(fullPrompt, '').trim();
+                                    console.warn("RAG Worker: Pleias query_report tags not found, and no clear stop. Using generic prompt removal for rephrase.");
+                                }
+                            }
+                        } else {
+                            // Original behavior for non-Pleias transformers
+                            rephrasedQuery = rawGeneratedText.replace(fullPrompt, '').trim();
+                            console.log(`RAG Worker: Standalone rephrase result (generic transformer, after prompt removal): ${rephrasedQuery}`);
+                        }
+
+                        if (!rephrasedQuery || rephrasedQuery.startsWith("<|")) { // Basic sanity check if parsing failed or returned unwanted tokens
+                            console.warn("RAG Worker: Rephrase parsing resulted in empty or token-like string. Falling back to original query.", rephrasedQuery);
+                            rephrasedQuery = originalQuery; // Fallback if parsing failed or produced something odd
+                        }
                     } else {
-                        rephrasedQuery = "Transformers.js rephrasing produced no text.";
+                        console.warn("RAG Worker: Standalone rephrasing produced unexpected output or no text.");
+                        rephrasedQuery = originalQuery; // Fallback
                     }
                 } else {
                     if (!ragManager) throw new Error("RAGManager not initialized for WebLLM rephrase.");
-                    rephrasedQuery = await ragManager.rephraseQuery(originalQuery, rephrasePromptTemplate, systemPrompt, temperature);
+                    rephrasedQuery = await ragManager.rephraseQuery(originalQuery, rephrasePromptTemplate, systemPrompt, temperature, rephraseSettings);
                 }
 
-                self.postMessage({ type: 'REPHRASED_QUERY_RESULT', payload: { rephrasedQuery } });
-                self.postMessage({ type: 'status', payload: { message: 'Query rephrased.', isError: false, isReady: true } });
+                // Log the payload just before sending
+                const rephraseDuration = performance.now() - rephraseStart;
+                const resultPayload = { rephrasedQuery, metrics: { duration: rephraseDuration } };
+                console.log("RAG Worker: Sending REPHRASED_QUERY_RESULT payload:", resultPayload);
+                self.postMessage({ type: 'REPHRASED_QUERY_RESULT', payload: resultPayload });
+                self.postMessage({ type: 'status', payload: { message: 'Query rephrased.' } });
             } catch (error) {
                 console.error("RAG Worker: Error rephrasing query:", error);
-                self.postMessage({ type: 'REPHRASED_QUERY_RESULT', payload: { error: `Error rephrasing query: ${(error as Error).message}` } });
-                self.postMessage({ type: 'status', payload: { message: 'Error rephrasing query.', isError: true, isReady: true } });
+                self.postMessage({ type: 'REPHRASED_QUERY_RESULT', payload: { error: `Error rephrasing query: ${(error as Error).message}`, metrics: null } });
+                self.postMessage({ type: 'status', payload: { message: 'Error rephrasing query.' } });
             }
             break;
 
@@ -307,13 +403,16 @@ self.onmessage = async (event: MessageEvent) => {
             }
             try {
                 self.postMessage({ type: 'status', payload: { message: 'Retrieving context in worker...', isError: false, isReady: false } });
-                const context = await ragManager.retrieveContext(payload.queryForContext);
-                self.postMessage({ type: 'RETRIEVED_CONTEXT_RESULT', payload: { context } });
-                self.postMessage({ type: 'status', payload: { message: 'Context retrieved.', isError: false, isReady: true } });
+                const contextStart = performance.now();
+                const searchResults = await ragManager.retrieveContext(payload.queryForContext);
+                const contextDuration = performance.now() - contextStart;
+
+                self.postMessage({ type: 'RETRIEVED_CONTEXT_RESULT', payload: { searchResults, metrics: { duration: contextDuration } } });
+                self.postMessage({ type: 'status', payload: { message: 'Context retrieved.' } });
             } catch (error) {
                 console.error("RAG Worker: Error retrieving context:", error);
-                self.postMessage({ type: 'RETRIEVED_CONTEXT_RESULT', payload: { error: `Error retrieving context: ${(error as Error).message}` } });
-                self.postMessage({ type: 'status', payload: { message: 'Error retrieving context.', isError: true, isReady: true } });
+                self.postMessage({ type: 'RETRIEVED_CONTEXT_RESULT', payload: { searchResults: null, error: `Error retrieving context: ${(error as Error).message}`, metrics: null } });
+                self.postMessage({ type: 'status', payload: { message: 'Error retrieving context.' } });
             }
             break;
 
@@ -327,7 +426,8 @@ self.onmessage = async (event: MessageEvent) => {
                 return;
             }
             try {
-                const { originalQuery, context, finalRagPromptTemplate, systemPrompt, temperature, chatEngineType, transformersModelId } = payload;
+                const { originalQuery, context, finalRagPromptTemplate, systemPrompt, temperature, chatEngineType, transformersModelId, transformersOnnxFile, answerSettings } = payload;
+                const finalAnswerStart = performance.now();
                 self.postMessage({ type: 'status', payload: { message: 'Generating final answer in worker...', isError: false, isReady: false } });
                 let finalAnswer;
 
@@ -335,30 +435,58 @@ self.onmessage = async (event: MessageEvent) => {
                     if (!transformersModelId) {
                         throw new Error("Transformers.js model ID not provided for final answer.");
                     }
-                    const pipeline = await getTransformersChatPipeline(transformersModelId);
+                    const pipeline = await getTransformersChatPipeline(transformersModelId, transformersOnnxFile);
                     const fullPrompt = finalRagPromptTemplate
                         .replace("{context}", context || "No context provided.")
                         .replace("{query}", originalQuery);
                     self.postMessage({ type: 'status', payload: { message: `Generating with TJS (${transformersModelId})...`, isError: false, isReady: false } });
-                    const output = await pipeline(fullPrompt, { temperature: temperature ?? 0.7, max_new_tokens: 500 });
+
+                    // Determine if sampling should be enabled for final answer
+                    const answerShouldSample = (answerSettings?.temperature ?? 0) > 0 ||
+                        (answerSettings?.top_k ?? 0) > 1 ||
+                        ((answerSettings?.top_p ?? 1.0) < 1.0);
+
+                    const tjsSettings: any = {
+                        temperature: temperature ?? 0.7,
+                        top_p: answerSettings?.top_p,
+                        top_k: answerSettings?.top_k,
+                        max_new_tokens: answerSettings?.max_new_tokens ?? 500,
+                        max_length: undefined, // Initialize max_length
+                        do_sample: answerShouldSample // Explicitly set sampling
+                    };
+                    if (tjsSettings.max_new_tokens) tjsSettings.max_length = tjsSettings.max_new_tokens;
+                    console.log("RAG Worker: Final settings for step-by-step Transformers.js final answer:", tjsSettings);
+                    const output = await pipeline(fullPrompt, tjsSettings);
+                    // Log raw output
                     if (Array.isArray(output) && output.length > 0 && output[0].generated_text) {
-                        finalAnswer = output[0].generated_text.replace(fullPrompt, '').trim(); // Attempt to remove prompt
-                        if (!finalAnswer && output[0].generated_text.length > 0) finalAnswer = output[0].generated_text.trim(); // Fallback if prompt wasn't in output
+                        console.log("RAG Worker: RAW step-by-step output from Transformers.js:", output[0].generated_text);
+                    }
+                    if (Array.isArray(output) && output.length > 0 && output[0].generated_text) {
+                        finalAnswer = output[0].generated_text.replace(fullPrompt, '').trim();
+                        if (!finalAnswer && output[0].generated_text.length > 0) finalAnswer = output[0].generated_text.trim();
                     } else {
                         finalAnswer = "Transformers.js generation produced no text.";
                     }
                 } else {
                     if (!ragManager) throw new Error("RAGManager not initialized for WebLLM final answer.");
-                    finalAnswer = await ragManager.generateFinalAnswer(originalQuery, context, finalRagPromptTemplate, systemPrompt, temperature);
+                    finalAnswer = await ragManager.generateFinalAnswer(
+                        originalQuery,
+                        context,
+                        finalRagPromptTemplate,
+                        systemPrompt,
+                        temperature,
+                        answerSettings
+                    );
                 }
 
-                self.postMessage({ type: 'FINAL_ANSWER_RESULT', payload: { finalAnswer } });
-                self.postMessage({ type: 'status', payload: { message: 'Final answer generated.', isError: false, isReady: true } });
+                const finalAnswerDuration = performance.now() - finalAnswerStart;
+                self.postMessage({ type: 'FINAL_ANSWER_RESULT', payload: { finalAnswer, metrics: { duration: finalAnswerDuration } } });
+                self.postMessage({ type: 'status', payload: { message: 'Final answer generated.' } });
 
             } catch (error) {
                 console.error("RAG Worker: Error generating final answer:", error);
-                self.postMessage({ type: 'FINAL_ANSWER_RESULT', payload: { error: `Error generating final answer: ${(error as Error).message}` } });
-                self.postMessage({ type: 'status', payload: { message: 'Error generating final answer.', isError: true, isReady: true } });
+                self.postMessage({ type: 'FINAL_ANSWER_RESULT', payload: { error: `Error generating final answer: ${(error as Error).message}`, metrics: null } });
+                self.postMessage({ type: 'status', payload: { message: 'Error generating final answer.' } });
             }
             break;
 

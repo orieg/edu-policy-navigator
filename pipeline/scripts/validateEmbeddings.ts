@@ -343,6 +343,16 @@ async function validateSimilarityAndGenerateSamples(): Promise<boolean> {
             id: 'sample4_edge_case_short',
             text1: 'hi',
             text2: 'hello'
+        },
+        {
+            id: 'sample5_school_district_lookup',
+            text1: 'Where is SRVUSD?',
+            text2: 'The San Ramon Valley Unified School District is located in the San Ramon Valley in California. Its website is https://www.srvusd.net. It is a public school district that serves the cities of San Ramon, Danville, and Alamo.'
+        },
+        {
+            id: 'sample6_school_district_lookup',
+            text1: 'SRVUSD, Locations, Grades, Type',
+            text2: 'The San Ramon Valley Unified School District is located in the San Ramon Valley in California. Its website is https://www.srvusd.net. It is a public school district that serves the cities of San Ramon, Danville, and Alamo.'
         }
     ];
 
@@ -358,7 +368,7 @@ async function validateSimilarityAndGenerateSamples(): Promise<boolean> {
 
         console.log(`  Initializing feature-extraction pipeline with model: ${EXPECTED_EMBEDDING_MODEL_ID}`);
         const extractor = await pipeline('feature-extraction', EXPECTED_EMBEDDING_MODEL_ID, {
-            quantized: false, // Ensure we get float32 for best comparison initially
+            // quantized: false, // Ensure we get float32 for best comparison initially
             progress_callback: (progress: any) => {
                 if (progress.status === 'progress') {
                     // console.log(`    Model loading progress: ${progress.file} ${Math.round(progress.loaded / progress.total * 100)}%`);

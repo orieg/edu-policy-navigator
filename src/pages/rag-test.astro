@@ -163,16 +163,24 @@
                 <summary>Chat Engine Configuration</summary>
                 <fieldset>
                     <div>
-                        <input type="radio" id="chatEngineWebLLM" name="chatEngine" value="webllm" checked />
+                        <input type="radio" id="chatEngineWebLLM" name="chatEngine" value="webllm" />
                         <label for="chatEngineWebLLM">WebLLM (Current MLC Setup)</label>
                     </div>
                     <div>
-                        <input type="radio" id="chatEngineTransformersJS" name="chatEngine" value="transformers" />
-                        <label for="chatEngineTransformersJS">Transformers.js (Hugging Face Model)</label>
+                        <input type="radio" id="chatEngineTransformersJSDefault" name="chatEngine" value="transformers_default" checked />
+                        <label for="chatEngineTransformersJSDefault">Transformers.js (Default: Qwen3 / Custom)</label>
                     </div>
-                    <div id="transformersModelInputDiv" style="margin-top: 10px; display: none;">
-                        <label for="transformersModelInput">Transformers.js Model ID or URL:</label><br />
-                        <input type="text" id="transformersModelInput" placeholder="e.g., Xenova/distilgpt2" style="width: 98%;" />
+                    <div>
+                        <input type="radio" id="chatEnginePleiasRAG" name="chatEngine" value="transformers_pleias" />
+                        <label for="chatEnginePleiasRAG">Transformers.js (Pleias RAG 350M ONNX)</label>
+                    </div>
+                    <div id="transformersModelInputDiv">
+                        <label for="transformersModelInput">Transformers.js Model ID or URL:</label>
+                        <input type="text" id="transformersModelInput" placeholder="e.g. HuggingFaceTB/SmolLM2-135M-Instruct" style="width: 100%;" value="onnx-community/Qwen3-0.6B-ONNX">
+                        <div>
+                            <label for="transformersOnnxFileInput">ONNX Model File Path or URL (optional):</label>
+                            <input type="text" id="transformersOnnxFileInput" placeholder="e.g. onnx/model_quantized.onnx or full URL" style="width: 100%;" value="onnx/model_q4.onnx">
+                        </div>
                     </div>
                 </fieldset>
             </details>
@@ -210,13 +218,28 @@
 
             <details class="accordion-section" open>
                 <summary>Chat Model Settings</summary>
-                <fieldset>
-                    <div id="chatModelConfigSection" style="margin-top: 5px; margin-bottom: 5px;">
-                        <div>
-                            <label for="temperatureSlider">Temperature: <span id="temperatureValue">0.7</span></label><br />
-                            <input type="range" id="temperatureSlider" min="0" max="2" value="0.7" step="0.01" style="width: 98%;">
-                        </div>
-                        <!-- Add other controls here later e.g., top_p -->
+                <fieldset style="display: flex; gap: 24px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 220px;">
+                        <h4 style="margin-bottom: 4px;">Rephrase Model Settings</h4>
+                        <label for="rephraseTemperatureSlider">Temperature: <span id="rephraseTemperatureValue">0.2</span></label><br />
+                        <input type="range" id="rephraseTemperatureSlider" min="0" max="2" value="0.6" step="0.01" style="width: 98%;">
+                        <label for="rephraseTopPSlider">Top-p: <span id="rephraseTopPValue">0.9</span></label><br />
+                        <input type="range" id="rephraseTopPSlider" min="0" max="1" value="0.95" step="0.01" style="width: 98%;">
+                        <label for="rephraseTopKInput">Top-k:</label>
+                        <input type="number" id="rephraseTopKInput" min="0" max="100" value="20" style="width: 60px;">
+                        <label for="rephraseMaxNewTokensInput">Max new tokens:</label>
+                        <input type="number" id="rephraseMaxNewTokensInput" min="1" max="32768" value="32768" style="width: 60px;">
+                    </div>
+                    <div style="flex: 1; min-width: 220px;">
+                        <h4 style="margin-bottom: 4px;">Chat Answer Model Settings</h4>
+                        <label for="answerTemperatureSlider">Temperature: <span id="answerTemperatureValue">0.6</span></label><br />
+                        <input type="range" id="answerTemperatureSlider" min="0" max="2" value="0.0" step="0.01" style="width: 98%;">
+                        <label for="answerTopPSlider">Top-p: <span id="answerTopPValue">0.95</span></label><br />
+                        <input type="range" id="answerTopPSlider" min="0" max="1" value="0.95" step="0.01" style="width: 98%;">
+                        <label for="answerTopKInput">Top-k:</label>
+                        <input type="number" id="answerTopKInput" min="0" max="100" value="0" style="width: 60px;">
+                        <label for="answerMaxNewTokensInput">Max new tokens:</label>
+                        <input type="number" id="answerMaxNewTokensInput" min="1" max="4096" value="2048" style="width: 60px;">
                     </div>
                 </fieldset>
             </details>
@@ -226,7 +249,7 @@
                 <div>
                     <label for="queryInput">Enter your query:</label><br />
                     <textarea id="queryInput" placeholder="Ask something..."
-                    ></textarea>
+                    >Where is SRVUSD?</textarea>
                 </div>
                 <button id="submitQueryBtn" disabled>Run Full RAG Pipeline</button>
             </fieldset>
@@ -256,6 +279,13 @@
                     style="max-height: 200px; overflow-y: auto;"
                 >
                     <!-- Retrieved context will appear here -->
+                </div>
+
+                <!-- New Min Context Score Slider -->
+                <div class="setting">
+                    <label for="minContextScoreSlider">Min Context Score:</label>
+                    <input type="range" id="minContextScoreSlider" min="0" max="1" step="0.01" value="0.3">
+                    <span id="minContextScoreValue">0.3</span>
                 </div>
 
                 <button

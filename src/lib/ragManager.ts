@@ -159,9 +159,10 @@ export class RAGManager {
         originalQuery: string,
         rephrasePromptTemplate?: string,
         systemPromptText?: string,
-        temperature?: number
+        temperature?: number,
+        modelSettings?: ChatOptions
     ): Promise<string> {
-        console.log("RAGManager: Rephrasing query:", originalQuery, "Temp:", temperature);
+        console.log("RAGManager: Rephrasing query:", originalQuery, "Settings:", modelSettings);
         const template = rephrasePromptTemplate || this.DEFAULT_REPHRASE_QUERY_PROMPT_TEMPLATE;
 
         const rephraseSystemPrompt = systemPromptText || "You are a query optimization assistant.";
@@ -172,7 +173,13 @@ export class RAGManager {
             { role: 'user', content: template.replace("{query}", originalQuery) }
         ];
 
-        const chatOpts: ChatOptions = { temperature: temperature ?? 0.2 };
+        // Create a new object to avoid modifying the input modelSettings
+        const chatOpts: ChatOptions = {
+            ...modelSettings,  // Spread all model settings first
+            temperature: temperature ?? modelSettings?.temperature ?? 0.2  // Then override temperature if provided
+        };
+
+        console.log("RAGManager: Using chat options:", chatOpts);
 
         const rephrasedQueryText = await this.webLLMService.getChatCompletion(
             messages,
@@ -188,7 +195,7 @@ export class RAGManager {
 
     public async retrieveContext(
         queryForContext: string
-    ): Promise<string | null> { // Context can be a string or null if nothing is found
+    ): Promise<SearchResult[] | null> { // Return SearchResult array or null
         console.log("RAGManager: Retrieving context for query:", queryForContext);
         const queryEmbedding = await this.webLLMService.getQueryEmbedding(queryForContext);
         if (!queryEmbedding) {
@@ -208,10 +215,9 @@ export class RAGManager {
             return null;
         }
 
-        // For now, returning combined text content. Could be more structured later.
-        const contextText = searchResults.map(doc => doc.text).join("\n\n---\n\n");
-        console.log("RAGManager: Retrieved context text based on query:", queryForContext, "Context length:", contextText.length);
-        return contextText;
+        console.log(`RAGManager: Returning ${searchResults.length} search results with scores.`);
+        // Return the full SearchResult array
+        return searchResults;
     }
 
     public async generateFinalAnswer(
@@ -219,9 +225,10 @@ export class RAGManager {
         context: string | null, // Context can be null
         finalRagPromptTemplate?: string,
         systemPromptText?: string,
-        temperature?: number
+        temperature?: number,
+        modelSettings?: ChatOptions
     ): Promise<string> {
-        console.log("RAGManager: Generating final answer for query:", originalQuery, "Temp:", temperature);
+        console.log("RAGManager: Generating final answer for query:", originalQuery, "Settings:", modelSettings);
         const finalTemplate = finalRagPromptTemplate || this.DEFAULT_FINAL_RAG_PROMPT_TEMPLATE;
         const effectiveSystemPrompt = systemPromptText || this.DEFAULT_SYSTEM_PROMPT;
 
@@ -236,7 +243,10 @@ export class RAGManager {
             { role: 'user', content: finalPrompt }
         ];
 
-        const chatOpts: ChatOptions = { temperature: temperature ?? undefined };
+        const chatOpts: ChatOptions = {
+            temperature: temperature ?? undefined,
+            ...modelSettings
+        };
 
         const finalAnswerText = await this.webLLMService.getChatCompletion(
             messages,

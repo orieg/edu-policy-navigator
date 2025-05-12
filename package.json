@@ -16,7 +16,7 @@
     "build:data": "tsc pipeline/scripts/generateDistrictJson.ts --module nodenext --outDir dist/pipeline/scripts && node dist/pipeline/scripts/generateDistrictJson.js",
     "build:boundaries": "tsc pipeline/scripts/splitBoundaries.ts --module nodenext --outDir dist/pipeline/scripts && node dist/pipeline/scripts/splitBoundaries.js",
     "build:embeddings": "tsc pipeline/scripts/generateClusteredEmbeddings.ts --module nodenext --outDir dist/pipeline/scripts --skipLibCheck true && node dist/pipeline/scripts/generateClusteredEmbeddings.js",
-    "validate:embeddings": "tsc pipeline/scripts/validateEmbeddings.ts --module nodenext --outDir dist/pipeline/scripts && node dist/pipeline/scripts/validateEmbeddings.js",
+    "validate:embeddings": "tsc pipeline/scripts/validateEmbeddings.ts --module nodenext --outDir dist/pipeline/scripts --skipLibCheck && node dist/pipeline/scripts/validateEmbeddings.js",
     "build:rag-test": "tsc --project tsconfig.client.json",
     "prepare": "pnpm run convert:xlsx && pnpm run build:data && pnpm run build:boundaries && pnpm run build:embeddings",
     "download:osm": "mkdir -p pipeline/data && curl -L -o pipeline/data/california-latest.osm.pbf https://download.geofabrik.de/north-america/us/california-latest.osm.pbf",
