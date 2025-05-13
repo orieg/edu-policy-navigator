@@ -45,7 +45,7 @@ This plan outlines creating and using a full-text search system where a global i
     * **D. Corpus Statistics File:**
         * `corpus_stats.json` (or `.msgpack`): `{ totalDocuments: number, averageDocumentLength: number }`.
     * **E. Document Store (Optional but Recommended):**
-        * A way to fetch document details (title, snippet) by `documentId`. This might be part of your existing data loading or a separate `doc_store.json` (potentially sharded if very large, e.g., by `docId` prefix).
+        * A way to fetch document details (title, snippet) by `documentId`. This might be part of your existing data loading (e.g., from `districts.json`, `school_by_district.json`) or a separate `doc_store.json` (potentially sharded if very large, e.g., by `docId` prefix).
     * **F. Manifest Update:** An updated `manifest.json` (or equivalent) to list paths to these new full-text search asset files/shards.
 
 ---
@@ -125,3 +125,50 @@ This plan outlines creating and using a full-text search system where a global i
 * Increased complexity in offline asset generation (sharded index).
 * Managing dynamic loading and combining of index shards on the client.
 * Ensuring consistent text processing between offline and client-side.
+
+## Initial Prototyping Strategy for `rag-test.astro`
+
+For rapid initial implementation and testing of hybrid search concepts within `rag-test.astro`, the following simplified approach will be taken:
+
+1.  **No Initial Sharding:**
+    *   Implement BM25 and RRF logic directly on the full, existing client-side dataset (`allProcessedData`). This bypasses the complexity of sharding for the first pass, allowing focus on the core algorithms.
+    *   Sharding and shard loading strategies can be integrated later once the core hybrid search is functional.
+
+2.  **Minimalist Client-Side Text Processing:**
+    *   For BM25, use basic tokenization (splitting by spaces and punctuation) and stemming if a very lightweight JavaScript library is readily available or can be quickly implemented. Avoid complex NLP pipelines initially.
+    *   The primary goal is to get a functional BM25, not a perfect one, for the first iteration.
+
+3.  **Leverage Existing Document Metadata:**
+    *   Utilize the existing `id`, `title`, `text`, and `embeddings` from `ProcessedResult` (and `FullProcessedResult`) – which are derived from the primary data sources like `districts.json` and `school_by_district.json` – for both semantic and keyword search components.
+    *   No new document store or complex indexing will be created for this initial phase.
+
+4.  **Basic UI Toggles and Parameter Input:**
+    *   Add a simple toggle or dropdown to switch between:
+        *   Semantic search only (current implementation)
+        *   BM25 only
+        *   Hybrid search (Semantic + BM25 with RRF)
+    *   Input fields for RRF `k_rrf` constant.
+    *   Input field for BM25 `k1` and `b` parameters (with sensible defaults).
+
+5.  **Clear Validation Goals:**
+    *   Focus on demonstrating that the hybrid approach can retrieve relevant documents that either semantic or keyword search alone might miss.
+    *   Use the "Embedding Similarity Validation" and RAG test sections to compare results.
+    *   Display scores from each component (semantic, BM25) and the final RRF score.
+
+6.  **Web Worker Integration:**
+    *   Perform BM25 calculations and RRF fusion within the existing web worker (`rag_worker.ts`) to keep the UI responsive, similar to how embeddings and chat generation are handled.
+
+This phased approach allows for quicker iteration and validation of the core hybrid search mechanics before investing in more complex optimizations like sharding or advanced text processing.
+
+## Comparison of Search Approaches
+
+This table provides a summary comparison of the different search methodologies discussed in this document.
+
+| Feature                     | Semantic Search (Vector-based)                                  | Keyword Search (BM25)                                       | Hybrid Search (Semantic + BM25 w/ RRF)                         |
+| :-------------------------- | :-------------------------------------------------------------- | :---------------------------------------------------------- | :------------------------------------------------------------- |
+| **Core Algorithm(s)**       | Embedding Models (e.g., Sentence Transformers), Similarity Metrics (e.g., Cosine, Dot Product). Dense vector search can be optimized at scale using Approximate Nearest Neighbor (ANN) libraries/algorithms (e.g., Faiss, HNSW, ScaNN). Clustering (k-means) can serve as an alternative indexing or pre-filtering method. | BM25 (based on TF-IDF, document length normalization). Relies on an Inverted Index. | Combination of algorithms from Semantic & Keyword search, with Reciprocal Rank Fusion (RRF) for merging results. |
+| **Primary Use Case / Strength** | Understanding query intent, finding conceptually similar documents even if keywords don't exact-match. Captures nuanced meaning. | Finding documents with exact or very similar keyword matches. Effective for known-item searches or specific terminology. | Achieving a balance of semantic relevance and keyword precision. Aims for higher overall relevance by leveraging strengths of both. |
+| **Query Type Suitability**  | Natural language questions, queries requiring understanding of concepts, synonyms, and related ideas. | Queries with specific keywords, product names, error codes, jargon, or precise phrases. | Broad range of queries; aims to perform well on both conceptual and keyword-specific queries. |
+| **Data Representation**     | Dense vector embeddings for documents and queries.              | Sparse representations (inverted index mapping terms to documents and frequencies). | Utilizes both dense vectors and sparse inverted indexes.       |
+| **Pros**                    | - Captures semantic meaning & context.<br>- Robust to variations in wording.<br>- Discovers related concepts. | - Precise matching for keywords.<br>- Transparent & interpretable results.<br>- Fast for indexed terms. | - Often yields superior relevance by combining diverse signals.<br>- More robust across various query types.<br>- Can surface results missed by either method alone. |
+| **Cons**                    | - Can miss documents with exact keyword matches if semantically distant.<br>- Embedding quality is crucial & can be a "black box".<br>- Computationally intensive for embedding generation and dense search without optimizations. | - Struggles with synonyms & conceptual variations.<br>- Doesn't understand query intent beyond keywords.<br>- Can be sensitive to keyword stuffing or misspellings if not handled. | - Increased system complexity (managing two types of indexes and fusion logic).<br>- Requires tuning of individual components and the fusion method (e.g., RRF `k` parameter).<br>- Higher resource consumption (CPU, memory). |
