@@ -160,3 +160,5 @@ public/src/
 # Ignore JS files compiled from TS in the src directory
 src/**/*.js
 src/**/*.js.map
+
+.DS_Store
