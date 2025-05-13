@@ -270,6 +270,42 @@
                 <button id="submitQueryBtn" disabled>Run Full RAG Pipeline</button>
             </fieldset>
 
+            <!-- MOVED: Hybrid Search PoC Elements - Placed after Main Query for pipeline control -->
+            <div class="input-group" style="margin-top: 15px;">
+                <label for="searchModeSelect">Search Mode:</label>
+                <select id="searchModeSelect">
+                    <option value="semantic" selected>Semantic (Full RAG Pipeline)</option>
+                    <option value="bm25">BM25 Only</option>
+                    <option value="hybrid">Hybrid (Semantic + BM25 + RRF)</option>
+                </select>
+            </div>
+
+            <div id="bm25ParamsDiv" style="display:none; border: 1px solid #ccc; padding: 10px; margin-top:5px; margin-bottom:10px; border-radius:5px;">
+                <h4>BM25 Parameters</h4>
+                <div class="input-group">
+                    <label for="bm25K1Input" title="Controls term frequency saturation. Higher values give more weight to term frequency, lower values saturate its effect sooner. Typical: 1.2-2.0.">k1 (Term Saturation):</label>
+                    <input type="number" id="bm25K1Input" value="1.2" step="0.1" title="Controls term frequency saturation. Higher values give more weight to term frequency, lower values saturate its effect sooner. Typical: 1.2-2.0." />
+                </div>
+                <div class="input-group">
+                    <label for="bm25BInput" title="Controls document length normalization. 0 means no length normalization, 1 means full normalization. Typical: 0.75.">b (Length Normalization):</label>
+                    <input type="number" id="bm25BInput" value="0.75" step="0.05" title="Controls document length normalization. 0 means no length normalization, 1 means full normalization. Typical: 0.75." />
+                </div>
+            </div>
+
+            <div id="rrfParamsDiv" style="display:none; border: 1px solid #ccc; padding: 10px; margin-top:5px; margin-bottom:10px; border-radius:5px;">
+                <h4>RRF Parameters (for Hybrid)</h4>
+                <div class="input-group">
+                    <label for="rrfKInput" title="RRF constant. Lower values give more weight to higher-ranked items in individual lists. Higher values spread out the influence. Typical: 60.">k (RRF Constant):</label>
+                    <input type="number" id="rrfKInput" value="60" step="1" title="RRF constant. Lower values give more weight to higher-ranked items in individual lists. Higher values spread out the influence. Typical: 60." />
+                </div>
+            </div>
+
+            <div class="input-group" id="hybridTopNInputDiv" style="margin-bottom: 15px;">
+                <label for="hybridTopNInput" title="Specifies the maximum number of results to return for BM25, Hybrid search, or number of context chunks for semantic search.">Top N Results (for BM25/Hybrid/Semantic Context):</label>
+                <input type="number" id="hybridTopNInput" value="10" step="1" min="1" title="Specifies the maximum number of results to return for BM25, Hybrid search, or number of context chunks for semantic search."/>
+            </div>
+            <!-- END MOVED: Hybrid Search PoC Elements -->
+
             <hr style="margin-top: 20px; margin-bottom: 20px;" />
 
             <fieldset>
@@ -303,29 +339,26 @@
                     <!-- Retrieved context will appear here -->
                 </div>
 
-                <!-- New Min Context Score Slider -->
+                <!-- Restoring these elements -->
                 <div class="setting">
-                    <label for="minContextScoreSlider">Min Context Score:</label>
-                    <input type="range" id="minContextScoreSlider" min="0" max="1" step="0.01" value="0.3">
+                    <label for="minContextScoreSlider" title="Minimum similarity score for a document to be included in the retrieved context for RAG. Filters out less relevant documents.">Min Context Score:</label>
+                    <input type="range" id="minContextScoreSlider" min="0" max="1" step="0.01" value="0.3" title="Minimum similarity score for a document to be included in the retrieved context for RAG. Filters out less relevant documents.">
                     <span id="minContextScoreValue">0.3</span>
                 </div>
-
-                <!-- New Search All Documents Checkbox -->
                 <div class="setting" style="margin-top: 10px;">
                     <input type="checkbox" id="searchAllDocumentsCheckbox" name="searchAllDocumentsCheckbox">
                     <label for="searchAllDocumentsCheckbox">Search all documents (slower, for testing impact of clustering)</label>
                 </div>
-
-                <!-- New Similarity Metric Select -->
                 <div class="setting" style="margin-top: 10px;">
-                    <label for="similarityMetricSelect">Similarity Metric:</label>
-                    <select id="similarityMetricSelect" name="similarityMetricSelect">
+                    <label for="similarityMetricSelect" title="Metric to determine semantic similarity for vector search during context retrieval. Cosine is common for normalized embeddings.">Similarity Metric:</label>
+                    <select id="similarityMetricSelect" name="similarityMetricSelect" title="Metric to determine semantic similarity for vector search during context retrieval. Cosine is common for normalized embeddings.">
                         <option value="cosine">Cosine Similarity (Dot Product on Normalized)</option>
                         <option value="dot_product">Dot Product (Explicit)</option>
                         <option value="manhattan">Manhattan Distance</option>
                         <option value="euclidean">Euclidean Distance</option>
                     </select>
                 </div>
+                <!-- End of restored elements -->
 
                 <button
                     id="generateFinalAnswerBtn"
@@ -335,9 +368,21 @@
             </fieldset>
 
             <h2 style="margin-top: 20px;">Response:</h2>
-            <div id="responseArea">
+            <div id="responseArea" class="output-area">
                 <!-- AI response will appear here -->
             </div>
+
+            <!-- NEW: BM25 and Hybrid Results Areas -->
+            <div id="bm25ResultsArea" class="output-area" style="margin-top: 10px;">
+                <!-- BM25 results will appear here -->
+            </div>
+            <div id="hybridSearchResultsArea" class="output-area" style="margin-top: 10px;">
+                <div id="hybridSearchResultsArea" class="results-area"></div>
+                <div id="performanceMetricsArea" class="metrics-area" style="margin-top: 10px; padding: 10px; border: 1px solid #ccc; display: none;">
+                    <!-- Performance metrics will be displayed here -->
+                </div>
+            </div>
+            <!-- END NEW -->
 
             <hr style="margin: 30px 0;" />
 
@@ -350,8 +395,8 @@
                     </p>
                     <!-- New Similarity Metric Select for Validation -->
                     <div class="setting" style="margin-bottom: 10px;">
-                        <label for="validationSimilarityMetricSelect">Similarity Metric for Validation:</label>
-                        <select id="validationSimilarityMetricSelect" name="validationSimilarityMetricSelect">
+                        <label for="validationSimilarityMetricSelect" title="Metric to compare text pair similarity for embedding validation. Cosine is common for normalized embeddings.">Similarity Metric for Validation:</label>
+                        <select id="validationSimilarityMetricSelect" name="validationSimilarityMetricSelect" title="Metric to compare text pair similarity for embedding validation. Cosine is common for normalized embeddings.">
                             <option value="cosine">Cosine Similarity</option>
                             <option value="dot_product">Dot Product</option>
                             <option value="manhattan">Manhattan Distance</option>
@@ -368,40 +413,24 @@
             </details>
             <!-- End of New Section -->
 
-            <!-- NEW: Hybrid Search PoC Elements -->
-            <div class="input-group">
-                <label for="searchModeSelect">Search Mode:</label>
-                <select id="searchModeSelect">
-                    <option value="semantic" selected>Semantic (Full RAG Pipeline)</option>
-                    <option value="bm25">BM25 Only</option>
-                    <option value="hybrid">Hybrid (Semantic + BM25 + RRF)</option>
-                </select>
-            </div>
+            <hr style="margin: 30px 0;" />
 
-            <div id="bm25ParamsDiv" style="display:none; border: 1px solid #ccc; padding: 10px; margin-bottom:10px; border-radius:5px;">
-                <h4>BM25 Parameters</h4>
-                <div class="input-group">
-                    <label for="bm25K1Input">k1 (Term Saturation):</label>
-                    <input type="number" id="bm25K1Input" value="1.2" step="0.1" />
+            <!-- NEW: Dedicated BM25 Test Section -->
+            <fieldset>
+                <legend>Dedicated BM25 Full-Text Search Test</legend>
+                <p>Test the BM25 retrieval component directly. Uses parameters from the "BM25 Parameters" and "Top N Results" inputs above (from the main pipeline controls).</p>
+                <button id="testBm25OnlyBtn" disabled>Test BM25 Retrieval Only</button>
+                <h4>BM25 Test Results:</h4>
+                <div id="dedicatedBm25TestResultsArea" class="output-area" style="margin-top: 10px;">
+                    <!-- Dedicated BM25 test results will appear here -->
                 </div>
-                <div class="input-group">
-                    <label for="bm25BInput">b (Length Normalization):</label>
-                    <input type="number" id="bm25BInput" value="0.75" step="0.05" />
-                </div>
-            </div>
+            </fieldset>
+            <!-- END: Dedicated BM25 Test Section -->
 
-            <div id="rrfParamsDiv" style="display:none; border: 1px solid #ccc; padding: 10px; margin-bottom:10px; border-radius:5px;">
-                <h4>RRF Parameters (for Hybrid)</h4>
-                <div class="input-group">
-                    <label for="rrfKInput">k (RRF Constant):</label>
-                    <input type="number" id="rrfKInput" value="60" step="1" />
-                </div>
-            </div>
+            <hr style="margin: 30px 0;" />
 
-            <div class="input-group" id="hybridTopNInputDiv">
-                <label for="hybridTopNInput">Top N Results (for BM25/Hybrid):</label>
-                <input type="number" id="hybridTopNInput" value="10" step="1" min="1"/>
-            </div>
+            <!-- REMOVE REDUNDANT Hybrid Search PoC Elements from here -->
+            <!-- These were moved up -->
             <!-- END: Hybrid Search PoC Elements -->
 
         </div>

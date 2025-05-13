@@ -161,6 +161,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const hybridSearchResultsArea = document.getElementById('hybridSearchResultsArea') as HTMLDivElement;
     // --- End Elements for Hybrid Search PoC ---
 
+    // --- NEW: Elements for Dedicated BM25 Test ---
+    const testBm25OnlyBtn = document.getElementById('testBm25OnlyBtn') as HTMLButtonElement;
+    const dedicatedBm25TestResultsArea = document.getElementById('dedicatedBm25TestResultsArea') as HTMLDivElement;
+    // --- END: Elements for Dedicated BM25 Test ---
+
     // --- Element Existence Check ---
     const requiredElements: { [key: string]: HTMLElement | null } = {
         queryInput,
@@ -214,6 +219,8 @@ document.addEventListener('DOMContentLoaded', async () => {
         hybridTopNInput,
         bm25ResultsArea,
         hybridSearchResultsArea,
+        testBm25OnlyBtn, // Added
+        dedicatedBm25TestResultsArea // Added
     };
     systemPromptContainer = document.getElementById('systemPromptContainerDiv') as HTMLDivElement; // Assign inside listener
     const validationSimilarityMetricSelect = document.getElementById('validationSimilarityMetricSelect') as HTMLSelectElement;
@@ -701,6 +708,7 @@ Based on the context, answer the following question:
             if (retrieveContextBtn) retrieveContextBtn.disabled = true;
             if (generateFinalAnswerBtn) generateFinalAnswerBtn.disabled = true;
             if (retrieveContextOriginalBtn) retrieveContextOriginalBtn.disabled = !isReady || !queryInput.value.trim();
+            if (testBm25OnlyBtn) testBm25OnlyBtn.disabled = !isReady; // Added
 
             // New chat engine UI elements
             if (chatEngineWebLLMRadio) chatEngineWebLLMRadio.disabled = !isReady;
@@ -769,6 +777,33 @@ Based on the context, answer the following question:
             (window as any).ragWorker = worker; // Also assign to window for HMR listener for now
             console.log("RAG Test Main: Web Worker created.");
 
+            // Helper to re-enable the main submit button and related step-by-step buttons
+            const reEnableSubmitButton = () => {
+                if (submitQueryBtn) {
+                    submitQueryBtn.disabled = false;
+                    submitQueryBtn.textContent = 'Run Full RAG Pipeline';
+                }
+                // Also re-enable step-by-step buttons if they exist and were part of a flow
+                // This might need more granular control depending on exact flow and if system is truly ready
+                if (rephraseQueryBtn && isWorkerReady) rephraseQueryBtn.disabled = false;
+                // retrieveContextBtn and generateFinalAnswerBtn are typically enabled by specific preceding successful steps,
+                // so they are not generically re-enabled here. Their state is managed by 'REPHRASED_QUERY_RESULT' and 'RETRIEVED_CONTEXT_RESULT' handlers.
+                if (retrieveContextOriginalBtn && isWorkerReady && queryInput.value.trim()) retrieveContextOriginalBtn.disabled = false;
+                if (testBm25OnlyBtn && isWorkerReady) testBm25OnlyBtn.disabled = false;
+
+                // Re-enable chat engine selection if worker is ready
+                if (isWorkerReady) {
+                    if (chatEngineWebLLMRadio) chatEngineWebLLMRadio.disabled = false;
+                    if (chatEnginePleiasRAGRadio) chatEnginePleiasRAGRadio.disabled = false;
+                    if (chatEngineTransformersJSDefaultRadio) chatEngineTransformersJSDefaultRadio.disabled = false;
+                    if (chatEnginePleiasRAG1BRadio) chatEnginePleiasRAG1BRadio.disabled = false;
+                    if (mlcModelSelect) mlcModelSelect.disabled = !chatEngineWebLLMRadio.checked; // Only enable if WebLLM is selected
+                    if (transformersModelInput) transformersModelInput.disabled = !chatEngineTransformersJSDefaultRadio.checked;
+                    if (transformersOnnxFileInput) transformersOnnxFileInput.disabled = !chatEngineTransformersJSDefaultRadio.checked;
+                }
+                if (progressBarContainer) progressBarContainer.style.display = 'none';
+            };
+
             worker.onmessage = (event: MessageEvent) => {
                 // console.log("RAG Test Main: Message received from worker:", event.data);
                 const { type, payload } = event.data;
@@ -786,31 +821,31 @@ Based on the context, answer the following question:
                         console.log("RAG Test Main: Received 'progress' message from worker:", payload);
                         updateProgress(payload.message, payload.loaded, payload.total);
                         break;
-                    case 'response': // Full RAG pipeline response
-                        let responseHtml = '';
-                        console.log("RAG Test Main: Handling 'response' message. Metrics:", payload?.metrics); // Log metrics specifically
+                    case 'response': // This handles final answers from full RAG or hybrid (with generation)
+                        responseArea.innerHTML = ''; // Clear previous response
                         if (payload.error) {
-                            responseHtml = `<span style="color:red;">Error: ${escapeHtml(payload.error)}</span>`;
+                            responseArea.innerHTML = `<p class="error-message">Error: ${escapeHtml(payload.error)}</p>`;
+                            updateStatus(`Error processing query: ${payload.error}`, true, true);
                         } else {
-                            // Escape and highlight <think> blocks
-                            responseHtml = highlightThinkBlocks(escapeHtml(payload.result || 'No result text.'));
-                        }
-                        // Add metrics if available
-                        if (payload.metrics) {
-                            responseHtml += `<br><small style="color:grey;">`;
-                            const { rephraseDuration, contextDuration, finalAnswerDuration, totalPipelineDuration, generatedTokenCount } = payload.metrics;
-                            responseHtml += `(Rephrase: ${rephraseDuration?.toFixed(0)}ms | `;
-                            responseHtml += `Context: ${contextDuration?.toFixed(0)}ms | `;
-                            responseHtml += `Generation: ${finalAnswerDuration?.toFixed(0)}ms`;
-                            if (generatedTokenCount && finalAnswerDuration && finalAnswerDuration > 0) {
-                                const tkPerS = (generatedTokenCount / (finalAnswerDuration / 1000)).toFixed(2);
-                                responseHtml += ` (${generatedTokenCount} tk, ${tkPerS} tk/s)`;
+                            // Display the main result
+                            let responseHtml = highlightThinkBlocks(escapeHtml(payload.result || 'No textual result from LLM.'));
+
+                            // Add inline LLM generation metrics if available from this response
+                            if (payload.metrics && payload.metrics.generationTime !== undefined) {
+                                responseHtml += `<br><small style="color:grey;">`;
+                                responseHtml += `(LLM Gen: ${payload.metrics.generationTime.toFixed(0)}ms`;
+                                if (payload.metrics.totalTokens !== undefined && payload.metrics.tokensPerSecond !== undefined && payload.metrics.generationTime > 0) {
+                                    responseHtml += `, ${payload.metrics.totalTokens} tk, ${payload.metrics.tokensPerSecond.toFixed(2)} tk/s`;
+                                }
+                                responseHtml += `)</small>`;
                             }
-                            responseHtml += ` | Total: ${totalPipelineDuration?.toFixed(0)}ms)</small>`;
+                            responseArea.innerHTML = `<p>${responseHtml.replace(/\n/g, '<br>')}</p>`;
+                            updateStatus('Query processed successfully.', false, true);
+
+                            // The comprehensive performance metrics are handled by a separate 'performanceMetrics' message
+                            // and displayed by updatePerformanceMetricsDisplay.
                         }
-                        responseArea.innerHTML = responseHtml;
-                        console.log("RAG Test Main: Updated responseArea innerHTML:", responseArea.innerHTML.substring(0, 500) + "..."); // Log the final HTML
-                        // Re-enable button after response, handled by status message typically
+                        reEnableSubmitButton(); // Re-enable after processing response
                         break;
                     case 'SIMILARITY_RESULT': // Handle result from worker
                         const { sampleId, webLLMSimilarity, error: webLLMError } = payload;
@@ -853,17 +888,19 @@ Based on the context, answer the following question:
                         } else {
                             currentRephrasedQuery = rephrasedQuery;
                             let rephraseHtml = currentRephrasedQuery ? highlightThinkBlocks(escapeHtml(currentRephrasedQuery)) : 'No rephrased query returned.';
-                            const duration = metrics?.duration ? (metrics.duration / 1000).toFixed(2) : 'N/A';
-                            if (metrics) {
-                                rephraseHtml += `<br><small style="color:grey;">(Duration: ${duration}s`;
-                                if (metrics.generatedTokenCount && metrics.duration && metrics.duration > 0) {
-                                    const tkPerS = (metrics.generatedTokenCount / (metrics.duration / 1000)).toFixed(2);
-                                    rephraseHtml += `, ${metrics.generatedTokenCount} tk, ${tkPerS} tk/s`;
+                            const duration = metrics?.duration;
+                            const tokenCount = metrics?.generatedTokenCount;
+
+                            if (duration !== undefined) {
+                                rephraseHtml += `<br><small style="color:grey;">(Duration: ${(duration / 1000).toFixed(2)}s`;
+                                if (tokenCount !== undefined && duration > 0) {
+                                    const tkPerS = (tokenCount / (duration / 1000)).toFixed(2);
+                                    rephraseHtml += `, ${tokenCount} tk, ${tkPerS} tk/s`;
                                 }
                                 rephraseHtml += `)</small>`;
                             }
                             rephrasedQueryArea.innerHTML = rephraseHtml;
-                            updateStatus(`Standalone rephrase complete (${duration}s). Ready for context retrieval.`, false, true);
+                            updateStatus(`Standalone rephrase complete. Ready for context retrieval.`, false, true);
 
                             // Clear subsequent steps' outputs
                             currentRetrievedContext = null;
@@ -937,10 +974,12 @@ Based on the context, answer the following question:
                                 finalAnswerHtml = payload.finalAnswer ? highlightThinkBlocks(escapeHtml(payload.finalAnswer)) : 'No final answer text.';
                             }
                             if (payload.metrics) {
-                                finalAnswerHtml += `<br><small style="color:grey;">(Duration: ${payload.metrics.duration?.toFixed(0)}ms`;
-                                if (payload.metrics.generatedTokenCount && payload.metrics.duration && payload.metrics.duration > 0) {
-                                    const tkPerS = (payload.metrics.generatedTokenCount / (payload.metrics.duration / 1000)).toFixed(2);
-                                    finalAnswerHtml += `, ${payload.metrics.generatedTokenCount} tk, ${tkPerS} tk/s`;
+                                const duration = payload.metrics.duration;
+                                const tokenCount = payload.metrics.generatedTokenCount;
+                                finalAnswerHtml += `<br><small style="color:grey;">(Duration: ${duration?.toFixed(0)}ms`;
+                                if (tokenCount !== undefined && duration !== undefined && duration > 0) {
+                                    const tkPerS = (tokenCount / (duration / 1000)).toFixed(2);
+                                    finalAnswerHtml += `, ${tokenCount} tk, ${tkPerS} tk/s`;
                                 }
                                 finalAnswerHtml += `)</small>`;
                             }
@@ -970,6 +1009,8 @@ Based on the context, answer the following question:
                     case 'HYBRID_SEARCH_RESULTS':
                         isWorkerReady = true;
                         updateProgress('Done', 100, 100);
+                        if (submitQueryBtn) submitQueryBtn.disabled = false; // Re-enable main button
+                        if (testBm25OnlyBtn) testBm25OnlyBtn.disabled = false; // Re-enable dedicated test button
                         if (payload.error) {
                             hybridSearchResultsArea.innerHTML = `<div class="error">Hybrid Search Error: ${escapeHtml(payload.error)}</div>`;
                         } else if (payload.results) {
@@ -980,15 +1021,35 @@ Based on the context, answer the following question:
                             displayMetrics(payload.metrics, hybridSearchResultsArea);
                         }
                         break;
+                    case 'DEDICATED_BM25_TEST_RESULTS': // Added new case
+                        isWorkerReady = true;
+                        updateProgress('Done', 100, 100);
+                        if (submitQueryBtn) submitQueryBtn.disabled = false;
+                        if (testBm25OnlyBtn) testBm25OnlyBtn.disabled = false;
+                        if (payload.error) {
+                            dedicatedBm25TestResultsArea.innerHTML = `<div class="error">Dedicated BM25 Test Error: ${escapeHtml(payload.error)}</div>`;
+                        } else if (payload.results) {
+                            displaySearchResults(payload.results, dedicatedBm25TestResultsArea, 'Dedicated BM25 Test Results');
+                        }
+                        if (payload.metrics) {
+                            displayMetrics(payload.metrics, dedicatedBm25TestResultsArea);
+                        }
+                        break;
                     case 'hybrid_search_semantic_results_for_pipeline':
-                        // Optionally display intermediate semantic results for debugging hybrid search
-                        console.log("Intermediate Semantic Results for Hybrid:", payload.results);
-                        // displaySearchResults(payload.results, someDebugArea, 'Hybrid - Semantic Part');
+                        // Display semantic results in the retrieved context area for hybrid pipeline view
+                        // This helps visualize the semantic part before BM25 and fusion
+                        if (payload.results) {
+                            displaySearchResults(payload.results, retrievedContextArea, 'Hybrid - Semantic Context Candidates:');
+                        }
                         break;
                     case 'hybrid_search_bm25_results_for_pipeline':
-                        // Optionally display intermediate BM25 results for debugging hybrid search
-                        console.log("Intermediate BM25 Results for Hybrid:", payload.results);
-                        // displaySearchResults(payload.results, someDebugArea, 'Hybrid - BM25 Part');
+                        // Display BM25 results in its dedicated area for hybrid pipeline view
+                        if (payload.results) {
+                            const topNForDisplay = 20; // Define how many BM25 candidates to show in this intermediate view
+                            const truncatedResults = payload.results.slice(0, topNForDisplay);
+                            const title = `Hybrid - BM25 Context Candidates (Top ${truncatedResults.length} of ${payload.results.length}):`;
+                            displaySearchResults(truncatedResults, bm25ResultsArea, title);
+                        }
                         break;
                     default:
                         console.warn("RAG Test Main: Unknown message type from worker:", type);
@@ -1018,34 +1079,40 @@ Based on the context, answer the following question:
 
     submitQueryBtn.addEventListener('click', async () => {
         const query = queryInput.value.trim();
-        const systemPrompt = systemPromptInput.value.trim();
-        const rephraseTemplate = rephrasePromptTemplateInput.value.trim();
-        const finalRagTemplate = finalRagPromptTemplateInput.value.trim();
+        const systemPrompt = systemPromptInput.value.trim(); // Used for semantic/hybrid RAG final answer
+        const rephraseTemplate = rephrasePromptTemplateInput.value.trim(); // Used for semantic/hybrid RAG rephrase
+        const finalRagTemplate = finalRagPromptTemplateInput.value.trim(); // Used for semantic/hybrid RAG final answer
+        const selectedSearchMode = searchModeSelect.value;
 
-        // Get chat engine config
-        let chatEngineType = 'webllm'; // Default
-        if (chatEngineTransformersJSDefaultRadio.checked) {
-            chatEngineType = 'transformers';
-        } else if (chatEnginePleiasRAGRadio.checked) {
-            chatEngineType = 'transformers_pleias';
-        } else if (chatEnginePleiasRAG1BRadio.checked) {
-            chatEngineType = 'transformers_pleias_1b'; // Assign new type
-        }
-        // Model ID and ONNX path depend on the type
+        // Common params for all modes that might use them
+        const k1 = parseFloat(bm25K1Input.value);
+        const b = parseFloat(bm25BInput.value);
+        const k_rrf = parseInt(rrfKInput.value, 10);
+        const topN = parseInt(hybridTopNInput.value, 10);
+        const currentSimilarityMetric = similarityMetricSelect.value;
+
+        // Get chat engine config (relevant for semantic/hybrid generative steps)
+        let chatEngineType = 'webllm';
+        if (chatEngineTransformersJSDefaultRadio.checked) chatEngineType = 'transformers';
+        else if (chatEnginePleiasRAGRadio.checked) chatEngineType = 'transformers_pleias';
+        else if (chatEnginePleiasRAG1BRadio.checked) chatEngineType = 'transformers_pleias_1b';
+
         let transformersModelId: string | null = null;
         let transformersOnnxFile: string | null = null;
-        if (chatEngineType === 'transformers') {
-            transformersModelId = transformersModelInput.value.trim();
-            transformersOnnxFile = transformersOnnxFileInput.value.trim();
-        } else if (chatEngineType === 'transformers_pleias') {
-            transformersModelId = 'onnx-community/Pleias-RAG-350M-ONNX';
-            transformersOnnxFile = 'onnx/model_quantized.onnx';
-        } else if (chatEngineType === 'transformers_pleias_1b') {
-            transformersModelId = 'onnx-community/Pleias-RAG-1B-ONNX';
-            transformersOnnxFile = 'onnx/model_quantized.onnx'; // Assumed path
+        if (chatEngineType.startsWith('transformers')) {
+            if (chatEngineType === 'transformers_pleias') {
+                transformersModelId = 'onnx-community/Pleias-RAG-350M-ONNX';
+                transformersOnnxFile = 'onnx/model_quantized.onnx';
+            } else if (chatEngineType === 'transformers_pleias_1b') {
+                transformersModelId = 'onnx-community/Pleias-RAG-1B-ONNX';
+                transformersOnnxFile = 'onnx/model_quantized.onnx';
+            } else { // 'transformers' (custom/default)
+                transformersModelId = transformersModelInput.value.trim();
+                transformersOnnxFile = transformersOnnxFileInput.value.trim();
+            }
         }
 
-        // Gather rephrase and answer settings
+        // Gather rephrase and answer settings (for semantic/hybrid generative steps)
         const rephraseSettings = {
             temperature: parseFloat(rephraseTemperatureSlider.value),
             top_p: parseFloat(rephraseTopPSlider.value),
@@ -1063,47 +1130,89 @@ Based on the context, answer the following question:
             alert("Please enter a query.");
             return;
         }
-        if (!rephraseTemplate.includes('{query}')) {
-            alert("Rephrase prompt template must include '{query}' placeholder.");
-            return;
-        }
-        if (!finalRagTemplate.includes('{context}') || !finalRagTemplate.includes('{query}')) {
-            alert("Final RAG prompt template must include '{context}' and '{query}' placeholders.");
-            return;
-        }
-        if (chatEngineType === 'transformers' && !transformersModelId) {
-            alert("Please enter a Transformers.js model ID or URL.");
-            return;
-        }
 
         if (worker) {
-            responseArea.textContent = 'Processing...';
-            responseArea.style.color = '#555';
-            updateStatus('Sending query to RAG system (full pipeline)...', false, false);
-            // Disable step buttons during full pipeline execution
+            // Clear previous results specific to search modes
+            bm25ResultsArea.innerHTML = '';
+            hybridSearchResultsArea.innerHTML = '';
+            // Response area might be cleared or used by different modes
+            // For BM25 only, clear it. For hybrid, it might show final generative answer.
+            // For semantic, it's the main output.
+            if (selectedSearchMode === 'bm25') responseArea.innerHTML = '';
+
+            updateStatus(`Processing query with ${selectedSearchMode} mode...`, false, false);
             if (rephraseQueryBtn) rephraseQueryBtn.disabled = true;
             if (retrieveContextBtn) retrieveContextBtn.disabled = true;
             if (generateFinalAnswerBtn) generateFinalAnswerBtn.disabled = true;
             if (retrieveContextOriginalBtn) retrieveContextOriginalBtn.disabled = true;
+            // Clear step-by-step areas too, as we are running a full pipeline mode
             rephrasedQueryArea.textContent = "";
             retrievedContextArea.textContent = "";
-            currentOriginalQuery = query; // Store for potential use in step-by-step if needed after full run
+            currentOriginalQuery = query; // Store for potential use
 
-            worker.postMessage({
-                type: 'query',
-                payload: {
+            let messageType = 'query'; // Default for semantic
+            let workerPayload: any = {};
+
+            if (selectedSearchMode === 'bm25') {
+                messageType = 'bm25Search';
+                workerPayload = {
+                    query,
+                    k1,
+                    b,
+                    topN
+                };
+            } else if (selectedSearchMode === 'hybrid') {
+                messageType = 'hybridSearch';
+                workerPayload = {
+                    query,
+                    k1,
+                    b,
+                    k_rrf,
+                    topN,
+                    similarityMetric: currentSimilarityMetric,
+                    // Hybrid can also have a generative step, so pass generative params
+                    systemPrompt: systemPrompt || null,
+                    rephrasePromptTemplate: rephraseTemplate, // For potential rephrase within hybrid pipeline
+                    finalRagPromptTemplate: finalRagTemplate, // For final answer generation
+                    chatEngineType,
+                    transformersModelId,
+                    transformersOnnxFile,
+                    rephraseSettings,
+                    answerSettings
+                };
+            } else { // 'semantic' (Full RAG pipeline)
+                messageType = 'query'; // This is the existing full RAG pipeline trigger
+                if (!rephraseTemplate.includes('{query}')) {
+                    alert("Rephrase prompt template must include '{query}' placeholder for semantic mode.");
+                    updateStatus("Error in prompt template.", true, true);
+                    return;
+                }
+                if (!finalRagTemplate.includes('{context}') || !finalRagTemplate.includes('{query}')) {
+                    alert("Final RAG prompt template must include '{context}' and '{query}' placeholders for semantic mode.");
+                    updateStatus("Error in prompt template.", true, true);
+                    return;
+                }
+                if (chatEngineType === 'transformers' && !transformersModelId) {
+                    alert("Please enter a Transformers.js model ID or URL for semantic mode.");
+                    updateStatus("Missing Transformers.js model ID.", true, true);
+                    return;
+                }
+                workerPayload = {
                     query,
                     systemPrompt: systemPrompt || null,
                     rephrasePromptTemplate: rephraseTemplate,
                     finalRagPromptTemplate: finalRagTemplate,
-                    chatEngineType, // Pass chat engine type
-                    transformersModelId: chatEngineType === 'transformers' ? transformersModelId : null, // Pass model ID if transformers
-                    transformersOnnxFile: chatEngineType === 'transformers' ? transformersOnnxFile : null, // Pass ONNX file path/url
+                    chatEngineType,
+                    transformersModelId,
+                    transformersOnnxFile,
                     rephraseSettings,
                     answerSettings,
-                    similarityMetric: similarityMetricSelect.value // Pass selected metric
-                }
-            });
+                    similarityMetric: currentSimilarityMetric
+                };
+            }
+
+            console.log(`RAG Test Main: Posting message to worker. Type: ${messageType}, Payload:`, workerPayload);
+            worker.postMessage({ type: messageType, payload: workerPayload });
         }
     });
 
@@ -1465,6 +1574,93 @@ Based on the context, answer the following question:
         const metricsDiv = document.createElement('div');
         metricsDiv.innerHTML = metricsHtml;
         targetArea.appendChild(metricsDiv.firstChild || document.createTextNode('')); // Append only the content of metricsDiv
+    }
+
+    // --- NEW: Event Listener for Dedicated BM25 Test Button ---
+    if (testBm25OnlyBtn) {
+        testBm25OnlyBtn.addEventListener('click', () => {
+            const query = queryInput.value.trim();
+            if (!query) {
+                alert("Please enter a query for BM25 testing.");
+                return;
+            }
+
+            const k1 = parseFloat(bm25K1Input.value);
+            const b = parseFloat(bm25BInput.value);
+            const topN = parseInt(hybridTopNInput.value, 10);
+
+            if (worker && isWorkerReady) {
+                dedicatedBm25TestResultsArea.innerHTML = 'Processing BM25 test...';
+                updateStatus('Running dedicated BM25 test...', false, false);
+                if (submitQueryBtn) submitQueryBtn.disabled = true; // Disable other buttons
+                testBm25OnlyBtn.disabled = true;
+
+                worker.postMessage({
+                    type: 'DEDICATED_BM25_TEST_REQUEST',
+                    payload: {
+                        query,
+                        k1,
+                        b,
+                        topN
+                    }
+                });
+            } else {
+                alert("Worker is not ready. Please wait for initialization.");
+            }
+        });
+    }
+    // --- END: New Event Listener ---
+
+    // Function to display performance metrics
+    function updatePerformanceMetricsDisplay(metrics: any) {
+        const metricsArea = document.getElementById('performanceMetricsArea'); // Get it here, as it might not be in requiredElements yet if created dynamically
+        if (!metricsArea) {
+            console.error("performanceMetricsArea DOM element not found when trying to update!");
+            return;
+        }
+        console.log("Updating Performance Metrics Display with:", metrics);
+
+        let html = '<h4>Performance Metrics:</h4><ul>';
+
+        // Standard RAG Pipeline Timings
+        if (metrics.rephraseTime !== undefined) {
+            html += `<li>Rephrase Time: ${metrics.rephraseTime.toFixed(0)} ms</li>`;
+        }
+        if (metrics.contextRetrievalTime !== undefined) {
+            html += `<li>Context Retrieval Time: ${metrics.contextRetrievalTime.toFixed(0)} ms</li>`;
+        }
+
+        // Hybrid Search Specific Timings
+        if (metrics.bm25Time !== undefined) { // Note: worker sends bm25Time
+            html += `<li>BM25 Search Time: ${metrics.bm25Time.toFixed(0)} ms</li>`;
+        }
+        if (metrics.fusionTime !== undefined) { // Note: worker sends fusionTime
+            html += `<li>RRF Fusion Time: ${metrics.fusionTime.toFixed(0)} ms</li>`;
+        }
+
+        // Generation Timings (Common)
+        if (metrics.generationTime !== undefined) {
+            html += `<li>LLM Generation Time: ${metrics.generationTime.toFixed(0)} ms</li>`;
+            if (metrics.totalTokens !== undefined && metrics.generationTime > 0 && metrics.tokensPerSecond !== undefined) {
+                html += `<li>LLM Output: ${metrics.totalTokens} tokens, ${metrics.tokensPerSecond.toFixed(2)} tk/s</li>`;
+            }
+        }
+
+        // Total Pipeline Timings
+        if (metrics.totalPipelineTime !== undefined) { // From full RAG pipeline (worker sends totalPipelineTime)
+            html += `<li>Total Full RAG Pipeline Time: ${metrics.totalPipelineTime.toFixed(0)} ms</li>`;
+        }
+        if (metrics.totalHybridTime !== undefined) { // From hybrid search pipeline
+            html += `<li>Total Hybrid Search Time: ${metrics.totalHybridTime.toFixed(0)} ms</li>`;
+        }
+
+        if (metrics.llmEngine) {
+            html += `<li>LLM Engine: ${escapeHtml(metrics.llmEngine)}</li>`;
+        }
+
+        html += '</ul>';
+        metricsArea.innerHTML = html;
+        metricsArea.style.display = 'block'; // Make sure it is visible
     }
 
 }); 

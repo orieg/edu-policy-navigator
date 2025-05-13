@@ -370,6 +370,8 @@ self.onmessage = async (event: MessageEvent) => {
                 let rephraseDuration = 0;
                 let contextDuration = 0;
                 let finalAnswerDuration = 0;
+                let tokensPerSecond = 0;
+                let totalTokens = 0;
 
                 // --- Stage 1: Rephrase Query ---
                 const rephraseStart = performance.now();
@@ -543,19 +545,32 @@ self.onmessage = async (event: MessageEvent) => {
                 finalAnswerDuration = performance.now() - finalAnswerStart;
                 const totalPipelineDuration = performance.now() - totalPipelineStart;
 
+                tokensPerSecond = (finalAnswer && finalAnswerDuration > 0) ? (estimateTokenCount(finalAnswer) / (finalAnswerDuration / 1000)) : 0;
+                totalTokens = estimateTokenCount(finalAnswer);
+
                 self.postMessage({
                     type: 'response', payload: {
                         result: finalAnswer,
                         metrics: {
-                            rephraseDuration,
-                            contextDuration,
-                            finalAnswerDuration,
-                            totalPipelineDuration,
-                            generatedTokenCount: estimateTokenCount(finalAnswer)
+                            generationTime: finalAnswerDuration,
+                            totalTokens: totalTokens,
+                            tokensPerSecond: tokensPerSecond
                         }
                     }
                 });
-                self.postMessage({ type: 'status', payload: { message: 'Full RAG pipeline complete. Ready for new query.', isError: false } });
+                self.postMessage({
+                    type: 'performanceMetrics',
+                    payload: {
+                        rephraseTime: rephraseDuration,
+                        contextRetrievalTime: contextDuration,
+                        generationTime: finalAnswerDuration,
+                        totalPipelineTime: totalPipelineDuration, // Consistent naming
+                        tokensPerSecond: tokensPerSecond,
+                        totalTokens: totalTokens,
+                        llmEngine: chatEngineType // Include engine type
+                    }
+                });
+                self.postMessage({ type: 'status', payload: { message: 'Full RAG pipeline complete. Ready for new query.', isError: false, isReady: true } });
 
             } catch (error) {
                 console.error("RAG Worker: Error in full RAG pipeline:", error);
@@ -1006,22 +1021,23 @@ self.onmessage = async (event: MessageEvent) => {
             self.postMessage({ type: 'status', payload: { message: `Performing Hybrid Search for: "${query}"...`, isError: false, isReady: false } });
 
             try {
-                // 1. Perform Semantic Search
-                let semanticResults: SearchResult[] = [];
-                const semanticSearchStart = performance.now();
+                let semanticResults: SearchResult[] = []; // Declare with wider scope and initialize
+                // 1. Perform Semantic Search using RAGManager (which handles embedding)
+                const semanticSearchStartTime = performance.now();
                 const queryEmbedding = await webLLMService.getQueryEmbedding(query);
                 if (!queryEmbedding) {
                     console.error("HybridSearch: Failed to generate query embedding for semantic part.");
-                    // Optionally, could proceed with only BM25 or return an error
-                    // For PoC, let's log and continue, RRF will handle one empty list
+                    // semanticResults remains empty, RRF will handle it.
                 } else {
-                    semanticResults = await ragManager.retrieveContext(
+                    // Use original query for semantic retrieval part
+                    semanticResults = await ragManager.retrieveContext( // Assign to the wider-scoped variable
                         query,
                         queryEmbedding,
                         { similarityMetric: metricForHybrid }
                     );
                 }
-                const semanticSearchDuration = performance.now() - semanticSearchStart;
+                const semanticSearchTime = performance.now() - semanticSearchStartTime;
+                // Post semantic results for pipeline view (optional, but good for UI update)
                 self.postMessage({ type: 'hybrid_search_semantic_results_for_pipeline', payload: { results: semanticResults } });
 
 
@@ -1057,28 +1073,151 @@ self.onmessage = async (event: MessageEvent) => {
                 const bm25SearchDuration = performance.now() - bm25SearchStart;
                 self.postMessage({ type: 'hybrid_search_bm25_results_for_pipeline', payload: { results: bm25Results } });
 
-
                 // 3. Fuse Results using RRF
                 const fusionStartTime = performance.now();
                 const fusedResults = reciprocalRankFusion([semanticResults, bm25Results], k_rrf);
                 const fusionDuration = performance.now() - fusionStartTime;
 
-                const finalResults = fusedResults.slice(0, topN);
+                const finalContextResults = fusedResults.slice(0, topN);
+                // Post intermediate fused retrieval results (optional, good for debugging)
+                self.postMessage({
+                    type: 'HYBRID_SEARCH_RESULTS', // This can be used to display retrieved/fused docs
+                    payload: {
+                        results: finalContextResults,
+                        metrics: { semanticSearchTime, bm25SearchDuration, fusionDuration }
+                    }
+                });
+
+                // --- 4. Generate Final Answer using Fused Context (if templates/engine provided) ---
+                let finalAnswer: string | null = "Hybrid search retrieval complete. Generative step not run or no templates provided.";
+                let finalAnswerDuration = 0;
+                const generativeStepStart = performance.now();
+                let currentTokensPerSecond = 0;
+                let currentTotalTokens = 0;
+
+                const {
+                    systemPrompt,
+                    rephrasePromptTemplate, // May not be used if query is already good
+                    finalRagPromptTemplate,
+                    chatEngineType,
+                    transformersModelId,
+                    transformersOnnxFile,
+                    rephraseSettings, // May not be used
+                    answerSettings
+                } = payload; // These are passed in the hybridSearch payload
+
+                if (finalRagPromptTemplate && chatEngineType) {
+                    self.postMessage({ type: 'status', payload: { message: `Hybrid: Generating final answer with ${chatEngineType}...`, isError: false, isReady: false } });
+
+                    let contextForGeneration = "No context provided from hybrid search.";
+                    if (finalContextResults.length > 0) {
+                        // Format context similar to how full RAG pipeline does
+                        if (chatEngineType === 'transformers_pleias' || chatEngineType === 'transformers_pleias_1b') {
+                            contextForGeneration = finalContextResults.map((chunk: SearchResult, index: number) =>
+                                `<|source_start|><|source_id|>${index + 1} <|source_content_start|>${chunk.text}<|source_content_end|><|source_end|>`
+                            ).join('\n');
+                            contextForGeneration += '\n<|language_start|>';
+                        } else {
+                            contextForGeneration = finalContextResults.map((chunk: SearchResult) => chunk.text).join('\n\n---\n\n');
+                        }
+                    }
+
+                    if (chatEngineType.startsWith('transformers')) {
+                        if (!transformersModelId) throw new Error("Transformers.js model ID not provided for Hybrid Search generation.");
+                        const genPipeline = await getTransformersChatPipeline(transformersModelId, transformersOnnxFile);
+                        const genPrompt = finalRagPromptTemplate
+                            .replace("{context}", contextForGeneration)
+                            .replace("{query}", query); // Use original query for final question
+
+                        const tjsGenSettings: any = {
+                            temperature: answerSettings?.temperature ?? 0.7,
+                            top_p: answerSettings?.top_p,
+                            top_k: answerSettings?.top_k,
+                            max_new_tokens: answerSettings?.max_new_tokens ?? 500,
+                            do_sample: (answerSettings?.temperature ?? 0) > 0 || (answerSettings?.top_k ?? 0) > 1 || ((answerSettings?.top_p ?? 1.0) < 1.0),
+                            stop_sequences: (chatEngineType === 'transformers_pleias' || chatEngineType === 'transformers_pleias_1b') ? ["<|answer_end|>"] : undefined,
+                            callback_function: (outputs: any[]) => {
+                                if (outputs && outputs[0] && typeof outputs[0].generated_text === 'string') {
+                                    self.postMessage({ type: 'GENERATION_UPDATE', payload: { partialResult: outputs[0].generated_text } });
+                                }
+                            }
+                        };
+                        const genOutput = await genPipeline(genPrompt, tjsGenSettings);
+                        if (Array.isArray(genOutput) && genOutput.length > 0 && genOutput[0].generated_text) {
+                            finalAnswer = genOutput[0].generated_text.replace(genPrompt, '').trim();
+                            if (!finalAnswer && genOutput[0].generated_text.length > 0) finalAnswer = genOutput[0].generated_text.trim();
+                        } else {
+                            finalAnswer = "Hybrid/TJS generation produced no text.";
+                        }
+                    } else { // webllm
+                        if (!ragManager) throw new Error("RAGManager not initialized for Hybrid/WebLLM generation.");
+                        finalAnswer = await ragManager.generateFinalAnswer(
+                            query, // Original query
+                            contextForGeneration,
+                            finalRagPromptTemplate,
+                            systemPrompt,
+                            answerSettings?.temperature,
+                            answerSettings
+                        );
+                    }
+                    finalAnswerDuration = performance.now() - generativeStepStart;
+                    currentTotalTokens = estimateTokenCount(finalAnswer);
+                    if (finalAnswerDuration > 0) {
+                        currentTokensPerSecond = currentTotalTokens / (finalAnswerDuration / 1000);
+                    }
+                } // End if (finalRagPromptTemplate && chatEngineType)
+
                 const totalHybridSearchDuration = performance.now() - hybridSearchStartTime;
 
+                // Post the final generative answer using the 'response' message type
                 self.postMessage({
-                    type: 'HYBRID_SEARCH_RESULTS',
+                    type: 'response', // This is for the main answer display
                     payload: {
-                        results: finalResults,
+                        result: finalAnswer,
                         metrics: {
-                            semanticSearchDuration,
-                            bm25SearchDuration,
-                            fusionDuration,
-                            totalHybridSearchDuration
+                            generationTime: finalAnswerDuration,
+                            totalTokens: currentTotalTokens,
+                            tokensPerSecond: currentTokensPerSecond
                         }
                     }
                 });
-                self.postMessage({ type: 'status', payload: { message: `Hybrid search complete. Found ${finalResults.length} results.`, isError: false, isReady: true } });
+
+                // Send performance metrics AFTER the main response, especially if generation occurred
+                if (finalRagPromptTemplate && chatEngineType) {
+                    self.postMessage({
+                        type: 'performanceMetrics',
+                        payload: {
+                            rephraseTime: 0, // Hybrid search in this worker doesn't have a separate rephrase step for the main query
+                            contextRetrievalTime: semanticSearchTime, // Time for the semantic part of hybrid retrieval
+                            bm25Time: bm25SearchDuration, // Use the correct variable name
+                            fusionTime: fusionDuration,   // Use the correct variable name
+                            generationTime: finalAnswerDuration, // This is the generation time
+                            totalHybridTime: totalHybridSearchDuration,
+                            tokensPerSecond: currentTokensPerSecond,
+                            totalTokens: currentTotalTokens,
+                            llmEngine: chatEngineType // Pass the engine type
+                        }
+                    });
+                } else {
+                    // If no generative step, send retrieval/fusion metrics only
+                    self.postMessage({
+                        type: 'performanceMetrics',
+                        payload: {
+                            rephraseTime: 0,
+                            contextRetrievalTime: semanticSearchTime,
+                            bm25Time: bm25SearchDuration,
+                            fusionTime: fusionDuration,
+                            generationTime: 0,
+                            totalHybridTime: totalHybridSearchDuration,
+                            tokensPerSecond: 0,
+                            totalTokens: 0,
+                            llmEngine: 'N/A (Retrieval Only)'
+                        }
+                    });
+                }
+
+
+                self.postMessage({ type: 'status', payload: { message: `Hybrid search (incl. generation if run) complete. Found ${finalContextResults.length} context docs.`, isError: false, isReady: true } });
 
             } catch (error) {
                 console.error("RAG Worker: Error in hybridSearch:", error);
@@ -1088,10 +1227,57 @@ self.onmessage = async (event: MessageEvent) => {
                     payload: {
                         results: [],
                         error: (error as Error).message,
-                        metrics: { totalHybridSearchDuration }
+                        metrics: { totalHybridTime: totalHybridSearchDuration }
                     }
                 });
                 self.postMessage({ type: 'status', payload: { message: `Error in Hybrid search: ${(error as Error).message}`, isError: true, isReady: true } });
+            }
+            break;
+
+        case 'DEDICATED_BM25_TEST_REQUEST':
+            console.log("RAG Worker: Received DEDICATED_BM25_TEST_REQUEST message:", payload);
+            const { query: dedicatedQuery, k1: dedicatedK1, b: dedicatedB, topN: dedicatedTopN } = payload;
+            if (!allDocsForBM25 || allDocsForBM25.length === 0) {
+                self.postMessage({ type: 'DEDICATED_BM25_TEST_RESULTS', payload: { error: 'BM25 data not precomputed or empty.' } });
+                return;
+            }
+            try {
+                const startTime = performance.now();
+                const queryTokens = tokenizeText(dedicatedQuery);
+                const scores: { doc: { id: string, text: string, title?: string }, score: number }[] = [];
+
+                for (const doc of allDocsForBM25) {
+                    const docId = doc.id;
+                    const docLength = docLengths.get(docId) || 0;
+                    const score = calculateBM25Score(
+                        queryTokens,
+                        doc,
+                        docLength,
+                        avgDocLengthBM25,
+                        totalDocsBM25,
+                        docFrequencies,
+                        dedicatedK1,
+                        dedicatedB
+                    );
+                    if (score > 0) { // Only consider documents with a positive score
+                        scores.push({ doc, score });
+                    }
+                }
+
+                scores.sort((a, b) => b.score - a.score); // Sort by score descending
+                const topResults = scores.slice(0, dedicatedTopN).map(s => ({ ...s.doc, score: s.score, text: s.doc.text.substring(0, 500) + (s.doc.text.length > 500 ? '...' : '') })); // Include text snippet
+                const duration = performance.now() - startTime;
+
+                self.postMessage({
+                    type: 'DEDICATED_BM25_TEST_RESULTS',
+                    payload: {
+                        results: topResults,
+                        metrics: { duration, numResults: topResults.length, originalNumScores: scores.length }
+                    }
+                });
+            } catch (error: any) {
+                console.error("RAG Worker: Error during dedicated BM25 test:", error);
+                self.postMessage({ type: 'DEDICATED_BM25_TEST_RESULTS', payload: { error: error.message || 'Unknown error during dedicated BM25 test.' } });
             }
             break;
 
@@ -1183,4 +1369,4 @@ async function performSimilarityValidation(similarityMetric: string) {
         console.error("Worker: Error during similarity validation process:", error);
         self.postMessage({ type: 'SIMILARITY_TEST_ERROR', payload: error.message });
     }
-} 
+}
