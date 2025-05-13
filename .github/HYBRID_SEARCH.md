@@ -130,19 +130,19 @@ This plan outlines creating and using a full-text search system where a global i
 
 For rapid initial implementation and testing of hybrid search concepts within `rag-test.astro`, the following simplified approach will be taken:
 
-1.  **No Initial Sharding:**
+- [ ] 1.  **No Initial Sharding:**
     *   Implement BM25 and RRF logic directly on the full, existing client-side dataset (`allProcessedData`). This bypasses the complexity of sharding for the first pass, allowing focus on the core algorithms.
     *   Sharding and shard loading strategies can be integrated later once the core hybrid search is functional.
 
-2.  **Minimalist Client-Side Text Processing:**
+- [ ] 2.  **Minimalist Client-Side Text Processing:**
     *   For BM25, use basic tokenization (splitting by spaces and punctuation) and stemming if a very lightweight JavaScript library is readily available or can be quickly implemented. Avoid complex NLP pipelines initially.
     *   The primary goal is to get a functional BM25, not a perfect one, for the first iteration.
 
-3.  **Leverage Existing Document Metadata:**
+- [ ] 3.  **Leverage Existing Document Metadata:**
     *   Utilize the existing `id`, `title`, `text`, and `embeddings` from `ProcessedResult` (and `FullProcessedResult`) – which are derived from the primary data sources like `districts.json` and `school_by_district.json` – for both semantic and keyword search components.
     *   No new document store or complex indexing will be created for this initial phase.
 
-4.  **Basic UI Toggles and Parameter Input:**
+- [ ] 4.  **Basic UI Toggles and Parameter Input:**
     *   Add a simple toggle or dropdown to switch between:
         *   Semantic search only (current implementation)
         *   BM25 only
@@ -150,12 +150,12 @@ For rapid initial implementation and testing of hybrid search concepts within `r
     *   Input fields for RRF `k_rrf` constant.
     *   Input field for BM25 `k1` and `b` parameters (with sensible defaults).
 
-5.  **Clear Validation Goals:**
+- [ ] 5.  **Clear Validation Goals:**
     *   Focus on demonstrating that the hybrid approach can retrieve relevant documents that either semantic or keyword search alone might miss.
     *   Use the "Embedding Similarity Validation" and RAG test sections to compare results.
     *   Display scores from each component (semantic, BM25) and the final RRF score.
 
-6.  **Web Worker Integration:**
+- [ ] 6.  **Web Worker Integration:**
     *   Perform BM25 calculations and RRF fusion within the existing web worker (`rag_worker.ts`) to keep the UI responsive, similar to how embeddings and chat generation are handled.
 
 This phased approach allows for quicker iteration and validation of the core hybrid search mechanics before investing in more complex optimizations like sharding or advanced text processing.
