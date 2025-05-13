@@ -132,6 +132,8 @@ interface DistrictRecord {
     District?: string;
     'CDS Code'?: string;
     slug?: string;
+    baseAcronym?: string;
+    typedAcronym?: string;
 }
 
 interface SchoolRecord {
@@ -139,6 +141,8 @@ interface SchoolRecord {
     'CDS Code'?: string;
     School?: string;
     Website?: string;
+    baseAcronym?: string;
+    typedAcronym?: string;
 }
 
 // Columns to extract for the final JSON output
@@ -157,8 +161,13 @@ const DISTRICT_COLUMNS_TO_KEEP: string[] = [
     'Website',
     'Low Grade',
     'High Grade',
+    'Charter Yes/No',
+    'Virtual Instruction Type',
+    'Multilingual Yes/No',
     'Latitude',
-    'Longitude'
+    'Longitude',
+    'baseAcronym',
+    'typedAcronym'
 ];
 
 const SCHOOL_COLUMNS_TO_KEEP: string[] = [
@@ -175,8 +184,15 @@ const SCHOOL_COLUMNS_TO_KEEP: string[] = [
     'Status',
     'Public Yes/No',
     'Educational Program Type',
+    'Charter Yes/No',
+    'Magnet Yes/No',
+    'Virtual Instruction Type',
+    'Year Round Yes/No',
+    'Multilingual Yes/No',
     'Latitude',
-    'Longitude'
+    'Longitude',
+    'baseAcronym',
+    'typedAcronym'
 ];
 
 // Define the expected CSV Headers based on the source structure
@@ -208,6 +224,84 @@ function hasValidCoordinates(lat: string | number | null | undefined, lon: strin
     const lonNum = parseFloat(String(lon));
     // Basic check: is it a number, and within plausible bounds? Add 0 check.
     return !isNaN(latNum) && !isNaN(lonNum) && latNum !== 0 && lonNum !== 0 && latNum >= -90 && latNum <= 90 && lonNum >= -180 && lonNum <= 180;
+}
+
+// --- Acronym Generation Logic ---
+const STOP_WORDS = new Set([
+    "the", "of", "and", "for", "a", "an", "in", "at", "to", // English
+    "de", "la", "las", "el", "los" // Spanish articles/prepositions
+    // Removed: "san", "santa"
+    // Removed: "school", "district", "unified", "elementary", "middle", "high", "union", 
+    // "charter", "community", "continuation"
+]);
+
+function generateAcronyms(name: string | null | undefined, type: string | null | undefined, category: 'district' | 'school'): { baseAcronym: string, typedAcronym: string } {
+    if (!name || name === 'No Data') {
+        return { baseAcronym: '', typedAcronym: '' };
+    }
+
+    let cleanedName = name.replace(/\s*\(.*\)$/, '').trim(); // Remove trailing (...)
+
+    const nameWords = cleanedName.split(/\s+|-/);
+    let baseAcronym = '';
+    const usedWordsForBase = []; // Keep track of words used for base to avoid suffix redundancy
+
+    for (const word of nameWords) {
+        const lowerWord = word.toLowerCase();
+        if (lowerWord.length > 0 && !STOP_WORDS.has(lowerWord)) {
+            baseAcronym += lowerWord.charAt(0).toUpperCase();
+            usedWordsForBase.push(lowerWord); // Add the word itself for later check
+        }
+    }
+
+    let typeSuffix = '';
+    let typeSuffixSourceWords: string[] = []; // Words that formed the suffix
+    const lowerType = type?.toLowerCase() || '';
+    const lowerCleanedName = cleanedName.toLowerCase();
+
+    if (category === 'district') {
+        if (lowerType.includes('unified')) { typeSuffix = 'USD'; typeSuffixSourceWords = ['unified', 'school', 'district']; }
+        else if (lowerType.includes('high school')) { typeSuffix = 'HSD'; typeSuffixSourceWords = ['high', 'school', 'district']; }
+        else if (lowerType.includes('elementary')) { typeSuffix = 'ESD'; typeSuffixSourceWords = ['elementary', 'school', 'district']; }
+        else if (lowerType.includes('union')) { typeSuffix = 'UD'; typeSuffixSourceWords = ['union', 'district']; }
+        // Add a general 'D' for district if no other type matches and name doesn't imply a more specific type
+        else if (!usedWordsForBase.includes('district') && !usedWordsForBase.includes('school')) { // Avoid if base already has D or S
+            typeSuffix = 'D'; typeSuffixSourceWords = ['district'];
+        }
+    } else if (category === 'school') {
+        if (lowerType.includes('elementary') || lowerCleanedName.includes('elementary')) { typeSuffix = 'E'; typeSuffixSourceWords = ['elementary']; }
+        else if (lowerType.includes('middle') || lowerCleanedName.includes('middle') || lowerType.includes('junior high') || lowerCleanedName.includes('junior high')) { typeSuffix = 'M'; typeSuffixSourceWords = ['middle', 'junior', 'high']; }
+        else if (lowerType.includes('high') || lowerCleanedName.includes('high')) { typeSuffix = 'H'; typeSuffixSourceWords = ['high']; }
+        // If no specific type, but name implies school and base doesn't have S
+        else if ((lowerType.includes('school') || lowerCleanedName.includes('school')) && !baseAcronym.endsWith('S')) {
+            if (!usedWordsForBase.includes('school')) { // check if 'school' was already part of the base
+                typeSuffix = 'S'; typeSuffixSourceWords = ['school'];
+            }
+        }
+    }
+
+    let finalTypedAcronym = baseAcronym;
+    if (typeSuffix) {
+        // Check if the last word contributing to baseAcronym is the first word of the suffix source words
+        // Or if the baseAcronym already ends with the first letter of the typeSuffix to avoid double letters like "SRVUUSD"
+        if (usedWordsForBase.length > 0 &&
+            typeSuffixSourceWords.length > 0 &&
+            usedWordsForBase[usedWordsForBase.length - 1] === typeSuffixSourceWords[0] &&
+            baseAcronym.endsWith(typeSuffixSourceWords[0].charAt(0).toUpperCase())) {
+            // If last word of base is first word of suffix (e.g. Unified in SRVU, Elementary in FCE)
+            // and baseAcronym already ends with that letter, remove first letter from suffix
+            finalTypedAcronym += typeSuffix.substring(1);
+        } else if (baseAcronym.endsWith(typeSuffix.charAt(0))) { // Simpler check: SRVU + USD -> SRVUSD
+            finalTypedAcronym += typeSuffix.substring(1);
+        } else {
+            finalTypedAcronym += typeSuffix;
+        }
+    }
+
+    if (baseAcronym.length > 10) baseAcronym = baseAcronym.substring(0, 10);
+    if (finalTypedAcronym.length > 15) finalTypedAcronym = finalTypedAcronym.substring(0, 15);
+
+    return { baseAcronym, typedAcronym: finalTypedAcronym };
 }
 
 // --- Refactored Generic Geocoding Logic --- 
@@ -414,7 +508,7 @@ async function generateJsonData() {
             // from_line: 5 // REMOVED - read from start
             skip_records_with_empty_values: true, // Helps ignore potentially empty trailing lines
             // Use on_record to skip the first 4 data rows (assuming row 1 was headers)
-            on_record: (record, { lines }) => {
+            on_record: (record: any, { lines }: { lines: number }) => { // Explicitly type record as any, or a more specific type if known
                 if (lines <= 4) { // Skip lines 1, 2, 3, 4 (header is line 1, metadata 2-4)
                     return null; // Discard the record
                 }
@@ -423,7 +517,7 @@ async function generateJsonData() {
         });
 
         parser.on('readable', () => {
-            let record;
+            let record: { [key: string]: any }; // Define the type for record here
             while ((record = parser.read()) !== null) {
                 processedRecordCount++;
 
@@ -454,13 +548,23 @@ async function generateJsonData() {
                     if (!tempDistricts.some(d => d['CDS Code'] === cdsCode)) {
                         const districtDetails: DistrictRecord = {};
                         DISTRICT_COLUMNS_TO_KEEP.forEach(col => {
-                            districtDetails[col] = record[col] !== undefined && record[col] !== null ? record[col] : 'No Data';
+                            // Skip acronym columns here, they'll be generated
+                            if (col !== 'baseAcronym' && col !== 'typedAcronym') {
+                                districtDetails[col] = record[col] !== undefined && record[col] !== null ? record[col] : 'No Data';
+                            }
                         });
                         // Ensure name passed to slug is a string
                         const districtName = typeof districtDetails['District'] === 'string' ? districtDetails['District'] : '';
                         districtDetails['slug'] = generateSlug(districtName, cdsCode);
+
+                        // --- Generate and assign acronyms for District ---
+                        const districtType = typeof record['Entity Type'] === 'string' ? record['Entity Type'] : '';
+                        const acronyms = generateAcronyms(districtName, districtType, 'district');
+                        districtDetails.baseAcronym = acronyms.baseAcronym || 'No Data'; // Fallback if empty
+                        districtDetails.typedAcronym = acronyms.typedAcronym || 'No Data'; // Fallback if empty
+                        // --- End acronym generation ---
+
                         tempDistricts.push(districtDetails);
-                        // districtCount++; // Count later after geocoding
                     }
                 }
 
@@ -468,7 +572,10 @@ async function generateJsonData() {
                 if (recordType === 'School') {
                     const schoolDetails: SchoolRecord = {};
                     SCHOOL_COLUMNS_TO_KEEP.forEach(col => {
-                        schoolDetails[col] = record[col] !== undefined && record[col] !== null ? record[col] : 'No Data';
+                        // Skip acronym columns here, they'll be generated
+                        if (col !== 'baseAcronym' && col !== 'typedAcronym') {
+                            schoolDetails[col] = record[col] !== undefined && record[col] !== null ? record[col] : 'No Data';
+                        }
                     });
 
                     // --- Correct SRVUSD Website URLs Here --- 
@@ -486,8 +593,15 @@ async function generateJsonData() {
                     }
                     // --- End URL Correction --- 
 
+                    // --- Generate and assign acronyms for School ---
+                    const schoolName = typeof record['School'] === 'string' ? record['School'] : '';
+                    const schoolProgramType = typeof record['Educational Program Type'] === 'string' ? record['Educational Program Type'] : '';
+                    const schoolAcronyms = generateAcronyms(schoolName, schoolProgramType, 'school');
+                    schoolDetails.baseAcronym = schoolAcronyms.baseAcronym || 'No Data'; // Fallback if empty
+                    schoolDetails.typedAcronym = schoolAcronyms.typedAcronym || 'No Data'; // Fallback if empty
+                    // --- End acronym generation ---
+
                     tempSchools.push(schoolDetails);
-                    // schoolCount++; // Count later
                 }
             }
         });

@@ -1,6 +1,7 @@
 import WebLLMService from '../lib/WebLLMService.ts';
 import { loadAllRAGData } from '../lib/dataLoader.ts';
 import { ClusteredSearchService } from '../lib/clusteredSearchService.ts';
+import type { SearchResult } from '../types/vectorStore';
 import { RAGManager } from '../lib/ragManager.ts';
 
 console.log("RAG Worker: Script loaded. All services imported.");
@@ -236,8 +237,25 @@ self.onmessage = async (event: MessageEvent) => {
                         throw new Error("Transformers.js model ID not provided for final answer.");
                     }
                     const finalAnswerPipeline = await getTransformersChatPipeline(transformersModelId, transformersOnnxFile);
+
+                    // --- Format Context String ---
+                    let formattedContextString = "No context provided.";
+                    if (Array.isArray(context) && context.length > 0) {
+                        if (chatEngineType === 'transformers_pleias') {
+                            // Special formatting for Pleias
+                            formattedContextString = context.map((chunk: SearchResult) =>
+                                `<|source_start|><|source_id_start|>${chunk.id}<|source_id_end|><|source_content_start|>${chunk.text}<|source_content_end|><|source_end|>`
+                            ).join('\n'); // Join with newline
+                            console.log("RAG Worker: Formatted Pleias context string:", formattedContextString);
+                        } else {
+                            // Default formatting: just join text chunks (or improve later)
+                            formattedContextString = context.map((chunk: SearchResult) => chunk.text).join('\n\n');
+                        }
+                    }
+                    // --- End Format Context String ---
+
                     const finalPrompt = (finalRagPromptTemplate || "Context: {context}\nQuery: {query}\nAnswer:")
-                        .replace("{context}", context || "No context provided.")
+                        .replace("{context}", formattedContextString)
                         .replace("{query}", originalQuery);
                     self.postMessage({ type: 'status', payload: { message: `Generating final answer with Transformers.js (${transformersModelId})...`, isError: false, isReady: false } });
 
@@ -269,9 +287,15 @@ self.onmessage = async (event: MessageEvent) => {
                     }
                 } else {
                     self.postMessage({ type: 'status', payload: { message: `Generating final answer with WebLLM...`, isError: false, isReady: false } });
+                    // --- Format Context String for WebLLM ---
+                    let formattedContextString = "No context provided.";
+                    if (Array.isArray(context) && context.length > 0) {
+                        formattedContextString = context.map((chunk: SearchResult) => chunk.text).join('\n\n');
+                    }
+                    // --- End Format Context String ---
                     finalAnswer = await ragManager.generateFinalAnswer(
                         originalQuery,
-                        context,
+                        formattedContextString,
                         finalRagPromptTemplate,
                         systemPrompt,
                         temperature,
@@ -431,13 +455,30 @@ self.onmessage = async (event: MessageEvent) => {
                 self.postMessage({ type: 'status', payload: { message: 'Generating final answer in worker...', isError: false, isReady: false } });
                 let finalAnswer;
 
-                if (chatEngineType === 'transformers') {
+                if (chatEngineType.startsWith('transformers')) { // Handle both 'transformers' and 'transformers_pleias'
                     if (!transformersModelId) {
                         throw new Error("Transformers.js model ID not provided for final answer.");
                     }
                     const pipeline = await getTransformersChatPipeline(transformersModelId, transformersOnnxFile);
+
+                    // --- Format Context String ---
+                    let formattedContextString = "No context provided.";
+                    if (Array.isArray(context) && context.length > 0) {
+                        if (chatEngineType === 'transformers_pleias') {
+                            // Special formatting for Pleias
+                            formattedContextString = context.map((chunk: SearchResult) =>
+                                `<|source_start|><|source_id_start|>${chunk.id}<|source_id_end|><|source_content_start|>${chunk.text}<|source_content_end|><|source_end|>`
+                            ).join('\n'); // Join with newline
+                            console.log("RAG Worker: Formatted Pleias context string:", formattedContextString);
+                        } else {
+                            // Default formatting: just join text chunks (or improve later)
+                            formattedContextString = context.map((chunk: SearchResult) => chunk.text).join('\n\n');
+                        }
+                    }
+                    // --- End Format Context String ---
+
                     const fullPrompt = finalRagPromptTemplate
-                        .replace("{context}", context || "No context provided.")
+                        .replace("{context}", formattedContextString)
                         .replace("{query}", originalQuery);
                     self.postMessage({ type: 'status', payload: { message: `Generating with TJS (${transformersModelId})...`, isError: false, isReady: false } });
 
@@ -469,9 +510,15 @@ self.onmessage = async (event: MessageEvent) => {
                     }
                 } else {
                     if (!ragManager) throw new Error("RAGManager not initialized for WebLLM final answer.");
+                    // --- Format Context String for WebLLM ---
+                    let formattedContextString = "No context provided.";
+                    if (Array.isArray(context) && context.length > 0) {
+                        formattedContextString = context.map((chunk: SearchResult) => chunk.text).join('\n\n');
+                    }
+                    // --- End Format Context String ---
                     finalAnswer = await ragManager.generateFinalAnswer(
                         originalQuery,
-                        context,
+                        formattedContextString,
                         finalRagPromptTemplate,
                         systemPrompt,
                         temperature,

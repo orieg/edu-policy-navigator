@@ -86,7 +86,19 @@ async function loadAndPrepareData(): Promise<ProcessedDocument[]> {
         const streetAddress = district['Street Address'];
         const entityType = district['Entity Type'] || 'educational institution';
 
-        let districtText = `The ${districtName} (${cdsCode}) is a ${entityType}`;
+        // Construct district acronym string
+        const districtBaseAcronym = district.baseAcronym;
+        const districtTypedAcronym = district.typedAcronym;
+        let districtAcronymText = '';
+        if (districtTypedAcronym && districtTypedAcronym !== 'No Data' && districtBaseAcronym && districtBaseAcronym !== 'No Data' && districtTypedAcronym !== districtBaseAcronym) {
+            districtAcronymText = `${districtTypedAcronym}, ${districtBaseAcronym}`;
+        } else if (districtTypedAcronym && districtTypedAcronym !== 'No Data') {
+            districtAcronymText = districtTypedAcronym;
+        } else if (districtBaseAcronym && districtBaseAcronym !== 'No Data') {
+            districtAcronymText = districtBaseAcronym;
+        }
+
+        let districtText = `The ${districtName}${districtAcronymText ? ` (${districtAcronymText})` : ''} is a ${entityType}`;
         if (streetAddress && streetAddress !== 'No Data') {
             districtText += ` located at ${streetAddress} in ${city}, ${county} County, California.`;
         } else {
@@ -95,9 +107,28 @@ async function loadAndPrepareData(): Promise<ProcessedDocument[]> {
         if (district['Funding Type'] && district['Funding Type'] !== 'No Data') {
             districtText += ` Funding Type: ${district['Funding Type']}.`;
         }
+        // Add Website if available
+        const website = district.Website;
+        if (website && website !== 'No Data') {
+            districtText += ` Its website is ${website}.`;
+        }
+
+        // Add other characteristics for districts
+        if (district['Charter Yes/No'] === 'Y') {
+            districtText += ' This is a charter district.';
+        }
+        const virtualTypeDistrict = district['Virtual Instruction Type'];
+        if (virtualTypeDistrict && virtualTypeDistrict !== 'No Data') {
+            districtText += ` Offers ${virtualTypeDistrict.toLowerCase()} instruction.`; // aDDED toLowerCase()
+        }
+        if (district['Multilingual Yes/No'] === 'Y') {
+            districtText += ' Offers multilingual programs.';
+        }
+
+        districtText += ` CDS Code: ${cdsCode}.`; // CDS Code at the end
 
         documents.push({
-            id: cdsCode, // Changed: Use CDSCode directly as ID
+            id: cdsCode,
             type: 'district',
             cdsCode: cdsCode,
             text: districtText,
@@ -116,6 +147,19 @@ async function loadAndPrepareData(): Promise<ProcessedDocument[]> {
         }
         const parentDistrict = districtList.find(d => d['CDS Code'] === districtCdsKey);
         const parentDistrictName = parentDistrict?.District || 'Unknown District';
+        const parentDistrictBaseAcronym = parentDistrict?.baseAcronym;
+        const parentDistrictTypedAcronym = parentDistrict?.typedAcronym;
+        const parentDistrictCounty = parentDistrict?.County;
+
+        // Construct parent district acronym string
+        let parentDistrictAcronymString = '';
+        if (parentDistrictTypedAcronym && parentDistrictTypedAcronym !== 'No Data' && parentDistrictBaseAcronym && parentDistrictBaseAcronym !== 'No Data' && parentDistrictTypedAcronym !== parentDistrictBaseAcronym) {
+            parentDistrictAcronymString = `${parentDistrictTypedAcronym}, ${parentDistrictBaseAcronym}`;
+        } else if (parentDistrictTypedAcronym && parentDistrictTypedAcronym !== 'No Data') {
+            parentDistrictAcronymString = parentDistrictTypedAcronym;
+        } else if (parentDistrictBaseAcronym && parentDistrictBaseAcronym !== 'No Data') {
+            parentDistrictAcronymString = parentDistrictBaseAcronym;
+        }
 
         for (const school of schoolsInDistrict) {
             if (school.Status !== 'Active' || school['Public Yes/No'] !== 'Y') {
@@ -134,13 +178,31 @@ async function loadAndPrepareData(): Promise<ProcessedDocument[]> {
             const highGrade = school['High Grade'];
             const website = school.Website;
 
-            let schoolText = `The ${schoolName} (${schoolCdsCode}) is a ${schoolType}`;
-            if (streetAddress && streetAddress !== 'No Data') {
-                schoolText += ` located at ${streetAddress} in ${schoolCity}, California,`;
-            } else {
-                schoolText += ` located in ${schoolCity}, California,`;
+            // Construct school's own acronym string
+            const schoolBaseAcronym = school.baseAcronym;
+            const schoolTypedAcronym = school.typedAcronym;
+            let schoolAcronymText = '';
+            if (schoolTypedAcronym && schoolTypedAcronym !== 'No Data' && schoolBaseAcronym && schoolBaseAcronym !== 'No Data' && schoolTypedAcronym !== schoolBaseAcronym) {
+                schoolAcronymText = `${schoolTypedAcronym}, ${schoolBaseAcronym}`;
+            } else if (schoolTypedAcronym && schoolTypedAcronym !== 'No Data') {
+                schoolAcronymText = schoolTypedAcronym;
+            } else if (schoolBaseAcronym && schoolBaseAcronym !== 'No Data') {
+                schoolAcronymText = schoolBaseAcronym;
             }
-            schoolText += ` and is part of the ${parentDistrictName} district (${districtCdsKey}).`;
+
+            let schoolText = `The ${schoolName}${schoolAcronymText ? ` (${schoolAcronymText})` : ''} is a ${schoolType}`;
+            if (streetAddress && streetAddress !== 'No Data') {
+                schoolText += ` located at ${streetAddress} in ${schoolCity}, California.`;
+            } else {
+                schoolText += ` located in ${schoolCity}, California.`;
+            }
+
+            schoolText += ` It is part of the ${parentDistrictName} district${parentDistrictAcronymString ? ` (${parentDistrictAcronymString})` : ''}`;
+            if (parentDistrictCounty && parentDistrictCounty !== 'No Data') {
+                schoolText += `, in ${parentDistrictCounty} county.`;
+            } else {
+                schoolText += `.`;
+            }
 
             if (lowGrade && highGrade && lowGrade !== 'No Data' && highGrade !== 'No Data') {
                 if (lowGrade === 'P' && highGrade === 'Adult') {
@@ -162,8 +224,28 @@ async function loadAndPrepareData(): Promise<ProcessedDocument[]> {
                 schoolText += ` Its website is ${website}.`;
             }
 
+            // Add other characteristics for schools
+            if (school['Charter Yes/No'] === 'Y') {
+                schoolText += ' This is a charter school.';
+            }
+            if (school['Magnet Yes/No'] === 'Y') {
+                schoolText += ' It is a magnet school.';
+            }
+            const virtualTypeSchool = school['Virtual Instruction Type'];
+            if (virtualTypeSchool && virtualTypeSchool !== 'No Data') {
+                schoolText += ` Offers ${virtualTypeSchool.toLowerCase()} instruction.`; // aDDED toLowerCase()
+            }
+            if (school['Year Round Yes/No'] === 'Y') {
+                schoolText += ' Operates on a year-round calendar.';
+            }
+            if (school['Multilingual Yes/No'] === 'Y') {
+                schoolText += ' Offers multilingual programs.';
+            }
+
+            schoolText += ` CDS Code: ${schoolCdsCode}.`; // CDS Code at the end
+
             documents.push({
-                id: schoolCdsCode, // Changed: Use CDSCode directly as ID
+                id: schoolCdsCode,
                 type: 'school',
                 cdsCode: schoolCdsCode,
                 text: schoolText,
