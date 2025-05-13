@@ -310,6 +310,23 @@
                     <span id="minContextScoreValue">0.3</span>
                 </div>
 
+                <!-- New Search All Documents Checkbox -->
+                <div class="setting" style="margin-top: 10px;">
+                    <input type="checkbox" id="searchAllDocumentsCheckbox" name="searchAllDocumentsCheckbox">
+                    <label for="searchAllDocumentsCheckbox">Search all documents (slower, for testing impact of clustering)</label>
+                </div>
+
+                <!-- New Similarity Metric Select -->
+                <div class="setting" style="margin-top: 10px;">
+                    <label for="similarityMetricSelect">Similarity Metric:</label>
+                    <select id="similarityMetricSelect" name="similarityMetricSelect">
+                        <option value="cosine">Cosine Similarity (Dot Product on Normalized)</option>
+                        <option value="dot_product">Dot Product (Explicit)</option>
+                        <option value="manhattan">Manhattan Distance</option>
+                        <option value="euclidean">Euclidean Distance</option>
+                    </select>
+                </div>
+
                 <button
                     id="generateFinalAnswerBtn"
                     disabled
@@ -331,6 +348,16 @@
                         Compare cosine similarity of sample text pairs using
                         different embedding methods.
                     </p>
+                    <!-- New Similarity Metric Select for Validation -->
+                    <div class="setting" style="margin-bottom: 10px;">
+                        <label for="validationSimilarityMetricSelect">Similarity Metric for Validation:</label>
+                        <select id="validationSimilarityMetricSelect" name="validationSimilarityMetricSelect">
+                            <option value="cosine">Cosine Similarity</option>
+                            <option value="dot_product">Dot Product</option>
+                            <option value="manhattan">Manhattan Distance</option>
+                            <option value="euclidean">Euclidean Distance</option>
+                        </select>
+                    </div>
                     <button id="runSimilarityTestBtn" disabled
                         >Run Similarity Comparison</button
                     >

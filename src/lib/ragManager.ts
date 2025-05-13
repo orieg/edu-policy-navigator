@@ -9,6 +9,7 @@ import type {
     DocumentMetadata
 } from '../types/vectorStore.d.ts';
 import type { ChatCompletionRequest, ChatOptions } from '@mlc-ai/web-llm';
+import { dotProduct, calculateSimilarity } from '../utils/mathUtils'; // Corrected import
 
 interface RAGManagerConfig {
     webLLMService: WebLLMService;
@@ -194,30 +195,98 @@ export class RAGManager {
     }
 
     public async retrieveContext(
-        queryForContext: string
-    ): Promise<SearchResult[] | null> { // Return SearchResult array or null
-        console.log("RAGManager: Retrieving context for query:", queryForContext);
-        const queryEmbedding = await this.webLLMService.getQueryEmbedding(queryForContext);
-        if (!queryEmbedding) {
-            console.warn("RAGManager: Could not generate query embedding for context retrieval.");
-            return null;
+        query: string, // Keep query for potential logging or future use, though embedding is primary
+        queryEmbedding: Float32Array,
+        options?: { searchAllDocuments?: boolean; similarityMetric?: string }
+    ): Promise<SearchResult[]> {
+        if (!this.searchService) {
+            console.error("RAGManager: Search service is not initialized.");
+            return [];
         }
 
-        const searchResults = await this.searchService.search(
-            queryEmbedding,
-            this.TOP_M_CLUSTERS,
-            this.TOP_K_DOCS_PER_CLUSTER,
-            this.FINAL_TOP_N_DOCS
-        );
+        if (options?.searchAllDocuments) {
+            console.log("RAGManager: Performing brute-force search across all documents.");
+            const allDocsWithEmbeddings = this.searchService.getAllDocumentsWithEmbeddings();
+            if (!allDocsWithEmbeddings || allDocsWithEmbeddings.length === 0) {
+                return [];
+            }
+            const currentMetric = options?.similarityMetric || 'cosine'; // Default to cosine
 
-        if (!searchResults || searchResults.length === 0) {
-            console.log("RAGManager: No relevant documents found for context.");
-            return null;
+            const scoredDocuments = allDocsWithEmbeddings.map(doc => ({
+                id: doc.id,
+                text: doc.text,
+                score: calculateSimilarity(queryEmbedding, doc.embedding, currentMetric)
+            }));
+
+            // Adjust sorting based on metric type
+            if (currentMetric === 'manhattan' || currentMetric === 'euclidean') {
+                scoredDocuments.sort((a, b) => a.score - b.score); // Manhattan/Euclidean: lower is better
+            } else {
+                scoredDocuments.sort((a, b) => b.score - a.score); // Cosine/Dot: higher is better
+            }
+            return scoredDocuments.slice(0, this.FINAL_TOP_N_DOCS);
+
+        } else {
+            // Existing clustered search logic
+            const currentMetric = options?.similarityMetric || 'cosine'; // Default to cosine
+            console.log(`RAGManager: Performing clustered search with metric: ${currentMetric}.`);
+            const closestClusters = this.searchService.findTopKClusters(
+                queryEmbedding,
+                this.TOP_M_CLUSTERS,
+                currentMetric // Pass metric
+            );
+
+            if (!closestClusters || closestClusters.length === 0) {
+                return [];
+            }
+
+            let allCandidateDocs: SearchResult[] = [];
+            for (const cluster of closestClusters) {
+                const clusterData = this.searchService.getClusterDataById(cluster.clusterId);
+                if (clusterData) {
+                    const docsInCluster = this.searchService.searchInCluster(
+                        queryEmbedding,
+                        clusterData,
+                        this.TOP_K_DOCS_PER_CLUSTER,
+                        currentMetric // Pass metric
+                    );
+                    if (docsInCluster) {
+                        allCandidateDocs.push(...docsInCluster);
+                    }
+                } else {
+                    console.warn(`RAGManager: Cluster data not found for clusterId: ${cluster.clusterId}`);
+                }
+            }
+
+            // De-duplicate and sort all candidates
+            const uniqueDocsMap = new Map<string, SearchResult>();
+            allCandidateDocs.forEach(doc => {
+                // When inserting into map, consider metric for "better" score
+                const existingDoc = uniqueDocsMap.get(doc.id);
+                if (!existingDoc) {
+                    uniqueDocsMap.set(doc.id, doc);
+                } else {
+                    if (currentMetric === 'manhattan' || currentMetric === 'euclidean') {
+                        if (doc.score < existingDoc.score) { // Lower is better for Manhattan/Euclidean
+                            uniqueDocsMap.set(doc.id, doc);
+                        }
+                    } else {
+                        if (doc.score > existingDoc.score) { // Higher is better for Cosine/Dot
+                            uniqueDocsMap.set(doc.id, doc);
+                        }
+                    }
+                }
+            });
+
+            const sortedUniqueDocs = Array.from(uniqueDocsMap.values());
+            // Adjust final sorting based on metric type
+            if (currentMetric === 'manhattan' || currentMetric === 'euclidean') {
+                sortedUniqueDocs.sort((a, b) => a.score - b.score);
+            } else {
+                sortedUniqueDocs.sort((a, b) => b.score - a.score);
+            }
+            return sortedUniqueDocs.slice(0, this.FINAL_TOP_N_DOCS);
         }
-
-        console.log(`RAGManager: Returning ${searchResults.length} search results with scores.`);
-        // Return the full SearchResult array
-        return searchResults;
     }
 
     public async generateFinalAnswer(

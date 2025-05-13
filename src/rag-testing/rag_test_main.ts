@@ -114,6 +114,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const minContextScoreSlider = document.getElementById('minContextScoreSlider') as HTMLInputElement;
     const minContextScoreValue = document.getElementById('minContextScoreValue') as HTMLSpanElement;
 
+    // New Search All Documents Checkbox
+    const searchAllDocumentsCheckbox = document.getElementById('searchAllDocumentsCheckbox') as HTMLInputElement;
+
+    // New Similarity Metric Select
+    const similarityMetricSelect = document.getElementById('similarityMetricSelect') as HTMLSelectElement;
+
     // Chat model config UI
     const chatEngineWebLLMRadio = document.getElementById('chatEngineWebLLM') as HTMLInputElement;
     const chatEngineTransformersJSDefaultRadio = document.getElementById('chatEngineTransformersJSDefault') as HTMLInputElement;
@@ -184,9 +190,12 @@ document.addEventListener('DOMContentLoaded', async () => {
         minContextScoreValue,
         retrieveContextOriginalBtn,
         mlcModelSelectDiv,
-        mlcModelSelect
+        mlcModelSelect,
+        searchAllDocumentsCheckbox,
+        similarityMetricSelect,
     };
     systemPromptContainer = document.getElementById('systemPromptContainerDiv') as HTMLDivElement; // Assign inside listener
+    const validationSimilarityMetricSelect = document.getElementById('validationSimilarityMetricSelect') as HTMLSelectElement;
 
     for (const [name, element] of Object.entries(requiredElements)) {
         if (!element) {
@@ -199,6 +208,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     let worker: Worker | undefined;
+    let isWorkerReady: boolean = false; // Declare isWorkerReady here
     let inBrowserExtractor: any = null; // For in-browser transformers.js pipeline
 
     // Intermediate state for step-by-step RAG
@@ -659,6 +669,7 @@ Based on the context, answer the following question:
         statusLabel.textContent = message;
         statusLabel.style.color = isError ? 'red' : '#555';
         if (isReady !== undefined) {
+            isWorkerReady = isReady; // Update isWorkerReady here
             submitQueryBtn.disabled = !isReady;
             queryInput.disabled = !isReady;
             if (systemPromptInput) systemPromptInput.disabled = !isReady;
@@ -917,6 +928,12 @@ Based on the context, answer the following question:
                             updateStatus(payload.error ? `Error generating final answer: ${payload.error}` : 'Final answer generated. Ready for new query/steps.', !!payload.error, true);
                         }
                         break;
+                    case 'SIMILARITY_TEST_RESULTS':
+                        console.log("Received similarity test results from worker:", payload);
+                        displaySimilarityResults(payload);
+                        statusLabel.textContent = 'Similarity validation complete.';
+                        if (runSimilarityTestBtn) runSimilarityTestBtn.disabled = false;
+                        break;
                     default:
                         console.warn("RAG Test Main: Unknown message type from worker:", type);
                 }
@@ -1027,7 +1044,8 @@ Based on the context, answer the following question:
                     transformersModelId: chatEngineType === 'transformers' ? transformersModelId : null, // Pass model ID if transformers
                     transformersOnnxFile: chatEngineType === 'transformers' ? transformersOnnxFile : null, // Pass ONNX file path/url
                     rephraseSettings,
-                    answerSettings
+                    answerSettings,
+                    similarityMetric: similarityMetricSelect.value // Pass selected metric
                 }
             });
         }
@@ -1035,82 +1053,19 @@ Based on the context, answer the following question:
 
     if (runSimilarityTestBtn) {
         runSimilarityTestBtn.addEventListener('click', async () => {
-            if (!similarityValidationSamples.length) {
-                similarityResultsArea.innerHTML = '<p style="color:orange;">No similarity samples loaded to test.</p>';
+            if (!worker || !isWorkerReady) {
+                console.warn('Similarity test button clicked, but worker is not ready.');
+                statusLabel.textContent = 'Worker not ready. Please wait for initialization.';
                 return;
             }
+            console.log("Requesting similarity test from worker...");
+            const selectedValidationMetric = validationSimilarityMetricSelect.value;
+            worker.postMessage({
+                type: 'SIMILARITY_TEST_REQUEST',
+                payload: { similarityMetric: selectedValidationMetric }
+            });
+            statusLabel.textContent = 'Running similarity validation...';
             runSimilarityTestBtn.disabled = true;
-            similarityResultsArea.innerHTML = '<p>Running similarity tests...</p>';
-
-            const inBrowserReady = await initializeInBrowserTransformers();
-
-            let tableHtml = `
-                <table> 
-                    <thead>
-                        <tr>
-                            <th>Sample ID</th>
-                            <th>Text 1 (Preview)</th>
-                            <th>Text 2 (Preview)</th>
-                            <th>Pre-computed (Node Transformers.js)</th>
-                            <th>WebLLM (MLC)</th>
-                            <th>In-Browser Transformers.js</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-            `;
-
-            for (const sample of similarityValidationSamples) {
-                tableHtml += `<tr id="sample-row-${sample.id}">
-                                <td>${sample.id}</td>
-                                <td>${sample.text1.substring(0, 30)}...</td>
-                                <td>${sample.text2.substring(0, 30)}...</td>
-                                <td>${sample.transformersJsSimilarity !== null ? sample.transformersJsSimilarity.toFixed(6) : 'N/A'}</td>
-                                <td class="webllm-score">Pending...</td>
-                                <td class="inbrowser-transformers-score">Pending...</td>
-                            </tr>`;
-
-                // 1. Request WebLLM similarity from worker
-                if (worker) {
-                    worker.postMessage({
-                        type: 'GET_EMBEDDING_SIMILARITY',
-                        payload: {
-                            sampleId: sample.id,
-                            text1: sample.text1,
-                            text2: sample.text2
-                        }
-                    });
-                }
-            }
-            tableHtml += '</tbody></table>';
-            similarityResultsArea.innerHTML = tableHtml;
-
-            // 2. Calculate In-Browser Transformers.js similarity (after table is rendered)
-            if (inBrowserReady && inBrowserExtractor) {
-                for (const sample of similarityValidationSamples) {
-                    const resultRow = document.getElementById(`sample-row-${sample.id}`);
-                    const inBrowserCell = resultRow?.querySelector('.inbrowser-transformers-score');
-                    if (!inBrowserCell) continue;
-
-                    try {
-                        const output1 = await inBrowserExtractor(sample.text1, { pooling: 'cls', normalize: true });
-                        const emb1 = normalizeL2(output1.data as Float32Array); // Ensure normalization, though pipeline should do it
-
-                        const output2 = await inBrowserExtractor(sample.text2, { pooling: 'cls', normalize: true });
-                        const emb2 = normalizeL2(output2.data as Float32Array);
-
-                        if (emb1.length !== 384 || emb2.length !== 384) { // Assuming EXPECTED_EMBEDDING_DIMENSIONS is 384
-                            throw new Error(`Dimension mismatch: ${emb1.length}, ${emb2.length}`);
-                        }
-                        const similarity = calculateCosineSimilarity(emb1, emb2);
-                        inBrowserCell.textContent = similarity.toFixed(6);
-                    } catch (e) {
-                        console.error(`Error with in-browser transformers for sample ${sample.id}:`, e);
-                        inBrowserCell.textContent = `Error: ${e instanceof Error ? e.message : String(e)}`;
-                        if (resultRow) resultRow.style.color = 'red';
-                    }
-                }
-            }
-            runSimilarityTestBtn.disabled = false;
         });
     }
 
@@ -1205,8 +1160,9 @@ Based on the context, answer the following question:
                 worker.postMessage({
                     type: 'RETRIEVE_CONTEXT',
                     payload: {
-                        queryForContext
-                        // Potentially add other search parameters here if needed later
+                        queryForContext,
+                        searchAllDocuments: searchAllDocumentsCheckbox.checked, // Pass checkbox state
+                        similarityMetric: similarityMetricSelect.value // Pass selected metric
                     }
                 });
             }
@@ -1331,7 +1287,9 @@ Based on the context, answer the following question:
                 worker.postMessage({
                     type: 'RETRIEVE_CONTEXT',
                     payload: {
-                        queryForContext: originalQuery
+                        queryForContext: originalQuery,
+                        searchAllDocuments: searchAllDocumentsCheckbox.checked, // Pass checkbox state
+                        similarityMetric: similarityMetricSelect.value // Pass selected metric
                     }
                 });
             }
@@ -1367,5 +1325,25 @@ Based on the context, answer the following question:
         });
     }
     // --- End HMR Handling ---
+
+    function displaySimilarityResults(payload: {
+        results: Array<{ pair: string, webLLMScore: number | string, transformersScore: number | string, details?: string }>
+        metricUsed?: string
+    }) {
+        const resultsArea = document.getElementById('similarityResultsArea');
+        if (!resultsArea) return;
+
+        let html = '<table><thead><tr><th>Text Pair</th><th>WebLLM (Xenova) Score</th><th>In-browser Transformers.js Score</th><th>Details</th></tr></thead><tbody>';
+        if (payload.metricUsed) {
+            const metricName = payload.metricUsed.charAt(0).toUpperCase() + payload.metricUsed.slice(1);
+            html = `<h4>Metric used: ${metricName.replace('_', ' ')}</h4>` + html;
+        }
+
+        for (const item of payload.results) {
+            html += `<tr><td>${item.pair}</td><td>${item.webLLMScore}</td><td>${item.transformersScore}</td><td>${item.details || 'N/A'}</td></tr>`;
+        }
+        html += '</tbody></table>';
+        resultsArea.innerHTML = html;
+    }
 
 }); 

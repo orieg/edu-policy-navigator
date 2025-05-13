@@ -6,6 +6,7 @@ import type {
     SearchResult,
     DocumentMetadata
 } from '../types/vectorStore';
+import { calculateSimilarity } from '../utils/mathUtils'; // Import the new utility
 
 export class ClusteredSearchService {
     private centroids: ClusterCentroidData[];
@@ -40,7 +41,7 @@ export class ClusteredSearchService {
      * @param vecB Float32Array
      * @returns The dot product (cosine similarity).
      */
-    public dotProduct(vecA: Float32Array, vecB: Float32Array): number {
+    private internalDotProduct(vecA: Float32Array, vecB: Float32Array): number {
         if (vecA.length !== vecB.length) {
             throw new Error("Vectors must have the same dimensionality for dot product.");
         }
@@ -65,7 +66,7 @@ export class ClusteredSearchService {
      * @param topM The number of top clusters to return.
      * @returns An array of the top M ClusterCentroidData objects, sorted by similarity score.
      */
-    public findTopKClusters(queryEmbedding: Float32Array, topM: number): ClusterCentroidData[] {
+    public findTopKClusters(queryEmbedding: Float32Array, topM: number, similarityMetric: string = 'cosine'): ClusterCentroidData[] {
         if (queryEmbedding.length !== this.embeddingDimensions) {
             throw new Error(`Query embedding dimensions (${queryEmbedding.length}) do not match service dimensions (${this.embeddingDimensions}).`);
         }
@@ -80,10 +81,15 @@ export class ClusteredSearchService {
 
         const scoredCentroids = this.centroids.map(centroidData => ({
             ...centroidData,
-            score: this.dotProduct(queryEmbedding, centroidData.centroid)
+            score: calculateSimilarity(queryEmbedding, centroidData.centroid, similarityMetric)
         }));
 
-        scoredCentroids.sort((a, b) => b.score - a.score); // Sort descending by score
+        // Adjust sorting based on metric type
+        if (similarityMetric === 'manhattan' || similarityMetric === 'euclidean') {
+            scoredCentroids.sort((a, b) => a.score - b.score); // Manhattan/Euclidean: lower is better
+        } else {
+            scoredCentroids.sort((a, b) => b.score - a.score); // Cosine/Dot: higher is better
+        }
 
         return scoredCentroids.slice(0, topM);
     }
@@ -95,7 +101,12 @@ export class ClusteredSearchService {
      * @param topKPerCluster The number of top documents to return from this cluster.
      * @returns An array of SearchResult objects, sorted by similarity score.
      */
-    public searchInCluster(queryEmbedding: Float32Array, clusterData: ClusterData, topKPerCluster: number): SearchResult[] {
+    public searchInCluster(
+        queryEmbedding: Float32Array,
+        clusterData: ClusterData,
+        topKPerCluster: number,
+        similarityMetric: string = 'cosine'
+    ): SearchResult[] {
         if (queryEmbedding.length !== this.embeddingDimensions) {
             throw new Error(`Query embedding dimensions (${queryEmbedding.length}) do not match service dimensions (${this.embeddingDimensions}).`);
         }
@@ -129,7 +140,7 @@ export class ClusteredSearchService {
         for (let i = 0; i < numEmbeddings; i++) {
             // Extract the i-th document embedding from the flat array
             const docEmbedding = embeddingsFlatArray.slice(i * dimensions, (i + 1) * dimensions);
-            const score = this.dotProduct(queryEmbedding, docEmbedding);
+            const score = calculateSimilarity(queryEmbedding, docEmbedding, similarityMetric);
             results.push({
                 id: metadata[i].id,
                 text: metadata[i].text,
@@ -138,7 +149,12 @@ export class ClusteredSearchService {
             });
         }
 
-        results.sort((a, b) => b.score - a.score); // Sort descending by score
+        // Adjust sorting based on metric type
+        if (similarityMetric === 'manhattan' || similarityMetric === 'euclidean') {
+            results.sort((a, b) => a.score - b.score); // Manhattan/Euclidean: lower is better
+        } else {
+            results.sort((a, b) => b.score - a.score); // Cosine/Dot: higher is better
+        }
 
         return results.slice(0, topKPerCluster);
     }
@@ -155,17 +171,18 @@ export class ClusteredSearchService {
         queryEmbedding: Float32Array,
         topMClusters: number,
         topKDocsPerCluster: number,
-        finalTopN: number
+        finalTopN: number,
+        similarityMetric: string = 'cosine'
     ): Promise<SearchResult[]> {
         if (!queryEmbedding || queryEmbedding.length !== this.embeddingDimensions) {
             throw new Error("Invalid query embedding provided.");
         }
 
-        console.log(`Starting two-stage search: topMClusters=${topMClusters}, topKDocsPerCluster=${topKDocsPerCluster}, finalTopN=${finalTopN}`);
+        console.log(`Starting two-stage search: topMClusters=${topMClusters}, topKDocsPerCluster=${topKDocsPerCluster}, finalTopN=${finalTopN}, metric=${similarityMetric}`);
 
         // Stage 1: Find top M relevant clusters
-        const topClusters = this.findTopKClusters(queryEmbedding, topMClusters);
-        console.log(`Found ${topClusters.length} top clusters: ${topClusters.map(c => c.clusterId).join(', ')}`);
+        const topClusters = this.findTopKClusters(queryEmbedding, topMClusters, similarityMetric);
+        console.log(`Found ${topClusters.length} top clusters: ${topClusters.map(c => c.clusterId).join(', ')} (Scores: ${topClusters.map(c => (c as any).score?.toFixed(4)).join(', ')})`);
 
         if (topClusters.length === 0) {
             return [];
@@ -176,8 +193,8 @@ export class ClusteredSearchService {
         for (const clusterCentroid of topClusters) {
             const clusterData = this.clustersData.get(clusterCentroid.clusterId);
             if (clusterData) {
-                console.log(`Searching in cluster ${clusterCentroid.clusterId}...`);
-                const clusterResults = this.searchInCluster(queryEmbedding, clusterData, topKDocsPerCluster);
+                console.log(`Searching in cluster ${clusterCentroid.clusterId} with metric ${similarityMetric}...`);
+                const clusterResults = this.searchInCluster(queryEmbedding, clusterData, topKDocsPerCluster, similarityMetric);
                 aggregatedResults.push(...clusterResults);
                 console.log(`Found ${clusterResults.length} results in cluster ${clusterCentroid.clusterId}. Total aggregated: ${aggregatedResults.length}`);
             } else {
@@ -186,10 +203,56 @@ export class ClusteredSearchService {
         }
 
         // Re-sort all aggregated results by score and take the final top N
-        aggregatedResults.sort((a, b) => b.score - a.score);
+        if (similarityMetric === 'manhattan' || similarityMetric === 'euclidean') {
+            aggregatedResults.sort((a, b) => a.score - b.score); // Manhattan/Euclidean: lower is better
+        } else {
+            aggregatedResults.sort((a, b) => b.score - a.score); // Cosine/Dot: higher is better
+        }
         const finalResults = aggregatedResults.slice(0, finalTopN);
 
-        console.log(`Search completed. Returning ${finalResults.length} final results.`);
+        console.log(`Search completed. Returning ${finalResults.length} final results (Top score: ${finalResults[0]?.score?.toFixed(4)}).`);
         return finalResults;
+    }
+
+    /**
+     * Retrieves ClusterData for a given cluster ID.
+     * @param clusterId The ID of the cluster.
+     * @returns The ClusterData object or undefined if not found.
+     */
+    public getClusterDataById(clusterId: string): ClusterData | undefined {
+        return this.clustersData.get(clusterId);
+    }
+
+    public getAllDocumentsWithEmbeddings(): Array<{ id: string, text: string, embedding: Float32Array }> {
+        const allDocs: Array<{ id: string, text: string, embedding: Float32Array }> = [];
+        // Use this.clustersData directly, and no need for isInitialized if constructor ensures data
+        if (!this.clustersData || this.clustersData.size === 0) {
+            console.warn("ClusteredSearchService: No cluster data loaded.");
+            return allDocs;
+        }
+
+        for (const clusterId of this.clustersData.keys()) {
+            const cluster = this.clustersData.get(clusterId);
+            // Access embeddings via cluster.embeddingData.embeddingsFlatArray
+            if (cluster && cluster.metadata && cluster.embeddingData?.embeddingsFlatArray) {
+                const { embeddingsFlatArray, numEmbeddings, dimensions } = cluster.embeddingData;
+                if (dimensions !== this.embeddingDimensions) {
+                    console.warn(`Cluster ${clusterId} has ${dimensions} dimensions, service expects ${this.embeddingDimensions}. Skipping.`);
+                    continue;
+                }
+                for (let i = 0; i < numEmbeddings; i++) {
+                    const meta = cluster.metadata[i];
+                    if (!meta) continue; // Should not happen if data is consistent
+                    const embedding = embeddingsFlatArray.slice(i * dimensions, (i + 1) * dimensions);
+                    allDocs.push({
+                        id: meta.id,
+                        text: meta.text,
+                        embedding: embedding
+                    });
+                }
+            }
+        }
+        console.log(`ClusteredSearchService: Retrieved ${allDocs.length} documents with embeddings from all clusters.`);
+        return allDocs;
     }
 } 

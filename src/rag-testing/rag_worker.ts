@@ -3,6 +3,7 @@ import { loadAllRAGData } from '../lib/dataLoader.ts';
 import { ClusteredSearchService } from '../lib/clusteredSearchService.ts';
 import type { SearchResult } from '../types/vectorStore';
 import { RAGManager } from '../lib/ragManager.ts';
+import { calculateSimilarity } from '../utils/mathUtils';
 
 console.log("RAG Worker: Script loaded. All services imported.");
 
@@ -10,9 +11,12 @@ let ragManager: RAGManager | null = null;
 let webLLMService: WebLLMService | null = null;
 let clusteredSearchService: ClusteredSearchService | null = null;
 
-// Cache for Transformers.js pipeline
-let activeTransformersPipeline: any = null; // Stores the active text-generation pipeline
-let activeTransformersModelId: string | null = null; // Stores the ID of the currently loaded model
+// Cache for Transformers.js pipeline (for chat)
+let activeTransformersPipeline: any = null;
+let activeTransformersModelId: string | null = null;
+
+// New: Cache for Transformers.js feature-extraction pipeline (for similarity validation)
+let similarityValidationFeatureExtractor: any = null;
 
 // MANIFEST_URL should be relative to the public directory if served statically,
 // or an absolute path if constructed dynamically.
@@ -105,6 +109,41 @@ async function getTransformersChatPipeline(modelId: string, onnxFile?: string) {
     }
 }
 
+// New function to initialize the feature extractor for similarity validation
+async function initializeSimilarityValidationFeatureExtractor() {
+    if (similarityValidationFeatureExtractor) return; // Already initialized
+
+    self.postMessage({ type: 'status', payload: { message: 'Initializing similarity validation feature extractor (Snowflake/snowflake-arctic-embed-xs)...', isError: false, isReady: false } });
+    try {
+        const { pipeline, env } = await import('@huggingface/transformers');
+        env.allowLocalModels = false; // Consistent with main thread if desired
+        env.useBrowserCache = true;   // Consistent with main thread if desired
+
+        similarityValidationFeatureExtractor = await pipeline('feature-extraction', 'Snowflake/snowflake-arctic-embed-xs', {
+            device: "wasm", // or "webgpu"
+            progress_callback: (progress: any) => {
+                if (progress.status === 'progress' || progress.status === 'download') {
+                    self.postMessage({
+                        type: 'progress',
+                        payload: {
+                            stage: `Loading Snowflake embedder (${progress.status})`,
+                            file: progress.file,
+                            loaded: progress.loaded,
+                            total: progress.total,
+                            progress: progress.progress,
+                        }
+                    });
+                }
+            }
+        });
+        self.postMessage({ type: 'status', payload: { message: 'Similarity validation feature extractor (Snowflake) loaded.', isError: false, isReady: true } }); // isReady might be true for this component only
+    } catch (error) {
+        console.error("RAG Worker: Error loading similarity validation feature extractor:", error);
+        self.postMessage({ type: 'status', payload: { message: `Error loading Snowflake embedder: ${(error as Error).message}`, isError: true } });
+        similarityValidationFeatureExtractor = null;
+    }
+}
+
 self.onmessage = async (event: MessageEvent) => {
     console.log("RAG Worker: Message received from main thread:", event.data);
     const { type, payload } = event.data;
@@ -125,6 +164,8 @@ self.onmessage = async (event: MessageEvent) => {
                 await webLLMService.initializeEmbeddingEngine();
                 self.postMessage({ type: 'progress', payload: { message: 'Embedding engine initialized. Initializing chat engine...', loaded: 33, total: 100 } });
                 await webLLMService.initializeChatEngine(undefined, mlcModelId);
+                // Initialize the similarity validation feature extractor
+                await initializeSimilarityValidationFeatureExtractor();
                 self.postMessage({ type: 'progress', payload: { message: 'Chat engine initialized. Loading RAG data...', loaded: 66, total: 100 } });
 
                 const dataLoaderProgress = (progress: { message: string, loaded: number, total: number }) => {
@@ -237,7 +278,23 @@ self.onmessage = async (event: MessageEvent) => {
                 // --- Stage 2: Retrieve Context ---
                 const contextStart = performance.now();
                 self.postMessage({ type: 'status', payload: { message: `Retrieving context for: "${queryForRetrieval}"...`, isError: false, isReady: false } });
-                const context = await ragManager.retrieveContext(queryForRetrieval);
+
+                // Ensure webLLMService is available for embedding
+                if (!webLLMService) {
+                    throw new Error("WebLLMService not available for query embedding in full RAG pipeline.");
+                }
+                const queryEmbeddingForRetrieval = await webLLMService.getQueryEmbedding(queryForRetrieval);
+                if (!queryEmbeddingForRetrieval) {
+                    throw new Error("Failed to generate query embedding for context retrieval in full RAG pipeline.");
+                }
+
+                const { similarityMetric: fullPipelineSimilarityMetric } = payload; // Extract metric for full pipeline
+
+                const context = await ragManager.retrieveContext(
+                    queryForRetrieval,
+                    queryEmbeddingForRetrieval,
+                    { similarityMetric: fullPipelineSimilarityMetric } // Pass metric
+                );
                 self.postMessage({ type: 'retrieved_context_for_pipeline', payload: { context: context } });
 
                 contextDuration = performance.now() - contextStart;
@@ -466,25 +523,45 @@ self.onmessage = async (event: MessageEvent) => {
             break;
 
         case 'RETRIEVE_CONTEXT':
-            if (!ragManager || !webLLMService || !clusteredSearchService) {
-                self.postMessage({ type: 'RETRIEVED_CONTEXT_RESULT', payload: { error: 'RAG system not initialized.' } });
+            if (!ragManager || !webLLMService) {
+                self.postMessage({ type: 'RETRIEVED_CONTEXT_RESULT', payload: { error: 'RAG system not initialized (ragManager or webLLMService is null).' } });
                 return;
             }
-            if (!payload || !payload.queryForContext) {
-                self.postMessage({ type: 'RETRIEVED_CONTEXT_RESULT', payload: { error: 'Missing queryForContext for context retrieval.' } });
-                return;
-            }
+            console.log("RAG Worker: Received RETRIEVE_CONTEXT message:", payload);
+            const { queryForContext, searchAllDocuments, similarityMetric } = payload;
+            const startTimeCtx = performance.now();
             try {
-                self.postMessage({ type: 'status', payload: { message: 'Retrieving context in worker...', isError: false, isReady: false } });
-                const contextStart = performance.now();
-                const searchResults = await ragManager.retrieveContext(payload.queryForContext);
-                const contextDuration = performance.now() - contextStart;
+                const queryEmbedding = await webLLMService.getQueryEmbedding(queryForContext);
+                if (!queryEmbedding) {
+                    throw new Error("Failed to generate query embedding for context retrieval.");
+                }
 
-                self.postMessage({ type: 'RETRIEVED_CONTEXT_RESULT', payload: { searchResults, metrics: { duration: contextDuration } } });
+                const searchResults = await ragManager.retrieveContext(queryForContext, queryEmbedding, {
+                    searchAllDocuments: searchAllDocuments ?? false,
+                    similarityMetric: similarityMetric
+                });
+
+                const endTimeCtx = performance.now();
+                self.postMessage({
+                    type: 'RETRIEVED_CONTEXT_RESULT',
+                    payload: {
+                        searchResults,
+                        metrics: {
+                            duration: endTimeCtx - startTimeCtx
+                        }
+                    }
+                });
                 self.postMessage({ type: 'status', payload: { message: 'Context retrieved.' } });
             } catch (error) {
                 console.error("RAG Worker: Error retrieving context:", error);
-                self.postMessage({ type: 'RETRIEVED_CONTEXT_RESULT', payload: { searchResults: null, error: `Error retrieving context: ${(error as Error).message}`, metrics: null } });
+                self.postMessage({
+                    type: 'RETRIEVED_CONTEXT_RESULT',
+                    payload: {
+                        searchResults: null,
+                        error: `Error retrieving context: ${(error as Error).message}`,
+                        metrics: null
+                    }
+                });
                 self.postMessage({ type: 'status', payload: { message: 'Error retrieving context.' } });
             }
             break;
@@ -671,6 +748,20 @@ self.onmessage = async (event: MessageEvent) => {
             }
             break;
 
+        case 'SIMILARITY_TEST_REQUEST':
+            console.log("Worker: Received SIMILARITY_TEST_REQUEST", payload);
+            if (payload && typeof payload.similarityMetric === 'string') {
+                performSimilarityValidation(payload.similarityMetric);
+            } else {
+                console.error("Worker: SIMILARITY_TEST_REQUEST missing or invalid similarityMetric in payload.");
+                self.postMessage({ type: 'SIMILARITY_TEST_ERROR', payload: 'Invalid similarityMetric in request.' });
+            }
+            break;
+
+        case 'CLEAR_CACHE':
+            console.log("RAG Worker: Clear cache request processed.");
+            break;
+
         default:
             console.warn("RAG Worker: Unknown message type received:", type);
             self.postMessage({ type: 'error', payload: { message: `Unknown command: ${type}` } });
@@ -678,4 +769,85 @@ self.onmessage = async (event: MessageEvent) => {
 };
 
 console.log("RAG Worker: Event listener attached.");
-self.postMessage({ type: 'status', payload: { message: 'Worker script loaded. Ready for initialization command.', isError: false, isReady: false } }); 
+self.postMessage({ type: 'status', payload: { message: 'Worker script loaded. Ready for initialization command.', isError: false, isReady: false } });
+
+// Helper function to get embeddings using the active Transformers.js pipeline
+async function getTransformersEmbedding(text: string, pipelineInstance: any): Promise<Float32Array | null> {
+    if (!pipelineInstance) {
+        console.error("Worker: Transformers.js pipeline instance (for feature extraction) not available for embedding.");
+        return null;
+    }
+    try {
+        const output = await pipelineInstance(text, { pooling: 'mean', normalize: true });
+        if (output && output.data instanceof Float32Array) {
+            return output.data;
+        }
+        console.error("Worker: Unexpected output structure from feature-extraction pipeline:", output);
+        return null;
+    } catch (error) {
+        console.error("Worker: Error getting embedding from feature-extraction pipeline:", error);
+        return null;
+    }
+}
+
+async function performSimilarityValidation(similarityMetric: string) {
+    // Check if webLLMService is instantiated and the dedicated similarityValidationFeatureExtractor is available.
+    if (!webLLMService || !similarityValidationFeatureExtractor) {
+        console.error("Worker: Services not initialized for similarity validation (WebLLMService or similarityValidationFeatureExtractor missing).");
+        self.postMessage({ type: 'SIMILARITY_TEST_ERROR', payload: 'Core services not ready for similarity validation.' });
+        return;
+    }
+
+    const textPairs = [
+        { id: "pair1", text1: "The quick brown fox jumps over the lazy dog.", text2: "A fast, dark-colored fox leaps above a sleepy canine." },
+        { id: "pair2", text1: "California is a state in the western USA.", text2: "The Golden State is known for its beaches and Hollywood." },
+        { id: "pair3", text1: "Educational policies are complex.", text2: "Quantum physics is complicated." },
+        { id: "pair4", text1: "San Ramon Valley Unified School District", text2: "SRVUSD" },
+        { id: "pair5", text1: "What is the location of SRVUSD?", text2: "Where is San Ramon Valley Unified School District located?" }
+    ];
+
+    const results = [];
+    try {
+        for (const pair of textPairs) {
+            let webLLMScore: number | string = 'N/A';
+            try {
+                const emb1_webllm = await webLLMService.getQueryEmbedding(pair.text1);
+                const emb2_webllm = await webLLMService.getQueryEmbedding(pair.text2);
+                if (emb1_webllm && emb2_webllm) {
+                    webLLMScore = calculateSimilarity(emb1_webllm, emb2_webllm, similarityMetric).toFixed(6);
+                } else {
+                    webLLMScore = "Embedding failed";
+                }
+            } catch (e: any) {
+                webLLMScore = `Error: ${e.message}`;
+                console.error(`Error during WebLLM embedding for pair ${pair.id}:`, e);
+            }
+
+            let transformersScore: number | string = 'N/A';
+            try {
+                // Use the dedicated feature extractor pipeline
+                const emb1_tfjs = await getTransformersEmbedding(pair.text1, similarityValidationFeatureExtractor);
+                const emb2_tfjs = await getTransformersEmbedding(pair.text2, similarityValidationFeatureExtractor);
+                if (emb1_tfjs && emb2_tfjs) {
+                    transformersScore = calculateSimilarity(emb1_tfjs, emb2_tfjs, similarityMetric).toFixed(6);
+                } else {
+                    transformersScore = "Embedding failed";
+                }
+            } catch (e: any) {
+                transformersScore = `Error: ${e.message}`;
+                console.error(`Error during Transformers.js embedding for pair ${pair.id}:`, e);
+            }
+
+            results.push({
+                pair: `${pair.text1.substring(0, 30)}... vs ${pair.text2.substring(0, 30)}...`,
+                webLLMScore,
+                transformersScore,
+                details: `Metric: ${similarityMetric}`
+            });
+        }
+        self.postMessage({ type: 'SIMILARITY_TEST_RESULTS', payload: { results, metricUsed: similarityMetric } });
+    } catch (error: any) {
+        console.error("Worker: Error during similarity validation process:", error);
+        self.postMessage({ type: 'SIMILARITY_TEST_ERROR', payload: error.message });
+    }
+} 
