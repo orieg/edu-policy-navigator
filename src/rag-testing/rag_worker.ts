@@ -30,6 +30,12 @@ function calculateCosineSimilarity(vecA: Float32Array, vecB: Float32Array): numb
     return dotProduct; // Assumes vectors are already L2 normalized by getQueryEmbedding
 }
 
+// --- Approximation for token count ---
+function estimateTokenCount(text: string | null): number {
+    if (!text) return 0;
+    return Math.round(text.length / 4); // Simple approximation
+}
+
 /**
  * Dynamically imports Transformers.js and initializes a text-generation pipeline.
  * Caches the pipeline to avoid reloading the same model.
@@ -44,7 +50,11 @@ async function getTransformersChatPipeline(modelId: string, onnxFile?: string) {
     }
 
     let modelPath = modelId;
-    let pipelineOptions: any = {};
+    const pipelineOptions: any = {
+        device: "wasm", // Or "webgpu" if preferred and supported
+        dtype: undefined, // Explicitly undefined for now
+        quantized: false // Add this line to disable library quantization for ONNX
+    };
 
     if (onnxFile) {
         if (onnxFile.startsWith('http://') || onnxFile.startsWith('https://')) {
@@ -101,6 +111,8 @@ self.onmessage = async (event: MessageEvent) => {
 
     switch (type) {
         case 'initialize':
+            const { mlcModelId } = payload || {};
+
             if (ragManager) {
                 self.postMessage({ type: 'status', payload: { message: 'RAG system already initialized.', isError: false, isReady: true } });
                 return;
@@ -112,7 +124,7 @@ self.onmessage = async (event: MessageEvent) => {
                 webLLMService = new WebLLMService();
                 await webLLMService.initializeEmbeddingEngine();
                 self.postMessage({ type: 'progress', payload: { message: 'Embedding engine initialized. Initializing chat engine...', loaded: 33, total: 100 } });
-                await webLLMService.initializeChatEngine();
+                await webLLMService.initializeChatEngine(undefined, mlcModelId);
                 self.postMessage({ type: 'progress', payload: { message: 'Chat engine initialized. Loading RAG data...', loaded: 66, total: 100 } });
 
                 const dataLoaderProgress = (progress: { message: string, loaded: number, total: number }) => {
@@ -189,7 +201,8 @@ self.onmessage = async (event: MessageEvent) => {
                         top_k: rephraseSettings?.top_k,
                         max_new_tokens: rephraseSettings?.max_new_tokens ?? 100,
                         max_length: undefined, // Initialize max_length
-                        do_sample: rephraseShouldSample // Explicitly set sampling
+                        do_sample: rephraseShouldSample, // Explicitly set sampling
+                        stop_sequences: (chatEngineType === 'transformers_pleias' || chatEngineType === 'transformers_pleias_1b') ? ["<|answer_end|>"] : undefined // <<< Add stop sequence for Pleias
                     };
                     if (tjsSettings.max_new_tokens) tjsSettings.max_length = tjsSettings.max_new_tokens;
                     console.log("RAG Worker: Final settings for Transformers.js rephrase:", tjsSettings);
@@ -232,7 +245,7 @@ self.onmessage = async (event: MessageEvent) => {
                 // --- Stage 3: Generate Final Answer ---
                 let finalAnswer: string | null;
                 const finalAnswerStart = performance.now();
-                if (chatEngineType === 'transformers') {
+                if (chatEngineType.startsWith('transformers')) { // <<< Changed to startsWith to include _1b
                     if (!transformersModelId) {
                         throw new Error("Transformers.js model ID not provided for final answer.");
                     }
@@ -241,12 +254,14 @@ self.onmessage = async (event: MessageEvent) => {
                     // --- Format Context String ---
                     let formattedContextString = "No context provided.";
                     if (Array.isArray(context) && context.length > 0) {
-                        if (chatEngineType === 'transformers_pleias') {
-                            // Special formatting for Pleias
-                            formattedContextString = context.map((chunk: SearchResult) =>
-                                `<|source_start|><|source_id_start|>${chunk.id}<|source_id_end|><|source_content_start|>${chunk.text}<|source_content_end|><|source_end|>`
+                        if (chatEngineType === 'transformers_pleias' || chatEngineType === 'transformers_pleias_1b') {
+                            // Special formatting for Pleias - Use index+1 and correct token format
+                            formattedContextString = context.map((chunk: SearchResult, index: number) =>
+                                // Use index+1 for ID, correct token structure, remove _start/_end for ID
+                                `<|source_start|><|source_id|>${index + 1} <|source_content_start|>${chunk.text}<|source_content_end|><|source_end|>`
                             ).join('\n'); // Join with newline
-                            console.log("RAG Worker: Formatted Pleias context string:", formattedContextString);
+                            console.log("RAG Worker: Formatted Pleias context string (with language_start):");
+                            console.log(formattedContextString);
                         } else {
                             // Default formatting: just join text chunks (or improve later)
                             formattedContextString = context.map((chunk: SearchResult) => chunk.text).join('\n\n');
@@ -259,6 +274,11 @@ self.onmessage = async (event: MessageEvent) => {
                         .replace("{query}", originalQuery);
                     self.postMessage({ type: 'status', payload: { message: `Generating final answer with Transformers.js (${transformersModelId})...`, isError: false, isReady: false } });
 
+                    // <<< Add Log Here >>>
+                    console.log("--- RAG Worker: Final Prompt for TJS Pipeline ---");
+                    console.log(finalPrompt);
+                    console.log("--------------------------------------------------");
+
                     // Determine if sampling should be enabled for final answer
                     const answerShouldSample = (answerSettings?.temperature ?? 0) > 0 ||
                         (answerSettings?.top_k ?? 0) > 1 ||
@@ -270,14 +290,23 @@ self.onmessage = async (event: MessageEvent) => {
                         top_k: answerSettings?.top_k,
                         max_new_tokens: answerSettings?.max_new_tokens ?? 500,
                         max_length: undefined, // Initialize max_length
-                        do_sample: answerShouldSample // Explicitly set sampling
+                        do_sample: answerShouldSample, // Explicitly set sampling
+                        stop_sequences: (chatEngineType === 'transformers_pleias' || chatEngineType === 'transformers_pleias_1b') ? ["<|answer_end|>"] : undefined, // Stop sequence for Pleias
+                        callback_function: (outputs: any[]) => {
+                            // Post intermediate results for streaming effect
+                            console.log("RAG Worker: callback_function (Full Pipeline) invoked:", outputs);
+                            if (outputs && outputs[0] && typeof outputs[0].generated_text === 'string') {
+                                console.log("RAG Worker: callback_function (Full Pipeline) sending GENERATION_UPDATE");
+                                self.postMessage({ type: 'GENERATION_UPDATE', payload: { partialResult: outputs[0].generated_text } });
+                            }
+                        }
                     };
                     if (tjsSettings.max_new_tokens) tjsSettings.max_length = tjsSettings.max_new_tokens;
-                    console.log("RAG Worker: Final settings for Transformers.js final answer:", tjsSettings);
+                    console.log("RAG Worker: Final settings for step-by-step Transformers.js final answer:", tjsSettings);
                     const finalAnswerOutput = await finalAnswerPipeline(finalPrompt, tjsSettings);
                     // Log raw output
                     if (Array.isArray(finalAnswerOutput) && finalAnswerOutput.length > 0 && finalAnswerOutput[0].generated_text) {
-                        console.log("RAG Worker: RAW finalAnswerOutput from Transformers.js:", finalAnswerOutput[0].generated_text);
+                        console.log("RAG Worker: RAW step-by-step output from Transformers.js:", finalAnswerOutput[0].generated_text);
                     }
                     if (Array.isArray(finalAnswerOutput) && finalAnswerOutput.length > 0 && finalAnswerOutput[0].generated_text) {
                         finalAnswer = finalAnswerOutput[0].generated_text.replace(finalPrompt, '').trim();
@@ -313,7 +342,8 @@ self.onmessage = async (event: MessageEvent) => {
                             rephraseDuration,
                             contextDuration,
                             finalAnswerDuration,
-                            totalPipelineDuration
+                            totalPipelineDuration,
+                            generatedTokenCount: estimateTokenCount(finalAnswer)
                         }
                     }
                 });
@@ -341,7 +371,10 @@ self.onmessage = async (event: MessageEvent) => {
                 self.postMessage({ type: 'status', payload: { message: 'Rephrasing query in worker...', isError: false, isReady: false } });
                 let rephrasedQuery;
 
-                if (chatEngineType === 'transformers') {
+                // <<< Log incoming rephraseSettings payload >>>
+                console.log("RAG Worker (REPHRASE_QUERY): Received payload rephraseSettings:", rephraseSettings);
+
+                if (chatEngineType.startsWith('transformers')) { // Handle both transformers and pleias types
                     if (!transformersModelId) {
                         throw new Error("Transformers.js model ID not provided for rephrasing.");
                     }
@@ -349,7 +382,17 @@ self.onmessage = async (event: MessageEvent) => {
                     const fullPrompt = rephrasePromptTemplate.replace("{query}", originalQuery);
                     // System prompt handling for transformers.js is tricky, often baked into the prompt or model fine-tuning
                     self.postMessage({ type: 'status', payload: { message: `Rephrasing with TJS (${transformersModelId})...`, isError: false, isReady: false } });
-                    const output = await pipeline(fullPrompt, { temperature: temperature ?? 0.3, max_new_tokens: 100 });
+
+                    // <<< ADD LOGS HERE >>>
+                    const rephrasePipelineSettings = { temperature: temperature ?? 0.3, max_new_tokens: rephraseSettings?.max_new_tokens ?? 100 }; // Use rephraseSettings for max_tokens
+                    console.log("--- RAG Worker: Rephrase Prompt for TJS Pipeline ---");
+                    console.log(fullPrompt);
+                    console.log("--- RAG Worker: Rephrase Settings for TJS Pipeline ---");
+                    console.log(rephrasePipelineSettings);
+                    console.log("-----------------------------------------------------");
+                    // <<< END LOGS >>>
+
+                    const output = await pipeline(fullPrompt, rephrasePipelineSettings); // Use defined settings object
                     if (Array.isArray(output) && output.length > 0 && output[0].generated_text) {
                         let rawGeneratedText = output[0].generated_text;
 
@@ -405,7 +448,13 @@ self.onmessage = async (event: MessageEvent) => {
 
                 // Log the payload just before sending
                 const rephraseDuration = performance.now() - rephraseStart;
-                const resultPayload = { rephrasedQuery, metrics: { duration: rephraseDuration } };
+                const resultPayload = {
+                    rephrasedQuery,
+                    metrics: {
+                        duration: rephraseDuration,
+                        generatedTokenCount: estimateTokenCount(rephrasedQuery)
+                    }
+                };
                 console.log("RAG Worker: Sending REPHRASED_QUERY_RESULT payload:", resultPayload);
                 self.postMessage({ type: 'REPHRASED_QUERY_RESULT', payload: resultPayload });
                 self.postMessage({ type: 'status', payload: { message: 'Query rephrased.' } });
@@ -464,12 +513,16 @@ self.onmessage = async (event: MessageEvent) => {
                     // --- Format Context String ---
                     let formattedContextString = "No context provided.";
                     if (Array.isArray(context) && context.length > 0) {
-                        if (chatEngineType === 'transformers_pleias') {
-                            // Special formatting for Pleias
-                            formattedContextString = context.map((chunk: SearchResult) =>
-                                `<|source_start|><|source_id_start|>${chunk.id}<|source_id_end|><|source_content_start|>${chunk.text}<|source_content_end|><|source_end|>`
+                        if (chatEngineType === 'transformers_pleias' || chatEngineType === 'transformers_pleias_1b') {
+                            // Special formatting for Pleias - Use index+1 and correct token format
+                            formattedContextString = context.map((chunk: SearchResult, index: number) =>
+                                // Use index+1 for ID, correct token structure, remove _start/_end for ID
+                                `<|source_start|><|source_id|>${index + 1} <|source_content_start|>${chunk.text}<|source_content_end|><|source_end|>`
                             ).join('\n'); // Join with newline
-                            console.log("RAG Worker: Formatted Pleias context string:", formattedContextString);
+                            // Append language start token after all sources
+                            formattedContextString += '\n<|language_start|>';
+                            console.log("RAG Worker: Formatted Pleias context string (with language_start):");
+                            console.log(formattedContextString);
                         } else {
                             // Default formatting: just join text chunks (or improve later)
                             formattedContextString = context.map((chunk: SearchResult) => chunk.text).join('\n\n');
@@ -482,18 +535,32 @@ self.onmessage = async (event: MessageEvent) => {
                         .replace("{query}", originalQuery);
                     self.postMessage({ type: 'status', payload: { message: `Generating with TJS (${transformersModelId})...`, isError: false, isReady: false } });
 
+                    // <<< Add Log Here >>>
+                    console.log("--- RAG Worker: Final Prompt for TJS Pipeline ---");
+                    console.log(fullPrompt);
+                    console.log("--------------------------------------------------");
+
                     // Determine if sampling should be enabled for final answer
                     const answerShouldSample = (answerSettings?.temperature ?? 0) > 0 ||
                         (answerSettings?.top_k ?? 0) > 1 ||
                         ((answerSettings?.top_p ?? 1.0) < 1.0);
 
                     const tjsSettings: any = {
-                        temperature: temperature ?? 0.7,
+                        temperature: answerSettings?.temperature ?? 0.7,
                         top_p: answerSettings?.top_p,
                         top_k: answerSettings?.top_k,
                         max_new_tokens: answerSettings?.max_new_tokens ?? 500,
                         max_length: undefined, // Initialize max_length
-                        do_sample: answerShouldSample // Explicitly set sampling
+                        do_sample: answerShouldSample, // Explicitly set sampling
+                        stop_sequences: (chatEngineType === 'transformers_pleias' || chatEngineType === 'transformers_pleias_1b') ? ["<|answer_end|>"] : undefined, // Stop sequence for Pleias
+                        callback_function: (outputs: any[]) => {
+                            // Post intermediate results for streaming effect
+                            console.log("RAG Worker: callback_function (Full Pipeline) invoked:", outputs);
+                            if (outputs && outputs[0] && typeof outputs[0].generated_text === 'string') {
+                                console.log("RAG Worker: callback_function (Full Pipeline) sending GENERATION_UPDATE");
+                                self.postMessage({ type: 'GENERATION_UPDATE', payload: { partialResult: outputs[0].generated_text } });
+                            }
+                        }
                     };
                     if (tjsSettings.max_new_tokens) tjsSettings.max_length = tjsSettings.max_new_tokens;
                     console.log("RAG Worker: Final settings for step-by-step Transformers.js final answer:", tjsSettings);
@@ -527,7 +594,16 @@ self.onmessage = async (event: MessageEvent) => {
                 }
 
                 const finalAnswerDuration = performance.now() - finalAnswerStart;
-                self.postMessage({ type: 'FINAL_ANSWER_RESULT', payload: { finalAnswer, metrics: { duration: finalAnswerDuration } } });
+                self.postMessage({
+                    type: 'FINAL_ANSWER_RESULT',
+                    payload: {
+                        finalAnswer,
+                        metrics: {
+                            duration: finalAnswerDuration,
+                            generatedTokenCount: estimateTokenCount(finalAnswer)
+                        }
+                    }
+                });
                 self.postMessage({ type: 'status', payload: { message: 'Final answer generated.' } });
 
             } catch (error) {

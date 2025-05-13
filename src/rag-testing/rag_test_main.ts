@@ -4,6 +4,7 @@ console.log("RAG Test Main: Script loaded.");
 import RagWorker from '/src/rag-testing/rag_worker.ts?worker';
 // Dynamically import transformers.js for in-browser use
 import { pipeline, env as CjsEnv } from '@huggingface/transformers';
+import type { SearchResult } from '../types/vectorStore';
 
 interface SimilaritySampleData {
     id: string;
@@ -15,6 +16,7 @@ interface SimilaritySampleData {
 }
 
 let similarityValidationSamples: SimilaritySampleData[] = [];
+let systemPromptContainer: HTMLDivElement | null = null; // Declare here, outside listener
 
 // Helper for cosine similarity (dot product of L2 normalized vectors)
 function calculateCosineSimilarity(vecA: number[] | Float32Array, vecB: number[] | Float32Array): number {
@@ -106,6 +108,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const retrieveContextBtn = document.getElementById('retrieveContextBtn') as HTMLButtonElement;
     const retrievedContextArea = document.getElementById('retrievedContextArea') as HTMLDivElement;
     const generateFinalAnswerBtn = document.getElementById('generateFinalAnswerBtn') as HTMLButtonElement;
+    const retrieveContextOriginalBtn = document.getElementById('retrieveContextOriginalBtn') as HTMLButtonElement;
 
     // New context score slider UI
     const minContextScoreSlider = document.getElementById('minContextScoreSlider') as HTMLInputElement;
@@ -115,6 +118,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const chatEngineWebLLMRadio = document.getElementById('chatEngineWebLLM') as HTMLInputElement;
     const chatEngineTransformersJSDefaultRadio = document.getElementById('chatEngineTransformersJSDefault') as HTMLInputElement;
     const chatEnginePleiasRAGRadio = document.getElementById('chatEnginePleiasRAG') as HTMLInputElement;
+    const chatEnginePleiasRAG1BRadio = document.getElementById('chatEnginePleiasRAG1B') as HTMLInputElement;
     const transformersModelInputDiv = document.getElementById('transformersModelInputDiv') as HTMLDivElement;
     const transformersModelInput = document.getElementById('transformersModelInput') as HTMLInputElement;
 
@@ -134,6 +138,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // New ONNX file input
     const transformersOnnxFileInput = document.getElementById('transformersOnnxFileInput') as HTMLInputElement;
+
+    // New MLC Model Select UI
+    const mlcModelSelectDiv = document.getElementById('mlcModelSelectDiv') as HTMLDivElement;
+    const mlcModelSelect = document.getElementById('mlcModelSelect') as HTMLSelectElement;
 
     // --- Element Existence Check ---
     const requiredElements: { [key: string]: HTMLElement | null } = {
@@ -156,6 +164,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         chatEngineWebLLMRadio,
         chatEngineTransformersJSDefaultRadio,
         chatEnginePleiasRAGRadio,
+        chatEnginePleiasRAG1BRadio,
         transformersModelInputDiv,
         transformersModelInput,
         rephraseTemperatureSlider,
@@ -172,13 +181,21 @@ document.addEventListener('DOMContentLoaded', async () => {
         answerMaxNewTokensInput,
         transformersOnnxFileInput,
         minContextScoreSlider,
-        minContextScoreValue
+        minContextScoreValue,
+        retrieveContextOriginalBtn,
+        mlcModelSelectDiv,
+        mlcModelSelect
     };
+    systemPromptContainer = document.getElementById('systemPromptContainerDiv') as HTMLDivElement; // Assign inside listener
 
     for (const [name, element] of Object.entries(requiredElements)) {
         if (!element) {
             throw new Error(`Initialization Error: Failed to find required DOM element with ID corresponding to variable '${name}'. Check HTML structure and IDs.`);
         }
+    }
+    // Keep the check here
+    if (!systemPromptContainer) {
+        throw new Error(`Initialization Error: Failed to find required DOM element with ID 'systemPromptContainerDiv'. Check HTML structure and IDs.`);
     }
 
     let worker: Worker | undefined;
@@ -188,10 +205,85 @@ document.addEventListener('DOMContentLoaded', async () => {
     let currentRephrasedQuery: string | null = null;
     let currentRetrievedContext: string | null = null;
     let currentOriginalQuery: string | null = null;
+    let currentRetrievedSearchResults: SearchResult[] | null = null; // Add variable for the actual results array
 
     // Store default prompt template values
     let defaultRephraseTemplate = '';
     let defaultFinalRagTemplate = '';
+
+    // --- Define MLC Model Specific Prompt Configurations ---
+    interface PromptConfig {
+        rephrase: string;
+        finalRag: string;
+        showSystemPromptInput: boolean;
+    }
+
+    const mlcModelPromptConfigs: Record<string, PromptConfig> = {
+        'Llama-3.2-1B-Instruct-q4f32_1-MLC': {
+            rephrase: `<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+You are a query rephrasing assistant. Transform the user query into a concise, factual query for database retrieval.
+Focus on specific entities like school/district names, locations, IDs. Eliminate conversational filler.
+Output ONLY the rephrased query.<|eot_id|><|start_header_id|>user<|end_header_id|>
+{query}<|eot_id|><|start_header_id|>assistant<|end_header_id|>`,
+            finalRag: `<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+{system_prompt}<|eot_id|><|start_header_id|>user<|end_header_id|>
+Context:
+{context}
+
+Based on the context, answer the following question:
+{query}<|eot_id|><|start_header_id|>assistant<|end_header_id|>`,
+            showSystemPromptInput: true,
+        },
+        'Phi-3-mini-4k-instruct-q4f32_1-MLC': {
+            rephrase: `<s><|user|>
+Rephrase the following query for optimal database retrieval, focusing on factual keywords:
+{query}<|end|>
+<|assistant|>`,
+            finalRag: `<s><|user|>
+{system_prompt}
+Based on the following context, please answer the query.
+Context:
+{context}
+Query: {query}<|end|>
+<|assistant|>`,
+            showSystemPromptInput: true,
+        },
+        'gemma-2-2b-it-q4f32_1-MLC': {
+            rephrase: `<start_of_turn>user
+Rephrase for database retrieval: {query}<end_of_turn>
+<start_of_turn>model`,
+            finalRag: `<start_of_turn>user
+{system_prompt}
+Context:
+{context}
+Query: {query}<end_of_turn>
+<start_of_turn>model`,
+            showSystemPromptInput: true,
+        },
+        'TinyLlama-1.1B-Chat-v1.0-q4f32_1-MLC': {
+            rephrase: `<|system|>
+You are a query rephrasing assistant. Transform the user query into a concise, factual query for database retrieval.
+Focus on specific entities like school/district names, locations, IDs. Eliminate conversational filler.
+Output ONLY the rephrased query.</s>
+<|user|>
+{query}</s>
+<|assistant|>`,
+            finalRag: `<|begin_of_text|><|start_header_id|>system<|end_header_id|>
+{system_prompt}<|eot_id|><|start_header_id|>user<|end_header_id|>
+Context:
+{context}
+
+Based on the context, answer the following question:
+{query}<|eot_id|><|start_header_id|>assistant<|end_header_id|>`,
+            showSystemPromptInput: true,
+        },
+        // Add more model configs as needed
+        'DEFAULT_WEBLLM': { // Fallback for WebLLM models not explicitly listed
+            rephrase: defaultRephraseTemplate, // Will be set later
+            finalRag: defaultFinalRagTemplate, // Will be set later
+            showSystemPromptInput: true,
+        }
+    };
 
     // Store default model generation settings values
     let defaultAnswerSettings = {
@@ -361,33 +453,36 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Helper function to update prompt templates
-    function updatePromptTemplates(isPleias: boolean) {
-        const pleiasFinalRagUITemplate = `<|query_start|>{query}<|query_end|>\n{context}\n<|source_analysis_start|>\n`;
-        const pleiasRephraseUITemplate = `<|query_start|>{query}<|query_end|>\n<|source_analysis_start|>\n`;
+    function updatePromptTemplates(isPleias: boolean, mlcModelId?: string) {
+        let currentConfig: PromptConfig | undefined = undefined;
+        let showSystemPrompt = true;
 
-        const systemPromptContainer = systemPromptInput.parentElement;
-        const rephraseContainer = rephrasePromptTemplateInput.parentElement;
+        if (chatEngineWebLLMRadio?.checked && mlcModelId) {
+            currentConfig = mlcModelPromptConfigs[mlcModelId] || mlcModelPromptConfigs['DEFAULT_WEBLLM'];
+        } else if (isPleias) {
+            currentConfig = {
+                rephrase: `<|query_start|>{query}<|query_end|>\n<|source_analysis_start|>`,
+                finalRag: `<|query_start|>{query}<|query_end|>\n{context}\n<|source_analysis_start|>`,
+                showSystemPromptInput: false,
+            };
+        }
 
-        if (isPleias) {
-            if (systemPromptContainer) systemPromptContainer.style.display = 'none';
-            systemPromptInput.disabled = true;
-
-            if (rephraseContainer) rephraseContainer.style.display = 'block';
-            rephrasePromptTemplateInput.value = pleiasRephraseUITemplate;
-            rephrasePromptTemplateInput.disabled = true;
-
-            finalRagPromptTemplateInput.value = pleiasFinalRagUITemplate;
-            finalRagPromptTemplateInput.disabled = true;
+        if (currentConfig) {
+            rephrasePromptTemplateInput.value = currentConfig.rephrase;
+            finalRagPromptTemplateInput.value = currentConfig.finalRag;
+            showSystemPrompt = currentConfig.showSystemPromptInput;
         } else {
-            if (systemPromptContainer) systemPromptContainer.style.display = 'block';
-            systemPromptInput.disabled = submitQueryBtn.disabled;
+            // Fallback to general defaults if no other config matched
+            rephrasePromptTemplateInput.value = defaultRephraseTemplate;
+            finalRagPromptTemplateInput.value = defaultFinalRagTemplate;
+            showSystemPrompt = true; // Show system prompt by default for non-Pleias, non-specific MLC
+        }
 
-            if (rephraseContainer) rephraseContainer.style.display = 'block';
-            if (defaultRephraseTemplate) rephrasePromptTemplateInput.value = defaultRephraseTemplate;
-            rephrasePromptTemplateInput.disabled = submitQueryBtn.disabled;
+        rephrasePromptTemplateInput.disabled = false; // Ensure editable
+        finalRagPromptTemplateInput.disabled = false; // Ensure editable
 
-            if (defaultFinalRagTemplate) finalRagPromptTemplateInput.value = defaultFinalRagTemplate;
-            finalRagPromptTemplateInput.disabled = submitQueryBtn.disabled;
+        if (systemPromptContainer) {
+            systemPromptContainer.style.display = showSystemPrompt ? '' : 'none';
         }
     }
 
@@ -397,27 +492,44 @@ document.addEventListener('DOMContentLoaded', async () => {
         const qwenOnnxPath = 'onnx/model_q4.onnx';
         const pleiasModelId = 'onnx-community/Pleias-RAG-350M-ONNX';
         const pleiasOnnxPath = 'onnx/model_quantized.onnx'; // Correct path
+        const pleias1BModelId = 'onnx-community/Pleias-RAG-1B-ONNX'; // New 1B model ID
+        const pleias1BOnnxPath = 'onnx/model_quantized.onnx'; // Assuming same quantized path for 1B
 
         if (chatEngineWebLLMRadio?.checked) {
             transformersModelInputDiv.style.display = 'none';
             transformersModelInput.disabled = true;
             transformersOnnxFileInput.disabled = true;
-            updatePromptTemplates(false); // Restore default prompts
+            mlcModelSelectDiv.style.display = 'block'; // Show MLC select
+            mlcModelSelect.disabled = submitQueryBtn.disabled; // Enable/disable based on system readiness
+            updatePromptTemplates(false, mlcModelSelect.value); // Pass selected MLC model
             updateGenerationSettingsUI(false); // Restore default generation settings
             if (rephraseQueryBtn) rephraseQueryBtn.disabled = submitQueryBtn.disabled; // Enable based on overall readiness
+        } else if (chatEnginePleiasRAG1BRadio?.checked) { // Add handling for 1B model
+            transformersModelInputDiv.style.display = 'block';
+            transformersModelInput.value = pleias1BModelId;
+            transformersOnnxFileInput.value = pleias1BOnnxPath; // Use 1B path (assumed same for now)
+            transformersModelInput.disabled = true; // Disable editing for preset
+            transformersOnnxFileInput.disabled = true; // Disable editing for preset
+            mlcModelSelectDiv.style.display = 'none'; // Hide MLC select
+            mlcModelSelect.disabled = true;
+            updatePromptTemplates(true); // Set Pleias prompts
+            updateGenerationSettingsUI(true); // Set Pleias generation settings
+            if (rephraseQueryBtn) rephraseQueryBtn.disabled = submitQueryBtn.disabled; // Re-enable rephrase button for Pleias
         } else if (chatEnginePleiasRAGRadio?.checked) {
             transformersModelInputDiv.style.display = 'block';
             transformersModelInput.value = pleiasModelId;
             transformersOnnxFileInput.value = pleiasOnnxPath;
             transformersModelInput.disabled = true; // Disable editing for preset
             transformersOnnxFileInput.disabled = true; // Disable editing for preset
+            mlcModelSelectDiv.style.display = 'none'; // Hide MLC select
+            mlcModelSelect.disabled = true;
             updatePromptTemplates(true); // Set Pleias prompts
             updateGenerationSettingsUI(true); // Set Pleias generation settings
             if (rephraseQueryBtn) rephraseQueryBtn.disabled = submitQueryBtn.disabled; // Re-enable rephrase button for Pleias
         } else if (chatEngineTransformersJSDefaultRadio?.checked) {
             transformersModelInputDiv.style.display = 'block';
             // Set back to default Qwen3, but allow editing
-            if (transformersModelInput.value !== qwenModelId && transformersModelInput.value !== pleiasModelId) {
+            if (transformersModelInput.value !== qwenModelId && transformersModelInput.value !== pleiasModelId && transformersModelInput.value !== pleias1BModelId) {
                 // Only reset if it wasn't just switched from Pleias or doesn't already have Qwen
             } else {
                 transformersModelInput.value = qwenModelId;
@@ -425,8 +537,10 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             transformersModelInput.disabled = submitQueryBtn.disabled; // Enable if system is ready
             transformersOnnxFileInput.disabled = submitQueryBtn.disabled; // Enable if system is ready
-            updatePromptTemplates(false); // Restore default prompts
+            updatePromptTemplates(false); // Restore default prompts for non-MLC, non-Pleias
             updateGenerationSettingsUI(false); // Restore default generation settings
+            mlcModelSelectDiv.style.display = 'none'; // Hide MLC select
+            mlcModelSelect.disabled = true;
             if (rephraseQueryBtn) rephraseQueryBtn.disabled = submitQueryBtn.disabled; // Enable based on overall readiness
         } else {
             // Default case or error, hide the div
@@ -437,12 +551,54 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateGenerationSettingsUI(false); // Restore default generation settings (safety)
             if (rephraseQueryBtn) rephraseQueryBtn.disabled = true; // Disable rephrase button (safety)
         }
+
+        if (chatEngineWebLLMRadio) chatEngineWebLLMRadio.disabled = !submitQueryBtn.disabled;
+        if (chatEnginePleiasRAGRadio) chatEnginePleiasRAGRadio.disabled = !submitQueryBtn.disabled;
+        if (chatEngineTransformersJSDefaultRadio) chatEngineTransformersJSDefaultRadio.disabled = !submitQueryBtn.disabled;
+        if (chatEnginePleiasRAG1BRadio) chatEnginePleiasRAG1BRadio.disabled = !submitQueryBtn.disabled;
+        if (mlcModelSelect) {
+            const systemIsBusy = submitQueryBtn.disabled;
+            const webLlmEngineSelected = chatEngineWebLLMRadio.checked;
+            const shouldBeDisabled = systemIsBusy || !webLlmEngineSelected;
+            console.log(`RAG Test Main (handleChatEngineChange): Setting mlcModelSelect.disabled = ${shouldBeDisabled} (systemIsBusy: ${systemIsBusy}, webLlmEngineSelected: ${webLlmEngineSelected})`);
+            mlcModelSelect.disabled = shouldBeDisabled;
+        }
+        if (transformersModelInput) {
+            transformersModelInput.disabled = !submitQueryBtn.disabled || !chatEngineTransformersJSDefaultRadio.checked;
+        }
+        if (transformersOnnxFileInput) {
+            transformersOnnxFileInput.disabled = !submitQueryBtn.disabled || !chatEngineTransformersJSDefaultRadio.checked;
+        }
+
+        if (submitQueryBtn.disabled) {
+            progressBarContainer.style.display = 'block';
+        } else {
+            progressBarContainer.style.display = 'none';
+        }
     }
 
-    if (chatEngineWebLLMRadio && chatEngineTransformersJSDefaultRadio && chatEnginePleiasRAGRadio && transformersModelInputDiv && transformersModelInput && transformersOnnxFileInput) {
+    if (chatEngineWebLLMRadio && chatEngineTransformersJSDefaultRadio && chatEnginePleiasRAGRadio && chatEnginePleiasRAG1BRadio && transformersModelInputDiv && transformersModelInput && transformersOnnxFileInput && mlcModelSelectDiv && mlcModelSelect) {
         chatEngineWebLLMRadio.addEventListener('change', handleChatEngineChange);
         chatEngineTransformersJSDefaultRadio.addEventListener('change', handleChatEngineChange);
         chatEnginePleiasRAGRadio.addEventListener('change', handleChatEngineChange);
+        chatEnginePleiasRAG1BRadio.addEventListener('change', handleChatEngineChange);
+        mlcModelSelect.addEventListener('change', () => {
+            if (chatEngineWebLLMRadio.checked) { // Check if WebLLM is active
+                // Update prompts first, before potentially slow worker re-initialization
+                updatePromptTemplates(false, mlcModelSelect.value);
+
+                if (!submitQueryBtn.disabled) { // Only re-init worker if system is ready
+                    console.log("RAG Test Main: MLC Model selection changed. Re-initializing worker for WebLLM.");
+                    updateStatus(`Initializing new WebLLM model: ${mlcModelSelect.value}...`, false, false);
+                    if (progressBar && progressBarContainer) {
+                        progressBar.style.width = `0%`;
+                        progressBar.textContent = `0%`;
+                        progressBarContainer.style.display = 'block';
+                    }
+                    initializeWorker();
+                }
+            }
+        });
 
         // Set initial state based on default checked radio button
         handleChatEngineChange();
@@ -451,26 +607,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Set default prompt template values
     if (rephrasePromptTemplateInput) {
         rephrasePromptTemplateInput.value = `<|im_start|>system
-**Objective:** Transform the User Query into a concise, factual query that will have high semantic similarity with records in our school database when used for RAG retrieval (vector cosine similarity).
-
-** Our Database Records Typically Contain:**
-    * Specific School Names and unique ID codes(e.g., 'Berkeley Special Education Preschool (01611430122804)')
-    * School Type(e.g., 'Special Education School')
-    * Full Street Addresses(e.g., '2020 Bonar St.')
-    * City and State(e.g., 'Berkeley, California')
-    * Specific District Names and unique ID codes(e.g., 'Berkeley Unified district (01611430000000)')
-    * Grades Served(e.g., 'Preschool to P')
-    * Website URLs(e.g., 'www.berkeley.net')
-
-** Instructions for Rephrasing the User Query:**
-1.  Identify the essential subject and details in the User Query.
-2.  Rewrite the query to be a compact phrase or series of keywords.
-3.  This rewritten query ** must predominantly feature and prioritize ** the types of specific information listed above(school / district names, locations, IDs, grades, etc.) if they are mentioned or clearly implied in the User Query.
-4.  Eliminate all conversational filler, questions, polite phrases, and redundant words.The rephrased query should be dense with relevant factual terms.
-5.  The final output should be optimized for accurate vector embedding comparison against our database records.
-
-** Output Mandate:**
-Return *only* the rephrased, optimized query. Do not include any explanations, labels, or introductory text.<|im_end|>
+Convert User Query into a concise, affirmative list of essential keywords for database semantic search.
+Focus on: School/District Names, IDs, Locations, Grades, Type.
+Remove: Questions, greetings, filler.
+Output only keywords<|im_end|>
 <|im_start|>user
 {query}<|im_end|>
 <|im_start|>assistant
@@ -493,6 +633,13 @@ Based on the context, answer the following question:
 `;
         defaultFinalRagTemplate = finalRagPromptTemplateInput.value; // Store the default
     }
+
+    // After defaults are set, populate the DEFAULT_WEBLLM config
+    mlcModelPromptConfigs['DEFAULT_WEBLLM'] = {
+        rephrase: defaultRephraseTemplate,
+        finalRag: defaultFinalRagTemplate,
+        showSystemPromptInput: true,
+    };
 
     // Store initial default generation settings from the UI (after they are set by HTML and slider listeners)
     defaultAnswerSettings = {
@@ -521,13 +668,19 @@ Based on the context, answer the following question:
             if (rephraseQueryBtn) rephraseQueryBtn.disabled = !isReady;
             if (retrieveContextBtn) retrieveContextBtn.disabled = true;
             if (generateFinalAnswerBtn) generateFinalAnswerBtn.disabled = true;
+            if (retrieveContextOriginalBtn) retrieveContextOriginalBtn.disabled = !isReady || !queryInput.value.trim();
 
             // New chat engine UI elements
             if (chatEngineWebLLMRadio) chatEngineWebLLMRadio.disabled = !isReady;
             if (chatEnginePleiasRAGRadio) chatEnginePleiasRAGRadio.disabled = !isReady;
             if (chatEngineTransformersJSDefaultRadio) chatEngineTransformersJSDefaultRadio.disabled = !isReady;
+            if (chatEnginePleiasRAG1BRadio) chatEnginePleiasRAG1BRadio.disabled = !isReady;
+            if (mlcModelSelect) mlcModelSelect.disabled = !isReady || !chatEngineWebLLMRadio.checked;
             if (transformersModelInput) {
                 transformersModelInput.disabled = !isReady || !chatEngineTransformersJSDefaultRadio.checked;
+            }
+            if (transformersOnnxFileInput) {
+                transformersOnnxFileInput.disabled = !isReady || !chatEngineTransformersJSDefaultRadio.checked;
             }
 
             if (isReady) progressBarContainer.style.display = 'none';
@@ -570,24 +723,24 @@ Based on the context, answer the following question:
     }
 
     function initializeWorker() {
-        // Access via casting instead of augmenting global scope
-        const existingWorker = (window as any).ragWorker;
-        if (existingWorker) {
-            console.log("RAG Test Main: Worker already exists. Terminating old one.");
-            existingWorker.terminate();
-            (window as any).ragWorker = undefined;
+        // Terminate existing scoped worker instance if it exists
+        if (worker) {
+            console.log("RAG Test Main: Terminating existing worker instance before re-initializing.");
+            worker.terminate();
+            worker = undefined;
         }
 
         console.log("RAG Test Main: Creating Web Worker using imported constructor...");
         try {
             // Instantiate the worker from the import
             worker = new RagWorker();
+            (window as any).ragWorker = worker; // Also assign to window for HMR listener for now
             console.log("RAG Test Main: Web Worker created.");
 
             worker.onmessage = (event: MessageEvent) => {
                 // console.log("RAG Test Main: Message received from worker:", event.data);
                 const { type, payload } = event.data;
-                console.log(`RAG Test Main: Received message type: ${type}`, payload); // Log incoming payload
+                // console.debug(`RAG Test Main: Received message type: ${type}`, payload); // Log incoming payload
 
                 switch (type) {
                     case 'status':
@@ -598,6 +751,7 @@ Based on the context, answer the following question:
                         }
                         break;
                     case 'progress':
+                        console.log("RAG Test Main: Received 'progress' message from worker:", payload);
                         updateProgress(payload.message, payload.loaded, payload.total);
                         break;
                     case 'response': // Full RAG pipeline response
@@ -612,10 +766,15 @@ Based on the context, answer the following question:
                         // Add metrics if available
                         if (payload.metrics) {
                             responseHtml += `<br><small style="color:grey;">`;
-                            responseHtml += `(Rephrase: ${payload.metrics.rephraseDuration?.toFixed(0)}ms | `;
-                            responseHtml += `Context: ${payload.metrics.contextDuration?.toFixed(0)}ms | `;
-                            responseHtml += `Generation: ${payload.metrics.finalAnswerDuration?.toFixed(0)}ms | `;
-                            responseHtml += `Total: ${payload.metrics.totalPipelineDuration?.toFixed(0)}ms)</small>`;
+                            const { rephraseDuration, contextDuration, finalAnswerDuration, totalPipelineDuration, generatedTokenCount } = payload.metrics;
+                            responseHtml += `(Rephrase: ${rephraseDuration?.toFixed(0)}ms | `;
+                            responseHtml += `Context: ${contextDuration?.toFixed(0)}ms | `;
+                            responseHtml += `Generation: ${finalAnswerDuration?.toFixed(0)}ms`;
+                            if (generatedTokenCount && finalAnswerDuration && finalAnswerDuration > 0) {
+                                const tkPerS = (generatedTokenCount / (finalAnswerDuration / 1000)).toFixed(2);
+                                responseHtml += ` (${generatedTokenCount} tk, ${tkPerS} tk/s)`;
+                            }
+                            responseHtml += ` | Total: ${totalPipelineDuration?.toFixed(0)}ms)</small>`;
                         }
                         responseArea.innerHTML = responseHtml;
                         console.log("RAG Test Main: Updated responseArea innerHTML:", responseArea.innerHTML.substring(0, 500) + "..."); // Log the final HTML
@@ -636,6 +795,17 @@ Based on the context, answer the following question:
                         updateStatus(`Worker Error: ${payload.message}`, true, submitQueryBtn.disabled); // Keep current button state
                         console.error("RAG Test Main: Received error from worker:", payload.message);
                         break;
+                    case 'GENERATION_UPDATE': // Handle partial generation results
+                        const { partialResult } = payload;
+                        console.log("RAG Test Main: Received GENERATION_UPDATE", partialResult); // <<< ADD LOG HERE
+                        if (typeof partialResult === 'string') {
+                            // Display partial result, maybe clean prompt if needed, add indicator
+                            // For now, just display raw partial output + indicator
+                            // The final 'response' or 'FINAL_ANSWER_RESULT' will provide the fully cleaned text.
+                            const partialHtml = highlightThinkBlocks(escapeHtml(partialResult)) + '<span style="color:grey;">...</span>';
+                            responseArea.innerHTML = partialHtml;
+                        }
+                        break;
                     case 'REPHRASED_QUERY_RESULT':
                         console.log("Main: Received REPHRASED_QUERY_RESULT:", payload);
                         const { rephrasedQuery, error, metrics } = payload;
@@ -653,13 +823,19 @@ Based on the context, answer the following question:
                             let rephraseHtml = currentRephrasedQuery ? highlightThinkBlocks(escapeHtml(currentRephrasedQuery)) : 'No rephrased query returned.';
                             const duration = metrics?.duration ? (metrics.duration / 1000).toFixed(2) : 'N/A';
                             if (metrics) {
-                                rephraseHtml += `<br><small style="color:grey;">(Duration: ${duration}s)</small>`;
+                                rephraseHtml += `<br><small style="color:grey;">(Duration: ${duration}s`;
+                                if (metrics.generatedTokenCount && metrics.duration && metrics.duration > 0) {
+                                    const tkPerS = (metrics.generatedTokenCount / (metrics.duration / 1000)).toFixed(2);
+                                    rephraseHtml += `, ${metrics.generatedTokenCount} tk, ${tkPerS} tk/s`;
+                                }
+                                rephraseHtml += `)</small>`;
                             }
                             rephrasedQueryArea.innerHTML = rephraseHtml;
                             updateStatus(`Standalone rephrase complete (${duration}s). Ready for context retrieval.`, false, true);
 
                             // Clear subsequent steps' outputs
                             currentRetrievedContext = null;
+                            currentRetrievedSearchResults = null; // Clear results array too
                             retrievedContextArea.textContent = "";
                             responseArea.textContent = "";
 
@@ -677,7 +853,8 @@ Based on the context, answer the following question:
                         console.log("RAG Test Main: Handling 'RETRIEVED_CONTEXT_RESULT'. Metrics:", contextMetrics, "Results:", searchResults);
 
                         let contextHtml = '';
-                        currentRetrievedContext = null; // Reset context
+                        currentRetrievedContext = null; // Reset context display string
+                        currentRetrievedSearchResults = null; // Reset results array
 
                         if (contextError) {
                             contextHtml = `<span style="color:red;">Error: ${escapeHtml(contextError)}</span>`;
@@ -705,6 +882,8 @@ Based on the context, answer the following question:
 
                                 // Store the TEXT content of the FILTERED results for the final answer step
                                 currentRetrievedContext = filteredResults.map((r: { text: string }) => r.text).join('\n\n---\n\n');
+                                // Store the actual FILTERED SearchResult objects
+                                currentRetrievedSearchResults = filteredResults;
 
                                 updateStatus(`Context retrieved (${filteredResults.length}/${searchResults.length} documents passed score threshold ${minScore}). Ready for final answer generation.`, false, true);
                                 if (generateFinalAnswerBtn) generateFinalAnswerBtn.disabled = false; // Enable final answer generation
@@ -726,7 +905,12 @@ Based on the context, answer the following question:
                                 finalAnswerHtml = payload.finalAnswer ? highlightThinkBlocks(escapeHtml(payload.finalAnswer)) : 'No final answer text.';
                             }
                             if (payload.metrics) {
-                                finalAnswerHtml += `<br><small style="color:grey;">(Duration: ${payload.metrics.duration?.toFixed(0)}ms)</small>`;
+                                finalAnswerHtml += `<br><small style="color:grey;">(Duration: ${payload.metrics.duration?.toFixed(0)}ms`;
+                                if (payload.metrics.generatedTokenCount && payload.metrics.duration && payload.metrics.duration > 0) {
+                                    const tkPerS = (payload.metrics.generatedTokenCount / (payload.metrics.duration / 1000)).toFixed(2);
+                                    finalAnswerHtml += `, ${payload.metrics.generatedTokenCount} tk, ${tkPerS} tk/s`;
+                                }
+                                finalAnswerHtml += `)</small>`;
                             }
                             console.log("RAG Test Main: Generated finalAnswerHtml:", finalAnswerHtml.substring(0, 500) + "..."); // Log generated HTML
                             responseArea.innerHTML = finalAnswerHtml;
@@ -746,7 +930,12 @@ Based on the context, answer the following question:
 
             // Send initialization message to worker
             console.log("RAG Test Main: Sending initialize message to worker...");
-            worker.postMessage({ type: 'initialize' });
+            let initPayload: any = {};
+            if (chatEngineWebLLMRadio.checked && mlcModelSelect) {
+                initPayload.mlcModelId = mlcModelSelect.value;
+                console.log("RAG Test Main: Sending mlcModelId to worker:", mlcModelSelect.value);
+            }
+            worker.postMessage({ type: 'initialize', payload: initPayload });
         } catch (error) {
             console.error("RAG Test Main: Error creating Web Worker:", error);
             updateStatus(`Worker error: ${error instanceof Error ? error.message : String(error)}`, true, false);
@@ -761,9 +950,27 @@ Based on the context, answer the following question:
         const finalRagTemplate = finalRagPromptTemplateInput.value.trim();
 
         // Get chat engine config
-        const chatEngineType = chatEnginePleiasRAGRadio.checked ? 'transformers_pleias' :
-            (chatEngineTransformersJSDefaultRadio.checked ? 'transformers' : 'webllm');
-        const transformersModelId = transformersModelInput.value.trim();
+        let chatEngineType = 'webllm'; // Default
+        if (chatEngineTransformersJSDefaultRadio.checked) {
+            chatEngineType = 'transformers';
+        } else if (chatEnginePleiasRAGRadio.checked) {
+            chatEngineType = 'transformers_pleias';
+        } else if (chatEnginePleiasRAG1BRadio.checked) {
+            chatEngineType = 'transformers_pleias_1b'; // Assign new type
+        }
+        // Model ID and ONNX path depend on the type
+        let transformersModelId: string | null = null;
+        let transformersOnnxFile: string | null = null;
+        if (chatEngineType === 'transformers') {
+            transformersModelId = transformersModelInput.value.trim();
+            transformersOnnxFile = transformersOnnxFileInput.value.trim();
+        } else if (chatEngineType === 'transformers_pleias') {
+            transformersModelId = 'onnx-community/Pleias-RAG-350M-ONNX';
+            transformersOnnxFile = 'onnx/model_quantized.onnx';
+        } else if (chatEngineType === 'transformers_pleias_1b') {
+            transformersModelId = 'onnx-community/Pleias-RAG-1B-ONNX';
+            transformersOnnxFile = 'onnx/model_quantized.onnx'; // Assumed path
+        }
 
         // Gather rephrase and answer settings
         const rephraseSettings = {
@@ -804,6 +1011,7 @@ Based on the context, answer the following question:
             if (rephraseQueryBtn) rephraseQueryBtn.disabled = true;
             if (retrieveContextBtn) retrieveContextBtn.disabled = true;
             if (generateFinalAnswerBtn) generateFinalAnswerBtn.disabled = true;
+            if (retrieveContextOriginalBtn) retrieveContextOriginalBtn.disabled = true;
             rephrasedQueryArea.textContent = "";
             retrievedContextArea.textContent = "";
             currentOriginalQuery = query; // Store for potential use in step-by-step if needed after full run
@@ -817,7 +1025,7 @@ Based on the context, answer the following question:
                     finalRagPromptTemplate: finalRagTemplate,
                     chatEngineType, // Pass chat engine type
                     transformersModelId: chatEngineType === 'transformers' ? transformersModelId : null, // Pass model ID if transformers
-                    transformersOnnxFile: chatEngineType === 'transformers' ? transformersOnnxFileInput.value.trim() : null, // Pass ONNX file path/url
+                    transformersOnnxFile: chatEngineType === 'transformers' ? transformersOnnxFile : null, // Pass ONNX file path/url
                     rephraseSettings,
                     answerSettings
                 }
@@ -914,9 +1122,27 @@ Based on the context, answer the following question:
             const systemPrompt = systemPromptInput.value.trim(); // System prompt might influence rephrasing
 
             // Get chat engine config
-            const chatEngineType = chatEnginePleiasRAGRadio.checked ? 'transformers_pleias' :
-                (chatEngineTransformersJSDefaultRadio.checked ? 'transformers' : 'webllm');
-            const transformersModelId = transformersModelInput.value.trim();
+            let chatEngineType = 'webllm'; // Default
+            if (chatEngineTransformersJSDefaultRadio.checked) {
+                chatEngineType = 'transformers';
+            } else if (chatEnginePleiasRAGRadio.checked) {
+                chatEngineType = 'transformers_pleias';
+            } else if (chatEnginePleiasRAG1BRadio.checked) {
+                chatEngineType = 'transformers_pleias_1b'; // Assign new type
+            }
+            // Model ID and ONNX path depend on the type
+            let transformersModelId: string | null = null;
+            let transformersOnnxFile: string | null = null;
+            if (chatEngineType === 'transformers') {
+                transformersModelId = transformersModelInput.value.trim();
+                transformersOnnxFile = transformersOnnxFileInput.value.trim();
+            } else if (chatEngineType === 'transformers_pleias') {
+                transformersModelId = 'onnx-community/Pleias-RAG-350M-ONNX';
+                transformersOnnxFile = 'onnx/model_quantized.onnx';
+            } else if (chatEngineType === 'transformers_pleias_1b') {
+                transformersModelId = 'onnx-community/Pleias-RAG-1B-ONNX';
+                transformersOnnxFile = 'onnx/model_quantized.onnx'; // Assumed path
+            }
 
             if (!originalQuery) {
                 alert("Please enter an original query.");
@@ -954,8 +1180,8 @@ Based on the context, answer the following question:
                         rephrasePromptTemplate: rephraseTemplate,
                         systemPrompt: systemPrompt || null,
                         chatEngineType,
-                        transformersModelId: chatEngineType === 'transformers' ? transformersModelId : null,
-                        transformersOnnxFile: chatEngineType === 'transformers' ? transformersOnnxFileInput.value.trim() : null,
+                        transformersModelId: transformersModelId, // Pass correct model ID
+                        transformersOnnxFile: transformersOnnxFile, // Pass correct ONNX file path/url
                         rephraseSettings // Pass all rephrase model settings
                     }
                 });
@@ -990,20 +1216,39 @@ Based on the context, answer the following question:
     if (generateFinalAnswerBtn) {
         generateFinalAnswerBtn.addEventListener('click', () => {
             const finalQuery = currentOriginalQuery; // Use the original query for the final question
-            const context = currentRetrievedContext;
+            const contextArrayForWorker = currentRetrievedSearchResults; // <<< Use the results array for the worker
             const finalRagTemplate = finalRagPromptTemplateInput.value.trim();
             const systemPrompt = systemPromptInput.value.trim();
 
             // Get chat engine config
-            const chatEngineType = chatEnginePleiasRAGRadio.checked ? 'transformers_pleias' :
-                (chatEngineTransformersJSDefaultRadio.checked ? 'transformers' : 'webllm');
-            const transformersModelId = transformersModelInput.value.trim();
+            let chatEngineType = 'webllm'; // Default
+            if (chatEngineTransformersJSDefaultRadio.checked) {
+                chatEngineType = 'transformers';
+            } else if (chatEnginePleiasRAGRadio.checked) {
+                chatEngineType = 'transformers_pleias';
+            } else if (chatEnginePleiasRAG1BRadio.checked) {
+                chatEngineType = 'transformers_pleias_1b'; // Assign new type
+            }
+            // Model ID and ONNX path depend on the type
+            let transformersModelId: string | null = null;
+            let transformersOnnxFile: string | null = null;
+            if (chatEngineType === 'transformers') {
+                transformersModelId = transformersModelInput.value.trim();
+                transformersOnnxFile = transformersOnnxFileInput.value.trim();
+            } else if (chatEngineType === 'transformers_pleias') {
+                transformersModelId = 'onnx-community/Pleias-RAG-350M-ONNX';
+                transformersOnnxFile = 'onnx/model_quantized.onnx';
+            } else if (chatEngineType === 'transformers_pleias_1b') {
+                transformersModelId = 'onnx-community/Pleias-RAG-1B-ONNX';
+                transformersOnnxFile = 'onnx/model_quantized.onnx'; // Assumed path
+            }
 
             if (!finalQuery) {
                 alert("Original query is missing for final answer generation.");
                 return;
             }
-            if (!context) {
+            // Adjust check for the array
+            if (!contextArrayForWorker) { // Check if the array exists (is not null)
                 alert("Retrieved context is missing for final answer generation.");
                 return;
             }
@@ -1020,6 +1265,9 @@ Based on the context, answer the following question:
                 responseArea.textContent = 'Generating final answer...';
                 responseArea.style.color = '#555';
                 updateStatus('Generating final answer...', false, false);
+                if (retrieveContextBtn) retrieveContextBtn.disabled = true;
+                if (rephraseQueryBtn) rephraseQueryBtn.disabled = true;
+                if (retrieveContextOriginalBtn) retrieveContextOriginalBtn.disabled = true;
 
                 // Gather answer model settings from UI
                 const answerSettings = {
@@ -1029,22 +1277,73 @@ Based on the context, answer the following question:
                     max_new_tokens: parseInt(answerMaxNewTokensInput.value, 10)
                 };
 
+                // --- Construct and log the final prompt --- >
+                let finalPromptForLog = finalRagTemplate;
+                if (systemPrompt) {
+                    finalPromptForLog = finalPromptForLog.replace('{system_prompt}', systemPrompt);
+                } else {
+                    // Remove the system prompt block if no system prompt is provided
+                    // Adjust this logic if your template handles optional system prompts differently
+                    finalPromptForLog = finalPromptForLog.replace(/<\|im_start\|>system\s*{system_prompt}\s*<\|im_end\|>\s*/, '');
+                }
+                // Log using the display string, as the worker handles the array formatting
+                finalPromptForLog = finalPromptForLog.replace('{context}', currentRetrievedContext || '[No context provided]');
+                finalPromptForLog = finalPromptForLog.replace('{query}', finalQuery);
+                console.log("--- Final Prompt for Generation (Main Thread Log - Display Format) ---");
+                console.log(finalPromptForLog);
+                console.log("-----------------------------------");
+                // < --- End logging ---
+
                 worker.postMessage({
                     type: 'GENERATE_FINAL_ANSWER',
                     payload: {
                         originalQuery: finalQuery, // Use the original query for the final Q
-                        context: context,
+                        context: contextArrayForWorker, // <<< Pass the array to the worker
                         systemPrompt: systemPrompt || null,
                         finalRagPromptTemplate: finalRagTemplate,
                         chatEngineType,
-                        transformersModelId: chatEngineType.startsWith('transformers') ? transformersModelId : null,
-                        transformersOnnxFile: chatEngineType.startsWith('transformers') ? transformersOnnxFileInput.value.trim() : null,
+                        transformersModelId: transformersModelId, // Pass correct model ID
+                        transformersOnnxFile: transformersOnnxFile, // Pass correct ONNX file path/url
                         answerSettings // Pass all answer model settings
                     }
                 });
             }
         });
     }
+
+    // Listener for NEW retrieve context (original query) button
+    if (retrieveContextOriginalBtn) {
+        retrieveContextOriginalBtn.addEventListener('click', () => {
+            const originalQuery = queryInput.value.trim();
+
+            if (!originalQuery) {
+                alert("Please enter an original query to retrieve context.");
+                return;
+            }
+            if (worker) {
+                updateStatus('Retrieving context (original query)...', false, false);
+                if (generateFinalAnswerBtn) generateFinalAnswerBtn.disabled = true;
+                if (rephraseQueryBtn) rephraseQueryBtn.disabled = true;
+                if (retrieveContextBtn) retrieveContextBtn.disabled = true;
+                retrievedContextArea.textContent = 'Retrieving... (using original query)';
+                responseArea.textContent = ''; // Clear old response
+
+                worker.postMessage({
+                    type: 'RETRIEVE_CONTEXT',
+                    payload: {
+                        queryForContext: originalQuery
+                    }
+                });
+            }
+        });
+    }
+
+    // Add listener to enable/disable retrieveContextOriginalBtn based on query input
+    queryInput.addEventListener('input', () => {
+        if (retrieveContextOriginalBtn) {
+            retrieveContextOriginalBtn.disabled = !queryInput.value.trim() || submitQueryBtn.disabled; // Also check if system is busy
+        }
+    });
 
     // Clean up worker when page is about to be unloaded
     window.addEventListener('beforeunload', () => {
@@ -1056,4 +1355,17 @@ Based on the context, answer the following question:
 
     // Initialize the worker after setting up listeners
     initializeWorker();
+
+    // --- Vite HMR Handling for Worker ---
+    if (import.meta.hot) {
+        import.meta.hot.accept('/src/rag-testing/rag_worker.ts?worker', (newWorkerModule) => {
+            console.log('RAG Test Main: HMR detected update for rag_worker.ts. Re-initializing worker...');
+            // The newWorkerModule might be useful if the import mechanism changes,
+            // but for now, simply re-running initializeWorker should pick up the new code
+            // because it calls `new RagWorker()` again.
+            initializeWorker(); // This will terminate the old and start a new one
+        });
+    }
+    // --- End HMR Handling ---
+
 }); 

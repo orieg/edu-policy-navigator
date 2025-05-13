@@ -584,7 +584,7 @@ async function main() {
         embeddingModelId: EMBEDDING_MODEL_ID,       // Corrected key
         embeddingDimensions: EMBEDDING_DIMENSIONS,  // Corrected key
         clusterAlgorithm: "ml-kmeans", // Or your specific algorithm
-        k: NUM_CLUSTERS_K,
+        kValue: NUM_CLUSTERS_K, // Use kValue key to match loader expectation
         centroidsFile: "centroids.json",
         clusters: [] as any[] // Initialize as any[] for now, will be populated correctly
     };

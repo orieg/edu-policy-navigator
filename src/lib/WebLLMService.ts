@@ -93,29 +93,35 @@ class WebLLMService {
         }
     }
 
-    public async initializeChatEngine(engineConfigOverride?: MLCEngineConfig): Promise<void> {
-        if (this.chatEngine) {
-            console.log("WebLLMService: Chat engine already initialized.");
+    public async initializeChatEngine(
+        engineConfigOverride?: MLCEngineConfig,
+        modelId?: string
+    ): Promise<void> {
+        const targetModelId = modelId || this.chatModelId;
+
+        if (this.chatEngine && this.chatEngine.modelId === targetModelId) {
+            console.log(`WebLLMService: Chat engine already initialized with the requested model (${targetModelId}).`);
             return;
         }
-        console.log(`WebLLMService: Initializing chat engine with model ID: ${this.chatModelId}...`);
+
+        if (this.chatEngine) {
+            console.log(`WebLLMService: Disposing existing chat engine (${this.chatEngine.modelId}) before loading new one (${targetModelId}).`);
+            await this.disposeChatEngine();
+        }
+
+        console.log(`WebLLMService: Initializing chat engine with model ID: ${targetModelId}...`);
         try {
-            // For prebuilt models, rely on WebLLM's internal config.
-            // We primarily pass initProgressCallback if it was set on the service instance,
-            // and allow other MLCEngineConfig properties to be overridden.
             const finalEngineConfig: MLCEngineConfig = {
-                initProgressCallback: this.initProgressCallback, // from constructor
-                ...(engineConfigOverride || {}), // Allow overriding initProgressCallback or other top-level props
+                initProgressCallback: this.initProgressCallback,
+                ...(engineConfigOverride || {}),
             };
 
-            // Explicitly remove appConfig if it came from engineConfigOverride, 
-            // to ensure WebLLM uses its internal prebuiltAppConfig for the chat model.
             if (finalEngineConfig.appConfig) {
                 delete finalEngineConfig.appConfig;
             }
 
             this.chatEngine = await CreateMLCEngine(
-                this.chatModelId, // WebLLM uses this to find the model in its prebuiltAppConfig
+                targetModelId,
                 finalEngineConfig
             );
             console.log("WebLLMService: Chat engine initialized successfully.");
