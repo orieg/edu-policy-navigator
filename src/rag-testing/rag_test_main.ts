@@ -149,6 +149,18 @@ document.addEventListener('DOMContentLoaded', async () => {
     const mlcModelSelectDiv = document.getElementById('mlcModelSelectDiv') as HTMLDivElement;
     const mlcModelSelect = document.getElementById('mlcModelSelect') as HTMLSelectElement;
 
+    // --- Elements for Hybrid Search PoC ---
+    const searchModeSelect = document.getElementById('searchModeSelect') as HTMLSelectElement;
+    const bm25ParamsDiv = document.getElementById('bm25ParamsDiv') as HTMLDivElement;
+    const bm25K1Input = document.getElementById('bm25K1Input') as HTMLInputElement;
+    const bm25BInput = document.getElementById('bm25BInput') as HTMLInputElement;
+    const rrfParamsDiv = document.getElementById('rrfParamsDiv') as HTMLDivElement;
+    const rrfKInput = document.getElementById('rrfKInput') as HTMLInputElement;
+    const hybridTopNInput = document.getElementById('hybridTopNInput') as HTMLInputElement; // Or a shared topN
+    const bm25ResultsArea = document.getElementById('bm25ResultsArea') as HTMLDivElement;
+    const hybridSearchResultsArea = document.getElementById('hybridSearchResultsArea') as HTMLDivElement;
+    // --- End Elements for Hybrid Search PoC ---
+
     // --- Element Existence Check ---
     const requiredElements: { [key: string]: HTMLElement | null } = {
         queryInput,
@@ -193,6 +205,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         mlcModelSelect,
         searchAllDocumentsCheckbox,
         similarityMetricSelect,
+        searchModeSelect,
+        bm25ParamsDiv,
+        bm25K1Input,
+        bm25BInput,
+        rrfParamsDiv,
+        rrfKInput,
+        hybridTopNInput,
+        bm25ResultsArea,
+        hybridSearchResultsArea,
     };
     systemPromptContainer = document.getElementById('systemPromptContainerDiv') as HTMLDivElement; // Assign inside listener
     const validationSimilarityMetricSelect = document.getElementById('validationSimilarityMetricSelect') as HTMLSelectElement;
@@ -934,6 +955,41 @@ Based on the context, answer the following question:
                         statusLabel.textContent = 'Similarity validation complete.';
                         if (runSimilarityTestBtn) runSimilarityTestBtn.disabled = false;
                         break;
+                    case 'BM25_SEARCH_RESULTS':
+                        isWorkerReady = true;
+                        updateProgress('Done', 100, 100);
+                        if (payload.error) {
+                            bm25ResultsArea.innerHTML = `<div class="error">BM25 Error: ${escapeHtml(payload.error)}</div>`;
+                        } else if (payload.results) {
+                            displaySearchResults(payload.results, bm25ResultsArea, 'BM25 Results');
+                        }
+                        if (payload.metrics) {
+                            displayMetrics(payload.metrics, bm25ResultsArea);
+                        }
+                        break;
+                    case 'HYBRID_SEARCH_RESULTS':
+                        isWorkerReady = true;
+                        updateProgress('Done', 100, 100);
+                        if (payload.error) {
+                            hybridSearchResultsArea.innerHTML = `<div class="error">Hybrid Search Error: ${escapeHtml(payload.error)}</div>`;
+                        } else if (payload.results) {
+                            displaySearchResults(payload.results, hybridSearchResultsArea, 'Hybrid Search Results (RRF)');
+                        }
+                        if (payload.metrics) {
+                            // Metrics for hybrid search might be structured differently (e.g., with sub-durations)
+                            displayMetrics(payload.metrics, hybridSearchResultsArea);
+                        }
+                        break;
+                    case 'hybrid_search_semantic_results_for_pipeline':
+                        // Optionally display intermediate semantic results for debugging hybrid search
+                        console.log("Intermediate Semantic Results for Hybrid:", payload.results);
+                        // displaySearchResults(payload.results, someDebugArea, 'Hybrid - Semantic Part');
+                        break;
+                    case 'hybrid_search_bm25_results_for_pipeline':
+                        // Optionally display intermediate BM25 results for debugging hybrid search
+                        console.log("Intermediate BM25 Results for Hybrid:", payload.results);
+                        // displaySearchResults(payload.results, someDebugArea, 'Hybrid - BM25 Part');
+                        break;
                     default:
                         console.warn("RAG Test Main: Unknown message type from worker:", type);
                 }
@@ -960,7 +1016,7 @@ Based on the context, answer the following question:
         }
     }
 
-    submitQueryBtn.addEventListener('click', () => {
+    submitQueryBtn.addEventListener('click', async () => {
         const query = queryInput.value.trim();
         const systemPrompt = systemPromptInput.value.trim();
         const rephraseTemplate = rephrasePromptTemplateInput.value.trim();
@@ -1344,6 +1400,71 @@ Based on the context, answer the following question:
         }
         html += '</tbody></table>';
         resultsArea.innerHTML = html;
+    }
+
+    // --- Event Listeners ---
+    if (searchModeSelect) {
+        searchModeSelect.addEventListener('change', () => {
+            const selectedMode = searchModeSelect.value;
+            if (bm25ParamsDiv) {
+                bm25ParamsDiv.style.display = (selectedMode === 'bm25' || selectedMode === 'hybrid') ? 'block' : 'none';
+            }
+            if (rrfParamsDiv) {
+                rrfParamsDiv.style.display = (selectedMode === 'hybrid') ? 'block' : 'none';
+            }
+            // Potentially hide/show other sections like full RAG prompt inputs if only doing retrieval
+            if (selectedMode === 'bm25') {
+                responseArea.innerHTML = ''; // Clear full RAG response area
+                retrievedContextArea.innerHTML = ''; // Clear semantic context area
+                hybridSearchResultsArea.innerHTML = '';
+            } else if (selectedMode === 'hybrid') {
+                responseArea.innerHTML = '';
+                retrievedContextArea.innerHTML = '';
+                bm25ResultsArea.innerHTML = '';
+            } else { // Semantic (full RAG)
+                bm25ResultsArea.innerHTML = '';
+                hybridSearchResultsArea.innerHTML = '';
+            }
+        });
+        // Trigger change once to set initial visibility
+        searchModeSelect.dispatchEvent(new Event('change'));
+    }
+
+    // Function to display search results (can be adapted from displayRetrievedContext)
+    function displaySearchResults(results: SearchResult[], targetArea: HTMLElement, title: string) {
+        if (!results || results.length === 0) {
+            targetArea.innerHTML = `<p>${title}: No results found.</p>`;
+            return;
+        }
+        let html = `<h3>${title} (Top ${results.length})</h3><ul>`;
+        results.forEach(result => {
+            const textSnippet = result.text ? escapeHtml(result.text.substring(0, 200) + (result.text.length > 200 ? '...' : '')) : 'N/A';
+            const docTitle = result.metadata?.name || result.id; // Assuming title is in metadata.name
+            html += `<li>
+                <strong>ID:</strong> ${escapeHtml(result.id)}<br/>
+                <strong>Title:</strong> ${escapeHtml(docTitle)}<br/>
+                <strong>Score:</strong> ${result.score.toFixed(4)}<br/>
+                <strong>Text:</strong> ${textSnippet}
+            </li>`;
+        });
+        html += '</ul>';
+        targetArea.innerHTML = html;
+    }
+
+    // Function to display metrics (can be adapted)
+    function displayMetrics(metrics: any, targetArea: HTMLElement) {
+        let metricsHtml = '<div class="metrics"><h4>Metrics:</h4><ul>';
+        for (const key in metrics) {
+            if (typeof metrics[key] === 'number') {
+                metricsHtml += `<li>${key}: ${metrics[key].toFixed(2)} ms</li>`;
+            } else {
+                metricsHtml += `<li>${key}: ${metrics[key]}</li>`;
+            }
+        }
+        metricsHtml += '</ul></div>';
+        const metricsDiv = document.createElement('div');
+        metricsDiv.innerHTML = metricsHtml;
+        targetArea.appendChild(metricsDiv.firstChild || document.createTextNode('')); // Append only the content of metricsDiv
     }
 
 }); 

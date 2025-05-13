@@ -18,6 +18,14 @@ let activeTransformersModelId: string | null = null;
 // New: Cache for Transformers.js feature-extraction pipeline (for similarity validation)
 let similarityValidationFeatureExtractor: any = null;
 
+// BM25 Precomputation Store
+let allDocsForBM25: { id: string, text: string, title?: string, [key: string]: any }[] = [];
+let docFrequencies: Map<string, number> = new Map(); // Map<term, count_of_docs_containing_term>
+let docLengths: Map<string, number> = new Map(); // Map<docId, length_in_tokens>
+let totalDocsBM25: number = 0;
+let avgDocLengthBM25: number = 0;
+// End BM25 Precomputation Store
+
 // MANIFEST_URL should be relative to the public directory if served statically,
 // or an absolute path if constructed dynamically.
 // Given it's from public/, and Astro base path is currently off for dev,
@@ -38,6 +46,104 @@ function calculateCosineSimilarity(vecA: Float32Array, vecB: Float32Array): numb
 function estimateTokenCount(text: string | null): number {
     if (!text) return 0;
     return Math.round(text.length / 4); // Simple approximation
+}
+
+// Simple tokenizer for BM25 (minimalist approach for PoC)
+function tokenizeText(text: string): string[] {
+    if (!text) return [];
+    // Lowercase, split by non-alphanumeric characters, filter out empty strings
+    return text.toLowerCase().split(/[^a-z0-9]+/).filter(token => token.length > 0);
+}
+
+// BM25 Scoring Function
+const K1_DEFAULT = 1.2; // Typical value for k1
+const B_DEFAULT = 0.75;  // Typical value for b
+
+function calculateBM25Score(
+    queryTokens: string[],
+    doc: { id: string, text: string, title?: string },
+    docLength: number, // Precomputed length of this document in tokens
+    // Corpus-level stats (precomputed):
+    averageDocumentLength: number,
+    totalNumberOfDocuments: number,
+    documentFrequencies: Map<string, number>, // Map<term, num_docs_containing_term>
+    // BM25 parameters:
+    k1: number = K1_DEFAULT,
+    b: number = B_DEFAULT
+): number {
+    let score = 0;
+
+    if (totalNumberOfDocuments === 0 || averageDocumentLength === 0) {
+        return 0; // Avoid division by zero if corpus stats are not ready
+    }
+
+    const docTokens = tokenizeText(doc.text); // Tokenize doc text on the fly for TF calculation
+    const termFrequenciesInDoc: Map<string, number> = new Map();
+    for (const token of docTokens) {
+        termFrequenciesInDoc.set(token, (termFrequenciesInDoc.get(token) || 0) + 1);
+    }
+
+    for (const term of queryTokens) {
+        const tf = termFrequenciesInDoc.get(term) || 0;
+        if (tf === 0) continue; // Term not in doc, skip
+
+        const df = documentFrequencies.get(term) || 0;
+        // IDF calculation: log( (N - n + 0.5) / (n + 0.5) + 1 )
+        // Adding 1 to the argument of log to ensure it's always positive, common practice.
+        const idf = Math.log(((totalNumberOfDocuments - df + 0.5) / (df + 0.5)) + 1);
+
+        const numerator = tf * (k1 + 1);
+        const denominator = tf + k1 * (1 - b + b * (docLength / averageDocumentLength));
+
+        score += idf * (numerator / denominator);
+    }
+    return score;
+}
+
+// Reciprocal Rank Fusion (RRF)
+const K_RRF_DEFAULT = 60; // Default RRF k value
+
+function reciprocalRankFusion(
+    searchResultsLists: SearchResult[][],
+    k_rrf: number = K_RRF_DEFAULT
+): SearchResult[] {
+    const fusedScores: Map<string, number> = new Map(); // Map<docId, RRF_score>
+    // Store doc details to avoid losing them, prioritize details from the first list a doc appears in
+    const docStore: Map<string, SearchResult> = new Map();
+
+    for (const list of searchResultsLists) {
+        if (!list || list.length === 0) {
+            continue;
+        }
+        list.forEach((doc, index) => {
+            const rank = index + 1; // Ranks are 1-based
+            if (!doc || typeof doc.id !== 'string') { // Basic check for valid doc object
+                console.warn("RRF: Skipping invalid document in a search list:", doc);
+                return;
+            }
+
+            if (!docStore.has(doc.id)) {
+                docStore.set(doc.id, { ...doc }); // Store a copy
+            }
+
+            const rrfScorePart = 1 / (k_rrf + rank);
+            fusedScores.set(doc.id, (fusedScores.get(doc.id) || 0) + rrfScorePart);
+        });
+    }
+
+    const finalFusedResults: SearchResult[] = [];
+    for (const [docId, totalRrfScore] of fusedScores.entries()) {
+        const docDetails = docStore.get(docId);
+        if (docDetails) {
+            finalFusedResults.push({
+                ...docDetails, // Retain original id, text, metadata
+                score: totalRrfScore // Update score with the RRF score
+            });
+        }
+    }
+
+    finalFusedResults.sort((a, b) => b.score - a.score); // Sort by RRF score descending
+    return finalFusedResults;
 }
 
 /**
@@ -188,6 +294,51 @@ self.onmessage = async (event: MessageEvent) => {
                     webLLMService: webLLMService,
                     clusteredSearchService: clusteredSearchService, // Use the now-assigned global variable
                 });
+
+                // --- Populate BM25 Data ---
+                console.log("RAG Worker: Starting BM25 precomputation...");
+                let accumulatedDocLength = 0;
+                allDocsForBM25 = [];
+                docFrequencies.clear();
+                docLengths.clear();
+
+                for (const clusterData of ragData.clustersData.values()) {
+                    if (clusterData.metadata) {
+                        for (const metaDoc of clusterData.metadata) {
+                            // Ensure metaDoc and its properties are not undefined
+                            if (metaDoc && typeof metaDoc.id === 'string' && typeof metaDoc.text === 'string') {
+                                allDocsForBM25.push({
+                                    id: metaDoc.id,
+                                    text: metaDoc.text,
+                                    title: metaDoc.name || metaDoc.id, // Use name as title, fallback to id
+                                    // Add other specific fields from metaDoc if needed for display/filtering later:
+                                    // type: metaDoc.type,
+                                    // city: metaDoc.city,
+                                    // anyOtherDirectFieldOnMetaDoc: metaDoc.anyOtherDirectFieldOnMetaDoc
+                                });
+
+                                const tokens = tokenizeText(metaDoc.text);
+                                docLengths.set(metaDoc.id, tokens.length);
+                                accumulatedDocLength += tokens.length;
+
+                                const uniqueTokensInDoc = new Set(tokens);
+                                uniqueTokensInDoc.forEach(token => {
+                                    docFrequencies.set(token, (docFrequencies.get(token) || 0) + 1);
+                                });
+                            } else {
+                                console.warn("RAG Worker: Skipping invalid metaDoc during BM25 precomputation:", metaDoc);
+                            }
+                        }
+                    }
+                }
+                totalDocsBM25 = allDocsForBM25.length;
+                avgDocLengthBM25 = totalDocsBM25 > 0 ? accumulatedDocLength / totalDocsBM25 : 0;
+
+                console.log(`RAG Worker: BM25 precomputation complete. Total docs: ${totalDocsBM25}, Avg doc length: ${avgDocLengthBM25.toFixed(2)}`);
+                if (allDocsForBM25.length === 0) {
+                    console.warn("RAG Worker: No documents were processed for BM25. Keyword search will not work.");
+                }
+                // --- End BM25 Data Population ---
 
                 self.postMessage({ type: 'progress', payload: { message: 'RAG System Ready.', loaded: 100, total: 100 } });
                 self.postMessage({ type: 'status', payload: { message: 'RAG system initialized and ready.', isError: false, isReady: true } });
@@ -528,7 +679,7 @@ self.onmessage = async (event: MessageEvent) => {
                 return;
             }
             console.log("RAG Worker: Received RETRIEVE_CONTEXT message:", payload);
-            const { queryForContext, searchAllDocuments, similarityMetric } = payload;
+            const { queryForContext, searchAllDocuments, similarityMetric: metricForContext } = payload;
             const startTimeCtx = performance.now();
             try {
                 const queryEmbedding = await webLLMService.getQueryEmbedding(queryForContext);
@@ -538,7 +689,7 @@ self.onmessage = async (event: MessageEvent) => {
 
                 const searchResults = await ragManager.retrieveContext(queryForContext, queryEmbedding, {
                     searchAllDocuments: searchAllDocuments ?? false,
-                    similarityMetric: similarityMetric
+                    similarityMetric: metricForContext
                 });
 
                 const endTimeCtx = performance.now();
@@ -760,6 +911,188 @@ self.onmessage = async (event: MessageEvent) => {
 
         case 'CLEAR_CACHE':
             console.log("RAG Worker: Clear cache request processed.");
+            break;
+
+        case 'bm25Search':
+            try {
+                if (!payload || typeof payload.query !== 'string') {
+                    throw new Error("Missing or invalid query in bm25Search payload.");
+                }
+                if (totalDocsBM25 === 0 || allDocsForBM25.length === 0) {
+                    console.warn("RAG Worker: BM25 data not ready or empty. Returning no results.");
+                    self.postMessage({ type: 'BM25_SEARCH_RESULTS', payload: { results: [], metrics: { duration: 0 } } });
+                    return;
+                }
+
+                const { query, k1 = K1_DEFAULT, b = B_DEFAULT, topN = 10 } = payload;
+                const startTime = performance.now();
+                self.postMessage({ type: 'status', payload: { message: `Performing BM25 search for: "${query}"...`, isError: false, isReady: false } });
+
+                const queryTokens = tokenizeText(query);
+                const rankedResults: SearchResult[] = [];
+
+                for (const doc of allDocsForBM25) {
+                    const currentDocLength = docLengths.get(doc.id) || 0;
+                    if (currentDocLength === 0 && doc.text.length > 0) {
+                        // Fallback if docLength wasn't precomputed for some reason, though it should be
+                        // This is less efficient as it tokenizes twice if this path is hit often
+                        // console.warn(`BM25: Doc length for ${doc.id} was 0, re-tokenizing. This should not happen frequently.`);
+                        // currentDocLength = tokenizeText(doc.text).length;
+                    }
+
+                    const score = calculateBM25Score(
+                        queryTokens,
+                        doc,
+                        currentDocLength,
+                        avgDocLengthBM25,
+                        totalDocsBM25,
+                        docFrequencies,
+                        k1,
+                        b
+                    );
+
+                    if (score > 0) { // Only consider documents with a positive score
+                        rankedResults.push({
+                            id: doc.id,
+                            text: doc.text, // Or a snippet
+                            score: score,
+                            metadata: { name: doc.title, ...doc } // Include title and other prepped fields
+                        });
+                    }
+                }
+
+                rankedResults.sort((a, b) => b.score - a.score); // Sort descending by score
+                const finalResults = rankedResults.slice(0, topN);
+                const duration = performance.now() - startTime;
+
+                self.postMessage({ type: 'BM25_SEARCH_RESULTS', payload: { results: finalResults, metrics: { duration } } });
+                self.postMessage({ type: 'status', payload: { message: `BM25 search complete. Found ${finalResults.length} results.`, isError: false, isReady: true } });
+
+            } catch (error) {
+                console.error("RAG Worker: Error in bm25Search:", error);
+                self.postMessage({ type: 'BM25_SEARCH_RESULTS', payload: { results: [], error: (error as Error).message, metrics: { duration: 0 } } });
+                self.postMessage({ type: 'status', payload: { message: `Error in BM25 search: ${(error as Error).message}`, isError: true, isReady: true } });
+            }
+            break;
+
+        case 'hybridSearch':
+            if (!ragManager || !webLLMService) {
+                self.postMessage({ type: 'HYBRID_SEARCH_RESULTS', payload: { error: 'RAG system not fully initialized (ragManager or webLLMService missing).' } });
+                return;
+            }
+            if (!payload || typeof payload.query !== 'string') {
+                self.postMessage({ type: 'HYBRID_SEARCH_RESULTS', payload: { error: 'Missing or invalid query in hybridSearch payload.' } });
+                return;
+            }
+            if (totalDocsBM25 === 0 || allDocsForBM25.length === 0) {
+                console.warn("RAG Worker: BM25 data not ready for hybrid search. Keyword component will be empty.");
+                // Proceeding, but BM25 results will be empty.
+            }
+
+            const {
+                query,
+                // BM25 params
+                k1 = K1_DEFAULT,
+                b = B_DEFAULT,
+                // RRF param
+                k_rrf = K_RRF_DEFAULT,
+                // Semantic search params (from existing 'query' or 'RETRIEVE_CONTEXT' payloads)
+                similarityMetric: metricForHybrid = 'cosine', // Default or from payload
+                // topN for final fused results
+                topN = 10
+            } = payload;
+
+            const hybridSearchStartTime = performance.now();
+            self.postMessage({ type: 'status', payload: { message: `Performing Hybrid Search for: "${query}"...`, isError: false, isReady: false } });
+
+            try {
+                // 1. Perform Semantic Search
+                let semanticResults: SearchResult[] = [];
+                const semanticSearchStart = performance.now();
+                const queryEmbedding = await webLLMService.getQueryEmbedding(query);
+                if (!queryEmbedding) {
+                    console.error("HybridSearch: Failed to generate query embedding for semantic part.");
+                    // Optionally, could proceed with only BM25 or return an error
+                    // For PoC, let's log and continue, RRF will handle one empty list
+                } else {
+                    semanticResults = await ragManager.retrieveContext(
+                        query,
+                        queryEmbedding,
+                        { similarityMetric: metricForHybrid }
+                    );
+                }
+                const semanticSearchDuration = performance.now() - semanticSearchStart;
+                self.postMessage({ type: 'hybrid_search_semantic_results_for_pipeline', payload: { results: semanticResults } });
+
+
+                // 2. Perform BM25 Search
+                const bm25SearchStart = performance.now();
+                const queryTokensBM25 = tokenizeText(query);
+                let bm25Results: SearchResult[] = [];
+
+                if (totalDocsBM25 > 0) {
+                    for (const doc of allDocsForBM25) {
+                        const currentDocLength = docLengths.get(doc.id) || 0;
+                        const score = calculateBM25Score(
+                            queryTokensBM25,
+                            doc,
+                            currentDocLength,
+                            avgDocLengthBM25,
+                            totalDocsBM25,
+                            docFrequencies,
+                            k1,
+                            b
+                        );
+                        if (score > 0) {
+                            bm25Results.push({
+                                id: doc.id,
+                                text: doc.text,
+                                score: score,
+                                metadata: { name: doc.title, ...doc }
+                            });
+                        }
+                    }
+                    bm25Results.sort((a, b) => b.score - a.score);
+                }
+                const bm25SearchDuration = performance.now() - bm25SearchStart;
+                self.postMessage({ type: 'hybrid_search_bm25_results_for_pipeline', payload: { results: bm25Results } });
+
+
+                // 3. Fuse Results using RRF
+                const fusionStartTime = performance.now();
+                const fusedResults = reciprocalRankFusion([semanticResults, bm25Results], k_rrf);
+                const fusionDuration = performance.now() - fusionStartTime;
+
+                const finalResults = fusedResults.slice(0, topN);
+                const totalHybridSearchDuration = performance.now() - hybridSearchStartTime;
+
+                self.postMessage({
+                    type: 'HYBRID_SEARCH_RESULTS',
+                    payload: {
+                        results: finalResults,
+                        metrics: {
+                            semanticSearchDuration,
+                            bm25SearchDuration,
+                            fusionDuration,
+                            totalHybridSearchDuration
+                        }
+                    }
+                });
+                self.postMessage({ type: 'status', payload: { message: `Hybrid search complete. Found ${finalResults.length} results.`, isError: false, isReady: true } });
+
+            } catch (error) {
+                console.error("RAG Worker: Error in hybridSearch:", error);
+                const totalHybridSearchDuration = performance.now() - hybridSearchStartTime;
+                self.postMessage({
+                    type: 'HYBRID_SEARCH_RESULTS',
+                    payload: {
+                        results: [],
+                        error: (error as Error).message,
+                        metrics: { totalHybridSearchDuration }
+                    }
+                });
+                self.postMessage({ type: 'status', payload: { message: `Error in Hybrid search: ${(error as Error).message}`, isError: true, isReady: true } });
+            }
             break;
 
         default:
