@@ -21,7 +21,7 @@ const RAW_EMBEDDINGS_CACHE_DIR = path.resolve(process.cwd(), 'public', 'embeddin
 const EMBEDDING_MODEL_ID = 'Snowflake/snowflake-arctic-embed-xs';
 const EMBEDDING_DIMENSIONS = 384; // For Snowflake/snowflake-arctic-embed-xs
 const MAX_CHUNK_LENGTH = 512; // Max tokens for the embedding model
-let NUM_CLUSTERS_K = 24; // Default K, will be adjusted if less documents than K
+let NUM_CLUSTERS_K = 64; // Default K, will be adjusted if less documents than K
 
 interface DocumentChunk {
     id: string; // Unique ID for the document chunk (typically CDSCode for schools/districts)
@@ -249,7 +249,7 @@ async function loadAndPrepareData(): Promise<ProcessedDocument[]> {
                 type: 'school',
                 cdsCode: schoolCdsCode,
                 text: schoolText,
-                originalData: { ...school, districtCdsCode: districtCdsKey }
+                originalData: { ...school, districtCdsCode: districtCdsKey, parentDistrictCounty }
             });
         }
     }
@@ -580,21 +580,99 @@ async function main() {
 
     console.log(`Clustering complete. Found ${NUM_CLUSTERS_K} clusters.`);
 
-    const manifestData = {
-        embeddingModelId: EMBEDDING_MODEL_ID,       // Corrected key
-        embeddingDimensions: EMBEDDING_DIMENSIONS,  // Corrected key
-        clusterAlgorithm: "ml-kmeans", // Or your specific algorithm
-        kValue: NUM_CLUSTERS_K, // Use kValue key to match loader expectation
-        centroidsFile: "centroids.json",
-        clusters: [] as any[] // Initialize as any[] for now, will be populated correctly
-    };
+    // -----------------------------
+    // Static County Clustering Step
+    // -----------------------------
+    console.log('Generating static county-based clusters...');
 
-    const centroidsOutput = centroids.map((centroid, index) => ({
-        clusterId: index, // Ensure clusterId is a number as expected by validation
+    // Build mapping from county name -> list of document indices
+    const countyToDocIndices: Record<string, number[]> = {};
+    for (let idx = 0; idx < allDocumentChunks.length; idx++) {
+        const meta = allDocumentChunks[idx].metadata as any;
+        let county: string | undefined = undefined;
+        if (meta.County && typeof meta.County === 'string' && meta.County !== 'No Data') {
+            county = meta.County.trim();
+        } else if (meta.parentDistrictCounty && typeof meta.parentDistrictCounty === 'string') {
+            county = meta.parentDistrictCounty.trim();
+        }
+        if (!county) continue;
+        if (!countyToDocIndices[county]) countyToDocIndices[county] = [];
+        countyToDocIndices[county].push(idx);
+    }
+
+    let nextClusterId = NUM_CLUSTERS_K;
+
+    // Prepare initial centroids array with k-means centroids
+    const centroidsOutput: { clusterId: number; centroid: number[] }[] = centroids.map((centroid, index) => ({
+        clusterId: index,
         centroid: Array.from(centroid)
     }));
-    await saveJSON(path.join(OUTPUT_DIR, "centroids.json"), centroidsOutput);
 
+    // Prepare manifest
+    const manifestData = {
+        embeddingModelId: EMBEDDING_MODEL_ID,
+        embeddingDimensions: EMBEDDING_DIMENSIONS,
+        clusterAlgorithm: "ml-kmeans+county",
+        kValue: NUM_CLUSTERS_K, // only the k-means part
+        centroidsFile: "centroids.json",
+        clusters: [] as any[]
+    };
+
+    const countyNames = Object.keys(countyToDocIndices).sort();
+    for (const county of countyNames) {
+        const docIndices = countyToDocIndices[county];
+        if (docIndices.length === 0) continue;
+
+        const clusterDir = path.join(OUTPUT_DIR, `cluster_${nextClusterId}`);
+        await fs.mkdir(clusterDir, { recursive: true });
+
+        // Prepare embeddings & metadata arrays
+        const clusterEmbeddings: Float32Array[] = [];
+        const clusterMetadata: DocumentChunk[] = [];
+        for (const docIdx of docIndices) {
+            clusterEmbeddings.push(allEmbeddings[docIdx]);
+            clusterMetadata.push(allDocumentChunks[docIdx]);
+        }
+
+        await saveBinaryFloat32(path.join(clusterDir, 'embeddings.bin'), clusterEmbeddings);
+        await saveJSON(path.join(clusterDir, 'metadata.json'), clusterMetadata);
+
+        // Compute centroid (mean of embeddings then L2 normalize)
+        const centroidVec = new Float32Array(EMBEDDING_DIMENSIONS);
+        for (const emb of clusterEmbeddings) {
+            for (let d = 0; d < EMBEDDING_DIMENSIONS; d++) {
+                centroidVec[d] += emb[d];
+            }
+        }
+        for (let d = 0; d < EMBEDDING_DIMENSIONS; d++) {
+            centroidVec[d] /= clusterEmbeddings.length;
+        }
+        const norm = Math.sqrt(centroidVec.reduce((sum, v) => sum + v * v, 0));
+        if (norm > 0) {
+            for (let d = 0; d < EMBEDDING_DIMENSIONS; d++) centroidVec[d] /= norm;
+        }
+
+        // Append centroid entry
+        centroidsOutput.push({ clusterId: nextClusterId, centroid: Array.from(centroidVec) });
+
+        // Append manifest entry
+        manifestData.clusters.push({
+            clusterId: nextClusterId,
+            type: 'county',
+            countyName: county,
+            count: docIndices.length,
+            embeddingsFile: `cluster_${nextClusterId}/embeddings.bin`,
+            metadataFile: `cluster_${nextClusterId}/metadata.json`
+        });
+
+        console.log(`Saved county cluster ${nextClusterId} (${county}) with ${docIndices.length} docs.`);
+        nextClusterId += 1;
+    }
+
+    const TOTAL_CLUSTERS = nextClusterId;
+    console.log(`Total clusters (k-means + counties): ${TOTAL_CLUSTERS}`);
+
+    // Now process k-means clusters for manifest and files
     for (let i = 0; i < NUM_CLUSTERS_K; i++) {
         const clusterDir = path.join(OUTPUT_DIR, `cluster_${i}`);
         await fs.mkdir(clusterDir, { recursive: true });
@@ -609,7 +687,6 @@ async function main() {
 
         if (clusterIndices.length === 0) {
             console.warn(`Cluster ${i} has no documents assigned.`);
-            // Save empty files for consistency if expected by loader
             await saveBinaryFloat32(path.join(clusterDir, "embeddings.bin"), []);
             await saveJSON(path.join(clusterDir, "metadata.json"), []);
         } else {
@@ -622,14 +699,17 @@ async function main() {
         }
 
         manifestData.clusters.push({
-            clusterId: i, // Ensure clusterId is a number
+            clusterId: i,
+            type: 'kmeans',
             count: clusterIndices.length,
             embeddingsFile: clusterIndices.length > 0 ? `cluster_${i}/embeddings.bin` : null,
-            metadataFile: clusterIndices.length > 0 ? `cluster_${i}/metadata.json` : null,
+            metadataFile: clusterIndices.length > 0 ? `cluster_${i}/metadata.json` : null
         });
-        console.log(`Saved data for cluster ${i} with ${clusterIndices.length} embeddings.`);
+        console.log(`Saved data for k-means cluster ${i} with ${clusterIndices.length} embeddings.`);
     }
 
+    // Save centroids after all clusters
+    await saveJSON(path.join(OUTPUT_DIR, "centroids.json"), centroidsOutput);
     await saveJSON(OUTPUT_MANIFEST_PATH, manifestData);
     console.log("Process completed successfully.");
 }
