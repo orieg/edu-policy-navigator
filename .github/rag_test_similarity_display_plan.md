@@ -75,21 +75,21 @@ The following shows an example of the comprehensive table that will display simi
 ### 1. Server-Side Logic (Astro Frontmatter in `src/pages/rag-test.astro`)
 
 *   **1.1. Access Pre-computed Data:**
-    *   [ ] **Cluster Centroids:** In the Astro frontmatter, fetch/load all relevant cluster centroids from pre-computed files (e.g., from `public/embeddings/school_districts/centroids.json`). Each centroid object in the resulting array should contain at least a `clusterId` (number) and its `vector` (array of numbers).
-    *   [ ] **(Optional) Cluster Contextual Data:**
-        *   [ ] Consider reading `public/embeddings/school_districts/manifest.json` to map `clusterId` (from centroids) to `countyName` or other relevant fields if clusters represent counties or similar entities.
-        *   [ ] Consider reading `public/embeddings/school_districts/cluster_keywords.json` to associate top keywords with each `clusterId`. This data, if fetched, should be structured for easy lookup by `clusterId` (e.g., an object where keys are `clusterId`s).
-    *   [ ] **(Optional) Static Rule-Based Query Embedding:** If a *static* rule-based query is used for comparison (i.e., the rule doesn't change based on user input), load its pre-computed embedding from a file (e.g., `public/embeddings/static_rule_query_embedding.json`). This embedding should be an array of numbers. If the rule-based query is dynamic or its embedding is better generated client-side, this step is handled on the client.
+    *   [x] **Cluster Centroids:** In the Astro frontmatter, fetch/load all relevant cluster centroids from pre-computed files (e.g., from `public/embeddings/school_districts/centroids.json`). Each centroid object in the resulting array should contain at least a `clusterId` (number) and its `vector` (array of numbers).
+    *   [x] **(Optional) Cluster Contextual Data:**
+        *   [x] Consider reading `public/embeddings/school_districts/manifest.json` to map `clusterId` (from centroids) to `countyName` or other relevant fields if clusters represent counties or similar entities.
+        *   [x] Consider reading `public/embeddings/school_districts/cluster_keywords.json` to associate top keywords with each `clusterId`. This data, if fetched, should be structured for easy lookup by `clusterId` (e.g., an object where keys are `clusterId`s).
+    *   [ ] **(Optional) Static Rule-Based Query Embedding:** If a *static* rule-based query is used for comparison (i.e., the rule doesn't change based on user input), load its pre-computed embedding from a file (e.g., `public/embeddings/static_rule_query_embedding.json`). This embedding should be an array of numbers. If the rule-based query is dynamic or its embedding is better generated client-side, this step is handled on the client. (Note: Currently dynamic, client-side generation is used for rule-based query embedding for the table).
 *   **1.2. Pass Data to Client:**
-    *   [ ] Structure the loaded data (e.g., `clusterCentroidsData`, `clusterContextData` (if any), and optionally `staticRuleQueryEmbedding`) into a JavaScript object.
-    *   [ ] Pass this object to the client-side script. Astro's `define:vars` directive in a `<script>` tag is suitable for this: `<script define:vars={{ clusterCentroidsData, clusterContextData, staticRuleQueryEmbedding }}>`.
+    *   [x] Structure the loaded data (e.g., `clusterCentroidsData`, `clusterContextData` (if any), and optionally `staticRuleQueryEmbedding`) into a JavaScript object.
+    *   [x] Pass this object to the client-side script. Astro's `define:vars` directive in a `<script>` tag is suitable for this: `<script define:vars={{ clusterCentroidsData, clusterContextData, staticRuleQueryEmbedding }}>`.
 
 ### 2. Client-Side Logic (JavaScript in `<script>` tag in `src/pages/rag-test.astro`)
 
 *   **2.1. Initialize Client-Side Embedding Model:**
-    *   [ ] Ensure Transformers.js (or the chosen client-side ML library) is initialized and capable of generating embeddings. This might involve setting up a feature-extraction pipeline (e.g., `const embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');`). This setup might already exist or need to be added/verified in `rag-test.astro`.
+    *   [x] Ensure Transformers.js (or the chosen client-side ML library) is initialized and capable of generating embeddings. This might involve setting up a feature-extraction pipeline (e.g., `const embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');`). This setup might already exist or need to be added/verified in `rag-test.astro`. (Note: Using `Snowflake/snowflake-arctic-embed-xs` for the table script).
 *   **2.2. Helper Functions:**
-    *   [ ] Implement `cosineSimilarity(vecA, vecB)`:
+    *   [x] Implement `cosineSimilarity(vecA, vecB)`:
         ```javascript
         function cosineSimilarity(vecA, vecB) {
             if (!vecA || !vecB || vecA.length === 0 || vecA.length !== vecB.length) return 0;
@@ -105,7 +105,7 @@ The following shows an example of the comprehensive table that will display simi
             return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
         }
         ```
-    *   [ ] Implement `averageEmbeddings(vecA, vecB)`:
+    *   [x] Implement `averageEmbeddings(vecA, vecB)`:
         ```javascript
         function averageEmbeddings(vecA, vecB) {
             if (!vecA || !vecB || vecA.length !== vecB.length) return [];
@@ -117,69 +117,78 @@ The following shows an example of the comprehensive table that will display simi
         }
         ```
 *   **2.3. Data Retrieval & User Input Processing Trigger:**
-    *   [ ] Retrieve the pre-computed data (e.g., `clusterCentroidsData`, `clusterContextData`, `staticRuleQueryEmbedding`) passed from the server (defined via `define:vars`).
-    *   [ ] This logic should trigger after a user submits a query (and the RAG process has identified relevant clusters, or for all clusters if for general testing).
-    *   [ ] Obtain the current "original user query" string from the appropriate input field on the page.
-    *   [ ] Obtain or define the "rule-based query" string.
+    *   [x] Retrieve the pre-computed data (e.g., `clusterCentroidsData`, `clusterContextData`, `staticRuleQueryEmbedding`) passed from the server (defined via `define:vars`).
+    *   [x] This logic should trigger after a user submits a query (and the RAG process has identified relevant clusters, or for all clusters if for general testing).
+    *   [x] Obtain the current "original user query" string from the appropriate input field on the page.
+    *   [x] Obtain or define the "rule-based query" string. (Note: Uses `window.currentRephrasedQueryForTable` or fallback).
 *   **2.4. Generate Required Embeddings Client-Side:**
-    *   [ ] **Original User Query Embedding:** Asynchronously generate the embedding for the "original user query" string using the initialized client-side embedding model.
+    *   [x] **Original User Query Embedding:** Asynchronously generate the embedding for the "original user query" string using the initialized client-side embedding model.
         ```javascript
         // Example: const originalUserQueryEmbedding = (await embedder(userQueryString, { pooling: 'mean', normalize: true })).data;
         ```
     *   **Rule-Based Query Embedding:**
-        *   [ ] If `staticRuleQueryEmbedding` was provided by the server, use it directly.
+        *   [ ] If `staticRuleQueryEmbedding` was provided by the server, use it directly. (Note: Not used, client-side generation is performed).
         *   Else (if the rule-based query is dynamic or its embedding was not pre-computed):
-            1.  [ ] Use/construct the rule-based query string (obtained in 2.3).
-            2.  [ ] Asynchronously generate its embedding using the client-side model, similar to the original user query.
+            1.  [x] Use/construct the rule-based query string (obtained in 2.3).
+            2.  [x] Asynchronously generate its embedding using the client-side model, similar to the original user query.
 *   **2.5. DOM Manipulation for Display (Likely within an async function due to embedding generation):**
-    *   [ ] Ensure all necessary embeddings (original user query, rule-based query) are generated before proceeding.
-    *   [ ] Identify or create a container element in the HTML for the similarity results table (e.g., `<div id="ragSimilarityTableContainer"></div>`).
-    *   [ ] Clear any previous table from this container.
-    *   [ ] Create the main `<table>` element and its `<thead>` with column headers: "Cluster ID", "Context", "Sim (Original Query ↔ Centroid)", "Sim (Rule-Based Query ↔ Centroid)", "Sim (Average Query ↔ Centroid)".
-    *   [ ] Create the `<tbody>` element for the table.
-    *   [ ] Iterate through each `cluster` in `clusterCentroidsData` (or a subset of clusters relevant to the current RAG results):
+    *   [x] Ensure all necessary embeddings (original user query, rule-based query) are generated before proceeding.
+    *   [x] Identify or create a container element in the HTML for the similarity results table (e.g., `<div id="ragSimilarityTableContainer"></div>`).
+    *   [x] Clear any previous table from this container.
+    *   [x] Create the main `<table>` element and its `<thead>` with column headers: "Cluster ID", "Context", "Sim (Original Query ↔ Centroid)", "Sim (Rule-Based Query ↔ Centroid)", "Sim (Average Query ↔ Centroid)".
+    *   [x] Create the `<tbody>` element for the table.
+    *   [x] Iterate through each `cluster` in `clusterCentroidsData` (or a subset of clusters relevant to the current RAG results):
         *   Let `clusterCentroidVector = cluster.vector;`
         *   Let `clusterId = cluster.clusterId;`
         *   Attempt to get `contextualInfoString` (e.g., county name or a comma-separated string of top keywords) from `clusterContextData` using `clusterId`. Default to "N/A" if not found.
         *   Let `originalQueryEmbedding` be the vector generated in step 2.4.
         *   Let `ruleBasedQueryEmbedding` be the vector obtained in step 2.4.
-        *   [ ] **Calculate Average Query Embedding:** `avgQueryEmbedding = averageEmbeddings(originalQueryEmbedding, ruleBasedQueryEmbedding);`
-        *   [ ] **Calculate Similarities:**
-            *   [ ] `sim_original_to_centroid = cosineSimilarity(originalQueryEmbedding, clusterCentroidVector);`
-            *   [ ] `sim_rule_to_centroid = cosineSimilarity(ruleBasedQueryEmbedding, clusterCentroidVector);`
-            *   [ ] `sim_average_to_centroid = cosineSimilarity(avgQueryEmbedding, clusterCentroidVector);`
-        *   [ ] **Create Table Row (`<tr>`):**
+        *   [x] **Calculate Average Query Embedding:** `avgQueryEmbedding = averageEmbeddings(originalQueryEmbedding, ruleBasedQueryEmbedding);`
+        *   [x] **Calculate Similarities:**
+            *   [x] `sim_original_to_centroid = cosineSimilarity(originalQueryEmbedding, clusterCentroidVector);`
+            *   [x] `sim_rule_to_centroid = cosineSimilarity(ruleBasedQueryEmbedding, clusterCentroidVector);`
+            *   [x] `sim_average_to_centroid = cosineSimilarity(avgQueryEmbedding, clusterCentroidVector);`
+        *   [x] **Create Table Row (`<tr>`):**
             *   Create `<td>` elements for `clusterId`, `contextualInfoString`, `sim_original_to_centroid.toFixed(4)`, `sim_rule_to_centroid.toFixed(4)`, and `sim_average_to_centroid.toFixed(4)`.
             *   Append these `<td>` elements to the `<tr>`.
-        *   [ ] Append the new `<tr>` to the `<tbody>`.
-    *   [ ] Append the complete `<table>` (with header and body) to the `ragSimilarityTableContainer`.
-    *   [ ] (Optional) If the `ragSimilarityTableContainer` itself is part of a larger collapsible section (e.g., `<details>`), ensure that is handled.
+        *   [x] Append the new `<tr>` to the `<tbody>`.
+    *   [x] Append the complete `<table>` (with header and body) to the `ragSimilarityTableContainer`.
+    *   [ ] (Optional) If the `ragSimilarityTableContainer` itself is part of a larger collapsible section (e.g., `<details>`), ensure that is handled. (Note: Container is not currently within a collapsible details section).
 
 ### 3. Styling (CSS)
 
 *   **3.1. Add/Utilize Styles:**
-    *   [ ] Leverage existing styles in `rag-test.astro` for tables (`#similarityResultsArea table` or similar), adapting as necessary for the new comprehensive table.
-    *   [ ] Ensure the new table is clear, readable, and fits the page's aesthetic. Consider table layout for width if context strings are long.
+    *   [x] Leverage existing styles in `rag-test.astro` for tables (`#similarityResultsArea table` or similar), adapting as necessary for the new comprehensive table.
+    *   [x] Ensure the new table is clear, readable, and fits the page's aesthetic. Consider table layout for width if context strings are long.
 
 ## Milestones/Checkpoints
 
 1.  **Milestone 1: Server-Side Data Preparation & Transfer**
-    *   [ ] Astro frontmatter script in `src/pages/rag-test.astro` correctly loads cluster centroids (and static rule-based query embedding and any contextual cluster data, if applicable) from files.
-    *   [ ] Successfully pass this pre-computed data to the client-side script via `define:vars`.
-    *   *Verification:* [ ] Log the received pre-computed data (centroids, static rule embedding, context data) on the client-side console upon page load.
+    *   [x] Astro frontmatter script in `src/pages/rag-test.astro` correctly loads cluster centroids (and static rule-based query embedding and any contextual cluster data, if applicable) from files.
+    *   [x] Successfully pass this pre-computed data to the client-side script via `define:vars`.
+    *   *Verification:* [x] Log the received pre-computed data (centroids, static rule embedding, context data) on the client-side console upon page load.
 2.  **Milestone 2: Client-Side Setup & Core Calculations**
-    *   [ ] Client-side embedding model (e.g., via Transformers.js) is initialized and functional.
-    *   [ ] Successfully generate an embedding for a sample "original user query" string client-side.
-    *   [ ] Successfully obtain/generate the "rule-based query" embedding client-side (either from server-passed static data or client-side generation).
-    *   [ ] `cosineSimilarity` and `averageEmbeddings` JavaScript functions are implemented correctly.
-    *   [ ] For at least one sample cluster, using the client-generated/obtained query embeddings, correctly calculate the three required similarity scores against the cluster's centroid.
-    *   [ ] Dynamically create and append a single table row to a test table structure, showing these scores, the `clusterId`, and any context.
-    *   *Verification:* [ ] Inspect the DOM for the new table row. [ ] Console log generated embeddings and the calculated similarity scores to verify correctness.
+    *   [x] Client-side embedding model (e.g., via Transformers.js) is initialized and functional.
+    *   [x] Successfully generate an embedding for a sample "original user query" string client-side.
+    *   [x] Successfully obtain/generate the "rule-based query" embedding client-side (either from server-passed static data or client-side generation).
+    *   [x] `cosineSimilarity` and `averageEmbeddings` JavaScript functions are implemented correctly.
+    *   [x] For at least one sample cluster, using the client-generated/obtained query embeddings, correctly calculate the three required similarity scores against the cluster's centroid.
+    *   [x] Dynamically create and append a single table row to a test table structure, showing these scores, the `clusterId`, and any context.
+    *   *Verification:* [x] Inspect the DOM for the new table row. [x] Console log generated embeddings and the calculated similarity scores to verify correctness.
 3.  **Milestone 3: Full Dynamic Rendering & Integration**
-    *   [ ] Integrate the display logic to trigger after a user query and RAG processing (or as appropriate for the page flow).
-    *   [ ] Loop through all relevant/selected clusters and render rows in the main similarity table, displaying `clusterId`, any available mapped contextual information, and all three similarity scores.
-    *   *Verification:* [ ] Test with multiple queries. Ensure the main table is populated correctly with all relevant cluster rows and data is updated/cleared appropriately between queries.
+    *   [x] Integrate the display logic to trigger after a user query and RAG processing (or as appropriate for the page flow).
+    *   [x] Loop through all relevant/selected clusters and render rows in the main similarity table, displaying `clusterId`, any available mapped contextual information, and all three similarity scores.
+    *   *Verification:* [x] Test with multiple queries. Ensure the main table is populated correctly with all relevant cluster rows and data is updated/cleared appropriately between queries.
 4.  **Milestone 4: Styling and Refinement**
-    *   [ ] Apply/refine CSS for good readability and user experience, ensuring consistency with the page, and that the table is usable.
-    *   [ ] Test overall layout.
-    *   *Verification:* [ ] Visual inspection and usability check. 
+    *   [x] Apply/refine CSS for good readability and user experience, ensuring consistency with the page, and that the table is usable.
+    *   [x] Test overall layout.
+    *   *Verification:* [x] Visual inspection and usability check.
+
+**Additional Implemented Features (beyond initial plan for this table):**
+*   User can select different similarity/distance algorithms (Cosine, Dot Product, Manhattan, Euclidean) for the table calculations.
+*   Table columns are sortable by clicking headers (ascending/descending).
+*   Users can filter the number of displayed rows (Top 5, Top 10, Show All), though all clusters are always processed for sorting.
+*   All keywords for a cluster are now displayed in the context column, not just the top 5.
+*   The actual "Original User Query" and "Rule-Based Query" (or fallback) strings are displayed above the table.
+*   The embedding model for the table was updated to `Snowflake/snowflake-arctic-embed-xs` for consistency.
+*   The table uses the rule-based rephrased query from the main RAG pipeline if available (`window.currentRephrasedQueryForTable`). 
