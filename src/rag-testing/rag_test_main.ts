@@ -4,7 +4,12 @@ console.log("RAG Test Main: Script loaded.");
 import RagWorker from '/src/rag-testing/rag_worker.ts?worker';
 // Dynamically import transformers.js for in-browser use
 import { pipeline, env as CjsEnv } from '@huggingface/transformers';
+
+// Make Transformers.js available globally for the inline script in rag-test.astro
+(window as any).transformers = { pipeline, env: CjsEnv };
+
 import type { SearchResult } from '../types/vectorStore';
+// import type { QueryPayload, RephraseQueryPayload } from '../types/chatTypes'; // Commented out due to missing file
 
 interface SimilaritySampleData {
     id: string;
@@ -154,6 +159,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const bm25ParamsDiv = document.getElementById('bm25ParamsDiv') as HTMLDivElement;
     const bm25K1Input = document.getElementById('bm25K1Input') as HTMLInputElement;
     const bm25BInput = document.getElementById('bm25BInput') as HTMLInputElement;
+    const bm25FilterKmeansKInput = document.getElementById('bm25FilterKmeansKInput') as HTMLInputElement; // Added
     const rrfParamsDiv = document.getElementById('rrfParamsDiv') as HTMLDivElement;
     const rrfKInput = document.getElementById('rrfKInput') as HTMLInputElement;
     const hybridTopNInput = document.getElementById('hybridTopNInput') as HTMLInputElement; // Or a shared topN
@@ -165,6 +171,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const testBm25OnlyBtn = document.getElementById('testBm25OnlyBtn') as HTMLButtonElement;
     const dedicatedBm25TestResultsArea = document.getElementById('dedicatedBm25TestResultsArea') as HTMLDivElement;
     // --- END: Elements for Dedicated BM25 Test ---
+
+    // --- NEW: Elements for Rephrase Strategy Selection ---
+    const rephraseStrategySelect = document.getElementById('rephraseStrategySelect') as HTMLSelectElement;
+    const llmRephraseSettingsDivForPrompt = document.getElementById('llmRephraseSettingsDivForPrompt') as HTMLDivElement;
+    const llmRephraseSettingsDivForModel = document.getElementById('llmRephraseSettingsDivForModel') as HTMLDivElement;
+    // --- END: Elements for Rephrase Strategy Selection ---
 
     // --- Element Existence Check ---
     const requiredElements: { [key: string]: HTMLElement | null } = {
@@ -214,13 +226,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         bm25ParamsDiv,
         bm25K1Input,
         bm25BInput,
+        bm25FilterKmeansKInput, // Added
         rrfParamsDiv,
         rrfKInput,
         hybridTopNInput,
         bm25ResultsArea,
         hybridSearchResultsArea,
         testBm25OnlyBtn, // Added
-        dedicatedBm25TestResultsArea // Added
+        dedicatedBm25TestResultsArea, // Added
+        // --- NEW: Add rephrase strategy elements to required list ---
+        rephraseStrategySelect,
+        llmRephraseSettingsDivForPrompt,
+        llmRephraseSettingsDivForModel
+        // --- END: Add rephrase strategy elements to required list ---
     };
     systemPromptContainer = document.getElementById('systemPromptContainerDiv') as HTMLDivElement; // Assign inside listener
     const validationSimilarityMetricSelect = document.getElementById('validationSimilarityMetricSelect') as HTMLSelectElement;
@@ -244,6 +262,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     let currentRetrievedContext: string | null = null;
     let currentOriginalQuery: string | null = null;
     let currentRetrievedSearchResults: SearchResult[] | null = null; // Add variable for the actual results array
+
+    // Expose for RAG table script in rag-test.astro
+    (window as any).currentRephrasedQueryForTable = null;
 
     // Store default prompt template values
     let defaultRephraseTemplate = '';
@@ -805,10 +826,23 @@ Based on the context, answer the following question:
             };
 
             worker.onmessage = (event: MessageEvent) => {
-                // console.log("RAG Test Main: Message received from worker:", event.data);
-                const { type, payload } = event.data;
-                // console.debug(`RAG Test Main: Received message type: ${type}`, payload); // Log incoming payload
+                console.log("RAG Test Main: Raw event.data from worker:", event.data);
+                try {
+                    console.log("RAG Test Main: Raw event.data from worker (stringified):", JSON.stringify(event.data));
+                } catch (e) {
+                    console.warn("RAG Test Main: Could not stringify event.data from worker.", e);
+                }
 
+                // Ensure event.data is an object before destructuring
+                if (typeof event.data !== 'object' || event.data === null) {
+                    console.error("RAG Test Main: Received non-object event.data from worker:", event.data);
+                    updateStatus("Error: Invalid message format from worker.", true);
+                    return;
+                }
+
+                const { type, payload, message, error, data: workerData } = event.data;
+
+                // Update UI based on worker messages
                 switch (type) {
                     case 'status':
                         updateStatus(payload.message, payload.isError, payload.isReady);
@@ -874,48 +908,54 @@ Based on the context, answer the following question:
                         }
                         break;
                     case 'REPHRASED_QUERY_RESULT':
-                        console.log("Main: Received REPHRASED_QUERY_RESULT:", payload);
-                        const { rephrasedQuery, error, metrics } = payload;
+                        console.log("Main: Handling REPHRASED_QUERY_RESULT. Type:", type, "Payload from destructuring:", payload, "Full event.data:", event.data);
 
-                        if (error) {
-                            console.error("Main: Error during rephrasing:", error);
-                            rephrasedQueryArea.innerHTML = `<span style="color:red;">Error: ${escapeHtml(error)}</span>`;
-                            updateStatus(`Error rephrasing query: ${error}`, true, true);
-                            // Allow retry for rephrase, but keep context/answer disabled
-                            if (rephraseQueryBtn) rephraseQueryBtn.disabled = false;
-                            if (retrieveContextBtn) retrieveContextBtn.disabled = true;
-                            if (generateFinalAnswerBtn) generateFinalAnswerBtn.disabled = true;
-                        } else {
-                            currentRephrasedQuery = rephrasedQuery;
-                            let rephraseHtml = currentRephrasedQuery ? highlightThinkBlocks(escapeHtml(currentRephrasedQuery)) : 'No rephrased query returned.';
-                            const duration = metrics?.duration;
-                            const tokenCount = metrics?.generatedTokenCount;
-
-                            if (duration !== undefined) {
-                                rephraseHtml += `<br><small style="color:grey;">(Duration: ${(duration / 1000).toFixed(2)}s`;
-                                if (tokenCount !== undefined && duration > 0) {
-                                    const tkPerS = (tokenCount / (duration / 1000)).toFixed(2);
-                                    rephraseHtml += `, ${tokenCount} tk, ${tkPerS} tk/s`;
-                                }
-                                rephraseHtml += `)</small>`;
-                            }
-                            rephrasedQueryArea.innerHTML = rephraseHtml;
-                            updateStatus(`Standalone rephrase complete. Ready for context retrieval.`, false, true);
-
-                            // Clear subsequent steps' outputs
-                            currentRetrievedContext = null;
-                            currentRetrievedSearchResults = null; // Clear results array too
-                            retrievedContextArea.textContent = "";
-                            responseArea.textContent = "";
-
-                            // Re-enable buttons for next steps
-                            if (rephraseQueryBtn) rephraseQueryBtn.disabled = false;
-                            if (retrieveContextBtn) retrieveContextBtn.disabled = !currentRephrasedQuery; // Enable if rephrase succeeded
-                            if (generateFinalAnswerBtn) generateFinalAnswerBtn.disabled = true; // Keep final answer disabled until context is retrieved
+                        if (!payload) {
+                            console.error("Main: REPHRASED_QUERY_RESULT received, but payload from destructuring is undefined/falsey. Full event.data:", event.data);
+                            updateStatus("Error: Rephrased query payload missing or invalid.", true);
+                            rephrasedQueryArea.innerHTML = `<p class="text-red-500">Error: Rephrased query payload missing or invalid.</p>`;
+                            currentOriginalQuery = '';
+                            currentRephrasedQuery = '';
+                            return;
                         }
-                        // Re-enable the run full pipeline button regardless of standalone success/failure
-                        if (runSimilarityTestBtn) runSimilarityTestBtn.disabled = false; // Assuming this is the full pipeline button based on previous context?
-                        // If not, replace with the correct button variable name.
+                        const { rephrasedQuery, originalQuery: receivedOriginalQuery, strategy: rephraseStrategyUsed, metrics } = payload;
+                        currentRephrasedQuery = rephrasedQuery;
+                        currentOriginalQuery = receivedOriginalQuery; // Update currentOriginalQuery based on what was rephrased
+
+                        // Update for RAG table access
+                        if (rephraseStrategyUsed === 'rule-based') {
+                            (window as any).currentRephrasedQueryForTable = currentRephrasedQuery;
+                        } else {
+                            // If LLM rephrase was used, table might not use it directly or note it.
+                            // For now, clear it if not rule-based, or decide later if LLM-rephrased should be used by table.
+                            (window as any).currentRephrasedQueryForTable = null;
+                        }
+
+                        let rephraseHtml = currentRephrasedQuery ? highlightThinkBlocks(escapeHtml(currentRephrasedQuery)) : 'No rephrased query returned.';
+                        const duration = metrics?.duration;
+                        const tokenCount = metrics?.generatedTokenCount;
+
+                        if (duration !== undefined) {
+                            rephraseHtml += `<br><small style="color:grey;">(Duration: ${(duration / 1000).toFixed(2)}s`;
+                            if (tokenCount !== undefined && duration > 0) {
+                                const tkPerS = (tokenCount / (duration / 1000)).toFixed(2);
+                                rephraseHtml += `, ${tokenCount} tk, ${tkPerS} tk/s`;
+                            }
+                            rephraseHtml += `)</small>`;
+                        }
+                        rephrasedQueryArea.innerHTML = rephraseHtml;
+                        updateStatus(`Standalone rephrase complete. Ready for context retrieval.`, false, true);
+
+                        // Clear subsequent steps' outputs
+                        currentRetrievedContext = null;
+                        currentRetrievedSearchResults = null; // Clear results array too
+                        retrievedContextArea.textContent = "";
+                        responseArea.textContent = "";
+
+                        // Re-enable buttons for next steps
+                        if (rephraseQueryBtn) rephraseQueryBtn.disabled = false;
+                        if (retrieveContextBtn) retrieveContextBtn.disabled = !currentRephrasedQuery; // Enable if rephrase succeeded
+                        if (generateFinalAnswerBtn) generateFinalAnswerBtn.disabled = true; // Keep final answer disabled until context is retrieved
                         break;
                     case 'RETRIEVED_CONTEXT_RESULT':
                         const { searchResults, error: contextError, metrics: contextMetrics } = payload;
@@ -1069,7 +1109,7 @@ Based on the context, answer the following question:
                 initPayload.mlcModelId = mlcModelSelect.value;
                 console.log("RAG Test Main: Sending mlcModelId to worker:", mlcModelSelect.value);
             }
-            worker.postMessage({ type: 'initialize', payload: initPayload });
+            worker.postMessage({ type: 'INIT', payload: initPayload });
         } catch (error) {
             console.error("RAG Test Main: Error creating Web Worker:", error);
             updateStatus(`Worker error: ${error instanceof Error ? error.message : String(error)}`, true, false);
@@ -1090,6 +1130,7 @@ Based on the context, answer the following question:
         const k_rrf = parseInt(rrfKInput.value, 10);
         const topN = parseInt(hybridTopNInput.value, 10);
         const currentSimilarityMetric = similarityMetricSelect.value;
+        const bm25FilterK = parseInt(bm25FilterKmeansKInput.value, 10); // Added
 
         // Get chat engine config (relevant for semantic/hybrid generative steps)
         let chatEngineType = 'webllm';
@@ -1159,7 +1200,8 @@ Based on the context, answer the following question:
                     query,
                     k1,
                     b,
-                    topN
+                    topN,
+                    bm25FilterK // Added
                 };
             } else if (selectedSearchMode === 'hybrid') {
                 messageType = 'hybridSearch';
@@ -1170,6 +1212,7 @@ Based on the context, answer the following question:
                     k_rrf,
                     topN,
                     similarityMetric: currentSimilarityMetric,
+                    bm25FilterK, // Added
                     // Hybrid can also have a generative step, so pass generative params
                     systemPrompt: systemPrompt || null,
                     rephrasePromptTemplate: rephraseTemplate, // For potential rephrase within hybrid pipeline
@@ -1181,7 +1224,7 @@ Based on the context, answer the following question:
                     answerSettings
                 };
             } else { // 'semantic' (Full RAG pipeline)
-                messageType = 'query'; // This is the existing full RAG pipeline trigger
+                messageType = 'QUERY'; // This is the existing full RAG pipeline trigger
                 if (!rephraseTemplate.includes('{query}')) {
                     alert("Rephrase prompt template must include '{query}' placeholder for semantic mode.");
                     updateStatus("Error in prompt template.", true, true);
@@ -1237,72 +1280,76 @@ Based on the context, answer the following question:
     // Event Listeners for step-by-step RAG
     if (rephraseQueryBtn) {
         rephraseQueryBtn.addEventListener('click', () => {
-            const originalQuery = queryInput.value.trim();
-            const rephraseTemplate = rephrasePromptTemplateInput.value.trim();
-            const systemPrompt = systemPromptInput.value.trim(); // System prompt might influence rephrasing
-
-            // Get chat engine config
-            let chatEngineType = 'webllm'; // Default
-            if (chatEngineTransformersJSDefaultRadio.checked) {
-                chatEngineType = 'transformers';
-            } else if (chatEnginePleiasRAGRadio.checked) {
-                chatEngineType = 'transformers_pleias';
-            } else if (chatEnginePleiasRAG1BRadio.checked) {
-                chatEngineType = 'transformers_pleias_1b'; // Assign new type
-            }
-            // Model ID and ONNX path depend on the type
-            let transformersModelId: string | null = null;
-            let transformersOnnxFile: string | null = null;
-            if (chatEngineType === 'transformers') {
-                transformersModelId = transformersModelInput.value.trim();
-                transformersOnnxFile = transformersOnnxFileInput.value.trim();
-            } else if (chatEngineType === 'transformers_pleias') {
-                transformersModelId = 'onnx-community/Pleias-RAG-350M-ONNX';
-                transformersOnnxFile = 'onnx/model_quantized.onnx';
-            } else if (chatEngineType === 'transformers_pleias_1b') {
-                transformersModelId = 'onnx-community/Pleias-RAG-1B-ONNX';
-                transformersOnnxFile = 'onnx/model_quantized.onnx'; // Assumed path
-            }
-
-            if (!originalQuery) {
-                alert("Please enter an original query.");
+            if (!isWorkerReady || !worker) {
+                updateStatus("Worker not ready. Cannot rephrase query.", true);
                 return;
             }
-            if (!rephraseTemplate.includes('{query}')) {
-                alert("Rephrase prompt template must include '{query}' placeholder.");
-                return;
-            }
-            if (chatEngineType === 'transformers' && !transformersModelId) {
-                alert("Please enter a Transformers.js model ID or URL for rephrasing.");
+            const queryText = queryInput.value;
+            if (!queryText.trim()) {
+                updateStatus("Query is empty. Cannot rephrase.", true);
+                rephrasedQueryArea.innerHTML = '<p class="text-red-500">Query cannot be empty.</p>';
                 return;
             }
 
-            if (worker) {
-                currentOriginalQuery = originalQuery; // Store original query
-                updateStatus('Rephrasing query...', false, false);
-                if (retrieveContextBtn) retrieveContextBtn.disabled = true;
-                if (generateFinalAnswerBtn) generateFinalAnswerBtn.disabled = true;
-                rephrasedQueryArea.textContent = 'Rephrasing...';
-                retrievedContextArea.textContent = ''; // Clear old context
+            currentOriginalQuery = queryText; // Store original query for later steps
 
-                // Gather rephrase model settings from UI
+            const strategy = rephraseStrategySelect.value;
+            updateStatus(`Rephrasing query using ${strategy} strategy...`);
+            rephrasedQueryArea.innerHTML = '<p><i>Rephrasing in progress...</i></p>';
+            console.log(`Rephrasing query: "${queryText}" using strategy: ${strategy}`);
+
+            if (strategy === 'rules') { // Changed from 'rule-based' to 'rules' to match HTML option value
+                worker.postMessage({
+                    type: 'REPHRASE_QUERY_RULE_BASED',
+                    query: queryText
+                });
+            } else { // llm-based (value 'llm') or default
+                const rephraseTemperature = parseFloat(rephraseTemperatureSlider.value);
+                const rephraseTopP = parseFloat(rephraseTopPSlider.value);
+                const rephraseTopK = parseInt(rephraseTopKInput.value, 10);
+                const rephraseMaxNewTokens = parseInt(rephraseMaxNewTokensInput.value, 10);
+
+                // Get chat engine config for LLM rephrase
+                let chatEngineType = 'webllm'; // Default
+                if (chatEngineTransformersJSDefaultRadio.checked) {
+                    chatEngineType = 'transformers';
+                } else if (chatEnginePleiasRAGRadio.checked) {
+                    chatEngineType = 'transformers_pleias';
+                } else if (chatEnginePleiasRAG1BRadio.checked) {
+                    chatEngineType = 'transformers_pleias_1b';
+                }
+
+                let currentTransformersModelId: string | null = null;
+                let currentTransformersOnnxFile: string | null = null;
+
+                if (chatEngineType === 'transformers') {
+                    currentTransformersModelId = transformersModelInput.value.trim();
+                    currentTransformersOnnxFile = transformersOnnxFileInput.value.trim();
+                } else if (chatEngineType === 'transformers_pleias') {
+                    currentTransformersModelId = 'onnx-community/Pleias-RAG-350M-ONNX';
+                    currentTransformersOnnxFile = 'onnx/model_quantized.onnx';
+                } else if (chatEngineType === 'transformers_pleias_1b') {
+                    currentTransformersModelId = 'onnx-community/Pleias-RAG-1B-ONNX';
+                    currentTransformersOnnxFile = 'onnx/model_quantized.onnx';
+                }
+
                 const rephraseSettings = {
-                    temperature: parseFloat(rephraseTemperatureSlider.value),
-                    top_p: parseFloat(rephraseTopPSlider.value),
-                    top_k: parseInt(rephraseTopKInput.value, 10),
-                    max_new_tokens: parseInt(rephraseMaxNewTokensInput.value, 10)
+                    temperature: rephraseTemperature,
+                    top_p: rephraseTopP,
+                    top_k: rephraseTopK,
+                    max_new_tokens: rephraseMaxNewTokens
                 };
 
                 worker.postMessage({
                     type: 'REPHRASE_QUERY',
                     payload: {
-                        originalQuery,
-                        rephrasePromptTemplate: rephraseTemplate,
-                        systemPrompt: systemPrompt || null,
-                        chatEngineType,
-                        transformersModelId: transformersModelId, // Pass correct model ID
-                        transformersOnnxFile: transformersOnnxFile, // Pass correct ONNX file path/url
-                        rephraseSettings // Pass all rephrase model settings
+                        originalQuery: queryText,
+                        rephrasePromptTemplate: rephrasePromptTemplateInput.value, // Send the raw template
+                        systemPrompt: systemPromptInput.value.trim() || null,
+                        chatEngineType: chatEngineType,
+                        transformersModelId: currentTransformersModelId,
+                        transformersOnnxFile: currentTransformersOnnxFile,
+                        rephraseSettings: rephraseSettings
                     }
                 });
             }
@@ -1588,6 +1635,7 @@ Based on the context, answer the following question:
             const k1 = parseFloat(bm25K1Input.value);
             const b = parseFloat(bm25BInput.value);
             const topN = parseInt(hybridTopNInput.value, 10);
+            const bm25FilterK = parseInt(bm25FilterKmeansKInput.value, 10); // Added
 
             if (worker && isWorkerReady) {
                 dedicatedBm25TestResultsArea.innerHTML = 'Processing BM25 test...';
@@ -1601,7 +1649,8 @@ Based on the context, answer the following question:
                         query,
                         k1,
                         b,
-                        topN
+                        topN,
+                        bm25FilterK // Added
                     }
                 });
             } else {
@@ -1662,5 +1711,33 @@ Based on the context, answer the following question:
         metricsArea.innerHTML = html;
         metricsArea.style.display = 'block'; // Make sure it is visible
     }
+
+    // --- NEW: Logic for Rephrase Strategy UI ---
+    function toggleLLMSettingsVisibility() {
+        if (!rephraseStrategySelect || !llmRephraseSettingsDivForPrompt || !llmRephraseSettingsDivForModel) {
+            console.warn("Rephrase strategy UI elements not found, cannot toggle visibility.");
+            return;
+        }
+        const strategy = rephraseStrategySelect.value;
+        if (strategy === 'llm') { // Changed from 'llm-based' to 'llm'
+            llmRephraseSettingsDivForPrompt.style.display = '';
+            llmRephraseSettingsDivForModel.style.display = '';
+        } else {
+            llmRephraseSettingsDivForPrompt.style.display = 'none';
+            llmRephraseSettingsDivForModel.style.display = 'none';
+        }
+    }
+
+    if (rephraseStrategySelect) {
+        rephraseStrategySelect.addEventListener('change', toggleLLMSettingsVisibility);
+        // Initialize visibility based on the default selected value
+        toggleLLMSettingsVisibility();
+    } else {
+        console.warn("Rephrase strategy select element not found. LLM settings visibility control will not be active.");
+    }
+    // --- END: Logic for Rephrase Strategy UI ---
+
+    // Ensure CJS environment is properly set up before attempting to load models that might need it.
+    CjsEnv.allowLocalModels = true; // Allow loading local models/quantized models
 
 }); 

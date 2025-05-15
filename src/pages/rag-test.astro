@@ -1,6 +1,93 @@
 ---
 // src/pages/rag-test.astro
 // No server-side processing needed for this basic test page yet.
+import fs from 'fs';
+import path from 'path';
+
+// --- 1. Server-Side Logic (Astro Frontmatter) ---
+
+// --- 1.1. Access Pre-computed Data ---
+let clusterCentroidsData = [];
+let clusterContextData = {}; // Combined context from manifest and keywords
+// let staticRuleQueryEmbedding = null; // Placeholder
+
+const baseEmbeddingsPath = path.join(process.cwd(), 'public', 'embeddings', 'school_districts');
+
+try {
+    // Load Cluster Centroids
+    const centroidsPath = path.join(baseEmbeddingsPath, 'centroids.json');
+    if (fs.existsSync(centroidsPath)) {
+        const centroidsJson = fs.readFileSync(centroidsPath, 'utf-8');
+        // The plan mentions `vector` but file has `centroid`. Renaming here for consistency with plan.
+        clusterCentroidsData = JSON.parse(centroidsJson).map(c => ({
+            clusterId: c.clusterId,
+            vector: c.centroid 
+        }));
+        console.log(`Successfully loaded ${clusterCentroidsData.length} cluster centroids.`);
+    } else {
+        console.error(`Error: centroids.json not found at ${centroidsPath}`);
+    }
+
+    // Load Cluster Contextual Data (from manifest.json for countyName)
+    const manifestPath = path.join(baseEmbeddingsPath, 'manifest.json');
+    const manifestContext = {};
+    if (fs.existsSync(manifestPath)) {
+        const manifestJson = fs.readFileSync(manifestPath, 'utf-8');
+        const manifestData = JSON.parse(manifestJson);
+        if (manifestData.clusters && Array.isArray(manifestData.clusters)) {
+            manifestData.clusters.forEach(cluster => {
+                if (cluster.clusterId !== undefined && cluster.countyName) {
+                    manifestContext[cluster.clusterId] = { countyName: cluster.countyName };
+                }
+            });
+        }
+        console.log(`Successfully processed manifest.json for county names.`);
+    } else {
+        console.warn(`Warning: manifest.json not found at ${manifestPath}. County context will be unavailable.`);
+    }
+
+    // Load Cluster Contextual Data (from cluster_keywords.json for keywords)
+    const keywordsPath = path.join(baseEmbeddingsPath, 'cluster_keywords.json');
+    const keywordsContext = {};
+    if (fs.existsSync(keywordsPath)) {
+        const keywordsJson = fs.readFileSync(keywordsPath, 'utf-8');
+        const keywordsData = JSON.parse(keywordsJson);
+        if (Array.isArray(keywordsData)) {
+            keywordsData.forEach(item => {
+                if (item.clusterId !== undefined && item.keywords) {
+                    // Store keywords as a comma-separated string of all keywords
+                    keywordsContext[item.clusterId] = { keywords: item.keywords.join(', ') }; 
+                }
+            });
+        }
+        console.log(`Successfully processed cluster_keywords.json for keywords.`);
+    } else {
+        console.warn(`Warning: cluster_keywords.json not found at ${keywordsPath}. Keyword context will be unavailable.`);
+    }
+    
+    // Combine context data: Start with manifest (county names), then add/override with keywords
+    // Ensure that if a clusterId exists in one, it's initialized in clusterContextData before merging
+    const allContextIds = new Set([...Object.keys(manifestContext), ...Object.keys(keywordsContext)]);
+    allContextIds.forEach(id => {
+        clusterContextData[id] = {
+            ...(manifestContext[id] || {}),
+            ...(keywordsContext[id] || {}),
+        };
+    });
+
+    // Note: Static Rule-Based Query Embedding is not loaded as the file was not found.
+    // If 'public/embeddings/static_rule_query_embedding.json' becomes available, logic to load it would go here.
+    // For now, staticRuleQueryEmbedding remains null or undefined.
+
+} catch (error) {
+    console.error("Error loading pre-computed data in Astro frontmatter:", error);
+    // Optionally, pass error status to client if needed
+}
+
+// --- 1.2. Pass Data to Client ---
+// This part will be handled by modifying the <script define:vars> tag later.
+// For now, these variables are prepared: clusterCentroidsData, clusterContextData
+
 ---
 
 <!doctype html>
@@ -116,6 +203,31 @@
             }
             /* End of styles for similarity table */
 
+            /* Styles for the new comprehensive RAG similarity table */
+            #ragSimilarityTableContainer table {
+                width: 100%;
+                border-collapse: collapse;
+                margin-top: 20px; /* Matches plan example section */
+                font-size: 0.9em;
+            }
+            #ragSimilarityTableContainer th,
+            #ragSimilarityTableContainer td {
+                border: 1px solid #ddd;
+                padding: 8px;
+                text-align: left;
+            }
+            #ragSimilarityTableContainer th {
+                background-color: #e8e8e8; /* Plan suggests a different shade, e.g. #f0f0f0 or #e8e8e8 */
+                font-weight: bold;
+            }
+            #ragSimilarityTableContainer tbody tr:nth-child(even) {
+                background-color: #fdfdfd; /* Lighter than existing even rows for distinction */
+            }
+            #ragSimilarityTableContainer tbody tr:hover {
+                background-color: #f5f5f5; /* Lighter hover too */
+            }
+            /* End of styles for comprehensive RAG similarity table */
+
             .intermediate-output {
                 margin-top: 5px;
                 margin-bottom: 15px;
@@ -163,7 +275,7 @@
                 <summary>Chat Engine Configuration</summary>
                 <fieldset>
                     <div>
-                        <input type="radio" id="chatEngineWebLLM" name="chatEngine" value="webllm" />
+                        <input type="radio" id="chatEngineWebLLM" name="chatEngine" value="webllm" checked>
                         <label for="chatEngineWebLLM">WebLLM (Current MLC Setup)</label>
                         <!-- New MLC Model Select Div -->
                         <div id="mlcModelSelectDiv" style="margin-left: 20px; margin-top: 5px; display: none;">
@@ -179,7 +291,7 @@
                         </div>
                     </div>
                     <div>
-                        <input type="radio" id="chatEngineTransformersJSDefault" name="chatEngine" value="transformers_default" checked />
+                        <input type="radio" id="chatEngineTransformersJSDefault" name="chatEngine" value="transformers">
                         <label for="chatEngineTransformersJSDefault">Transformers.js (Default: Qwen3 / Custom)</label>
                     </div>
                     <div>
@@ -213,7 +325,7 @@
                         ></textarea>
                     </div>
 
-                    <div>
+                    <div id="llmRephraseSettingsDivForPrompt"> <!-- Wrapper for LLM-specific prompt template -->
                         <label for="rephrasePromptTemplateInput"
                             >Rephrase Prompt Template (use &lbrace;query&rbrace; for user query):</label
                         ><br />
@@ -235,16 +347,26 @@
             <details class="accordion-section" open>
                 <summary>Chat Model Settings</summary>
                 <fieldset style="display: flex; gap: 24px; flex-wrap: wrap;">
-                    <div style="flex: 1; min-width: 220px;">
-                        <h4 style="margin-bottom: 4px;">Rephrase Model Settings</h4>
-                        <label for="rephraseTemperatureSlider">Temperature: <span id="rephraseTemperatureValue">0.2</span></label><br />
-                        <input type="range" id="rephraseTemperatureSlider" min="0" max="2" value="0.6" step="0.01" style="width: 98%;">
-                        <label for="rephraseTopPSlider">Top-p: <span id="rephraseTopPValue">0.9</span></label><br />
-                        <input type="range" id="rephraseTopPSlider" min="0" max="1" value="0.95" step="0.01" style="width: 98%;">
-                        <label for="rephraseTopKInput">Top-k:</label>
-                        <input type="number" id="rephraseTopKInput" min="0" max="100" value="20" style="width: 60px;">
-                        <label for="rephraseMaxNewTokensInput">Max new tokens:</label>
-                        <input type="number" id="rephraseMaxNewTokensInput" min="1" max="32768" value="32768" style="width: 60px;">
+                    <div style="flex: 1; min-width: 220px;"> <!-- This outer div might need to encompass the strategy select too for layout -->
+                        <div  style="margin-bottom: 15px;"> <!-- Added div for spacing -->
+                            <label for="rephraseStrategySelect">Rephrase Strategy:</label><br/>
+                            <select id="rephraseStrategySelect" name="rephraseStrategySelect" style="width: 100%; padding: 5px;">
+                                <option value="llm" selected>LLM-based Rephrasing</option>
+                                <option value="rules">Rule-based Rephrasing (Simple)</option>
+                            </select>
+                        </div>
+
+                        <div id="llmRephraseSettingsDivForModel"> <!-- Wrapper for LLM-specific rephrase model settings -->
+                            <h4 style="margin-bottom: 4px;">Rephrase Model Settings</h4>
+                            <label for="rephraseTemperatureSlider">Temperature: <span id="rephraseTemperatureValue">0.2</span></label><br />
+                            <input type="range" id="rephraseTemperatureSlider" min="0" max="2" value="0.6" step="0.01" style="width: 98%;">
+                            <label for="rephraseTopPSlider">Top-p: <span id="rephraseTopPValue">0.9</span></label><br />
+                            <input type="range" id="rephraseTopPSlider" min="0" max="1" value="0.95" step="0.01" style="width: 98%;">
+                            <label for="rephraseTopKInput">Top-k:</label>
+                            <input type="number" id="rephraseTopKInput" min="0" max="100" value="20" style="width: 60px;">
+                            <label for="rephraseMaxNewTokensInput">Max new tokens:</label>
+                            <input type="number" id="rephraseMaxNewTokensInput" min="1" max="32768" value="32768" style="width: 60px;">
+                        </div>
                     </div>
                     <div style="flex: 1; min-width: 220px;">
                         <h4 style="margin-bottom: 4px;">Chat Answer Model Settings</h4>
@@ -289,6 +411,10 @@
                 <div class="input-group">
                     <label for="bm25BInput" title="Controls document length normalization. 0 means no length normalization, 1 means full normalization. Typical: 0.75.">b (Length Normalization):</label>
                     <input type="number" id="bm25BInput" value="0.75" step="0.05" title="Controls document length normalization. 0 means no length normalization, 1 means full normalization. Typical: 0.75." />
+                </div>
+                <div class="input-group">
+                    <label for="bm25FilterKmeansKInput" title="Only consider documents for BM25 from clusters where clusterId > this value. Assumes documents have metadata.clusterId.">Filter K-Means k (clusterId > k):</label>
+                    <input type="number" id="bm25FilterKmeansKInput" value="0" step="1" min="-1" title="Only consider documents for BM25 from clusters where clusterId > this value. Set to -1 or 0 to include all based on your lowest clusterId." />
                 </div>
             </div>
 
@@ -433,9 +559,508 @@
             <!-- These were moved up -->
             <!-- END: Hybrid Search PoC Elements -->
 
+            <div id="responseAreaContainer" class="intermediate-output" style="display: none;">
+                <h4>Raw LLM Response:</h4>
+                <div id="responseArea"></div>
+            </div>
+
+            <div id="similarityResultsArea" class="intermediate-output" style="display: none;">
+                <h4>Embedding Similarity Validation:</h4>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Document Snippet</th>
+                            <th>WebLLM Score</th>
+                            <th>In-Browser Transformers Score</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Rows will be added here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Container for the new RAG similarity table -->
+            <div id="ragSimilarityTableContainer" class="intermediate-output" style="display: none;">
+                 <div style="margin-bottom: 10px;">
+                    <label for="ragTableRowFilterSelect">Show Rows:</label>
+                    <select id="ragTableRowFilterSelect" name="ragTableRowFilterSelect" title="Filter number of rows shown in the table below">
+                        <option value="all" selected>Show All</option>
+                        <option value="5">Show Top 5</option>
+                        <option value="10">Show Top 10</option>
+                    </select>
+                 </div>
+                 <h4>RAG Query-Cluster Similarity Analysis:</h4>
+                 <!-- Table will be injected here by JavaScript -->
+            </div>
+
+            <form id="queryForm" style="margin-top: 10px;">
+                <div style="margin-bottom: 10px;">
+                    <label for="ragTableSimilarityMetricSelect">Similarity/Distance Metric for Table:</label>
+                    <select id="ragTableSimilarityMetricSelect" name="ragTableSimilarityMetricSelect" title="Metric for RAG table calculations">
+                        <option value="cosine" selected>Cosine Similarity</option>
+                        <option value="dot_product">Dot Product</option>
+                        <option value="manhattan">Manhattan Distance</option>
+                        <option value="euclidean">Euclidean Distance</option>
+                    </select>
+                </div>
+                <!-- This form will now have its own submit button for the RAG table -->
+                <button type="submit" id="generateRagTableBtn" style="margin-right: 10px;">Show Query/Cluster Similarity Analysis</button>
+                <button type="button" id="clearRagTableBtn">Clear Similarity Table</button>
+            </form>
+
         </div>
 
         <!-- Astro will handle the .ts import and compilation -->
         <script type="module" src="/src/rag-testing/rag_test_main.ts"></script>
+
+        <script define:vars={{ clusterCentroidsData, clusterContextData }}>
+            // --- Client-Side Logic for RAG Similarity Table ---
+            const statusLabel = document.getElementById('statusLabel');
+            // const similarityTableBody = similarityResultsArea.querySelector('tbody'); // Belongs to a different table
+
+            const ragSimilarityTableContainer = document.getElementById('ragSimilarityTableContainer');
+            let pipeline; // For Transformers.js feature extraction
+
+            // --- Helper function to escape HTML --- 
+            function escapeHTML(str) {
+                if (typeof str !== 'string') return '';
+                return str.replace(/[&<>'"`/]/g, function (match) {
+                    const escape = {
+                        '&': '&amp;',
+                        '<': '&lt;',
+                        '>': '&gt;',
+                        '"': '&quot;',
+                        "'": '&#39;', // HTML entity for single quote
+                        '/': '&#x2F;', // To prevent closing HTML tags
+                        '`': '&#96;'  // HTML entity for backtick
+                    };
+                    return escape[match];
+                });
+            }
+
+            // --- 2.2. Helper Functions (as per plan) ---
+            function cosineSimilarity(vecA, vecB) {
+                if (!vecA || !vecB || vecA.length === 0 || vecA.length !== vecB.length) {
+                    console.warn("cosineSimilarity: Invalid input vectors", vecA, vecB);
+                    return 0;
+                }
+                let dotProduct = 0;
+                let normA = 0;
+                let normB = 0;
+                for (let i = 0; i < vecA.length; i++) {
+                    dotProduct += vecA[i] * vecB[i];
+                    normA += vecA[i] * vecA[i];
+                    normB += vecB[i] * vecB[i];
+                }
+                if (normA === 0 || normB === 0) {
+                    return 0; 
+                }
+                return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+            }
+
+            function averageEmbeddings(vecA, vecB) {
+                if (!vecA || !vecB || vecA.length === 0 || vecA.length !== vecB.length) {
+                    console.warn("averageEmbeddings: Invalid input vectors for averaging", vecA, vecB);
+                    return [];
+                }
+                const result = new Array(vecA.length);
+                for (let i = 0; i < vecA.length; i++) {
+                    result[i] = (vecA[i] + vecB[i]) / 2;
+                }
+                return result;
+            }
+
+            function dotProduct(vecA, vecB) {
+                if (!vecA || !vecB || vecA.length === 0 || vecA.length !== vecB.length) {
+                    console.warn("dotProduct: Invalid input vectors", vecA, vecB);
+                    return 0;
+                }
+                let product = 0;
+                for (let i = 0; i < vecA.length; i++) {
+                    product += vecA[i] * vecB[i];
+                }
+                return product;
+            }
+
+            function manhattanDistance(vecA, vecB) {
+                if (!vecA || !vecB || vecA.length === 0 || vecA.length !== vecB.length) {
+                    console.warn("manhattanDistance: Invalid input vectors", vecA, vecB);
+                    return Infinity; // Or some other indicator of error/max distance
+                }
+                let distance = 0;
+                for (let i = 0; i < vecA.length; i++) {
+                    distance += Math.abs(vecA[i] - vecB[i]);
+                }
+                return distance;
+            }
+
+            function euclideanDistance(vecA, vecB) {
+                if (!vecA || !vecB || vecA.length === 0 || vecA.length !== vecB.length) {
+                    console.warn("euclideanDistance: Invalid input vectors", vecA, vecB);
+                    return Infinity; // Or some other indicator of error/max distance
+                }
+                let sumOfSquares = 0;
+                for (let i = 0; i < vecA.length; i++) {
+                    sumOfSquares += Math.pow(vecA[i] - vecB[i], 2);
+                }
+                return Math.sqrt(sumOfSquares);
+            }
+
+            // Log passed data for Milestone 1 Verification
+            console.log("Milestone 1 Verification: Data passed from server (for RAG Table):", {
+                clusterCentroidsData,
+                clusterContextData
+            });
+
+            document.addEventListener('DOMContentLoaded', async () => {
+                const mainQueryInput = document.getElementById('queryInput');
+                const queryForm = document.getElementById('queryForm');
+                
+                const generateTableButton = document.getElementById('generateRagTableBtn');
+                const clearTableButton = document.getElementById('clearRagTableBtn');
+                    
+                const responseArea = document.getElementById('responseArea'); 
+                const responseAreaContainer = document.getElementById('responseAreaContainer');
+
+                const progressBarContainer = document.getElementById('progressBarContainer');
+                const progressBar = document.getElementById('progressBar');
+
+                const T = window.transformers;
+
+                if (!T) {
+                    console.error("Transformers.js (window.transformers) is not available for RAG Table. Ensure it's loaded.");
+                    if(statusLabel) statusLabel.textContent = "Critical Error: Transformers.js library not found for RAG Table.";
+                    if(generateTableButton) generateTableButton.disabled = true;
+                    return;
+                }
+                    
+                function updateStatus(message, isLoading = false) {
+                    if (statusLabel) statusLabel.textContent = message;
+                    if (progressBarContainer && generateTableButton) {
+                        progressBarContainer.style.display = isLoading ? 'block' : 'none';
+                        generateTableButton.disabled = isLoading;
+                    }
+                }
+
+                function updateProgressBar(percentage) {
+                    if (progressBar) {
+                        progressBar.style.width = percentage + '%';
+                        progressBar.textContent = percentage + '%';
+                    }
+                }
+
+                if (queryForm && mainQueryInput && ragSimilarityTableContainer && generateTableButton) {
+                    queryForm.addEventListener('submit', async function (event) {
+                        event.preventDefault();
+                        const userQueryString = mainQueryInput.value.trim();
+
+                        if (!userQueryString) {
+                            alert('Please enter a query in the main query input field to generate the RAG similarity table.');
+                            return;
+                        }
+
+                        const selectedMetric = document.getElementById('ragTableSimilarityMetricSelect').value;
+                        const isDistanceMetric = selectedMetric === 'manhattan' || selectedMetric === 'euclidean';
+                        
+                        let metricFunctionName = "Cosine Sim";
+                        if (selectedMetric === 'dot_product') metricFunctionName = "Dot Product";
+                        else if (selectedMetric === 'manhattan') metricFunctionName = "Manhattan Dist";
+                        else if (selectedMetric === 'euclidean') metricFunctionName = "Euclidean Dist";
+
+                        updateStatus('Processing for RAG Similarity Table...', true);
+                        updateProgressBar(0);
+                        
+                        if(responseAreaContainer) responseAreaContainer.style.display = 'block';
+                        if(responseArea) responseArea.textContent = ''; // Clear main response area for this action's mock message
+                        
+                        ragSimilarityTableContainer.innerHTML = '';
+                        ragSimilarityTableContainer.style.display = 'none';
+
+                        try {
+                            if (!pipeline) {
+                                updateStatus('Loading embedding model (Snowflake/snowflake-arctic-embed-xs for RAG Table)...', true);
+                                updateProgressBar(5);
+                                pipeline = await T.pipeline('feature-extraction', 'Snowflake/snowflake-arctic-embed-xs', {
+                                    progress_callback: (progress) => {
+                                        updateProgressBar(5 + Math.round(progress.progress * 0.15)); 
+                                    }
+                                });
+                                updateStatus('Embedding model loaded for RAG Table. Generating embeddings...', true);
+                            }
+                            updateProgressBar(20);
+
+                            // Get the original user query string
+                            const originalUserQueryString = mainQueryInput.value.trim();
+                            if (!originalUserQueryString) {
+                                updateStatus('Original user query is empty. Cannot generate table.', false);
+                                ragSimilarityTableContainer.innerHTML = '<p style="color:orange;">Please enter a query in the main text area above.</p>';
+                                return;
+                            }
+
+                            // Attempt to get the rule-based query from the main script, fallback to original
+                            let ruleBasedQueryString = originalUserQueryString; // Default to original
+                            let ruleBasedQueryNote = "(using original query as fallback for rule-based query)";
+                            if (window.currentRephrasedQueryForTable && typeof window.currentRephrasedQueryForTable === 'string') {
+                                ruleBasedQueryString = window.currentRephrasedQueryForTable;
+                                ruleBasedQueryNote = "(using rule-based rephrased query from step-by-step panel)";
+                            } else {
+                                console.warn("RAG Table: window.currentRephrasedQueryForTable not available or not a string. Using original query for rule-based part.");
+                            }
+
+                            updateStatus('Generating embedding for original query...', true);
+                            const originalUserQueryEmbeddingTensor = await pipeline(originalUserQueryString, { pooling: 'mean', normalize: true });
+                            const originalUserQueryEmbedding = Array.from(originalUserQueryEmbeddingTensor.data);
+                            updateProgressBar(40);
+
+                            const ruleBasedQueryEmbeddingTensor = await pipeline(ruleBasedQueryString, { pooling: 'mean', normalize: true });
+                            const ruleBasedQueryEmbedding = Array.from(ruleBasedQueryEmbeddingTensor.data);
+                            updateProgressBar(60);
+
+                            function calculateMetric(vecA, vecB, metric) {
+                                switch (metric) {
+                                    case 'dot_product':
+                                        return dotProduct(vecA, vecB);
+                                    case 'manhattan':
+                                        return manhattanDistance(vecA, vecB);
+                                    case 'euclidean':
+                                        return euclideanDistance(vecA, vecB);
+                                    case 'cosine':
+                                    default:
+                                        return cosineSimilarity(vecA, vecB);
+                                }
+                            }
+                            
+                            updateStatus('Preparing to display all clusters for RAG Table...', true);
+                            if (!clusterCentroidsData || clusterCentroidsData.length === 0) {
+                                console.warn("RAG Table: No cluster centroids data available to display.");
+                            }
+                            const relevantCentroidsToDisplay = clusterCentroidsData; // Use all clusters
+                            console.log(`RAG Table: Will display all ${relevantCentroidsToDisplay ? relevantCentroidsToDisplay.length : 0} clusters.`);
+                            updateProgressBar(65);
+                            
+                            updateStatus('Calculating similarities and building RAG Table...', true);
+
+                            ragSimilarityTableContainer.innerHTML = '';
+
+                            const originalQueryDisplay = document.createElement('p');
+                            originalQueryDisplay.innerHTML = `<strong>Original User Query:</strong> ${escapeHTML(originalUserQueryString)}`;
+                            ragSimilarityTableContainer.appendChild(originalQueryDisplay);
+
+                            const ruleBasedQueryDisplay = document.createElement('p');
+                            ruleBasedQueryDisplay.innerHTML = `<strong>Rule-Based Query:</strong> ${escapeHTML(ruleBasedQueryString)} <em>${escapeHTML(ruleBasedQueryNote)}</em>`;
+                            ragSimilarityTableContainer.appendChild(ruleBasedQueryDisplay);
+
+                            const table = document.createElement('table');
+                            const thead = document.createElement('thead');
+                            const tbody = document.createElement('tbody');
+
+                            thead.innerHTML = `<tr>
+                                <th>Cluster ID</th>
+                                <th>Context (Keywords / County)</th>
+                                <th>${metricFunctionName} (Original Query &harr; Centroid)</th>
+                                <th>${metricFunctionName} (Rule-Based Query &harr; Centroid)</th>
+                                <th>${metricFunctionName} (Average Query &harr; Centroid)</th>
+                            </tr>`;
+                            table.appendChild(thead);
+                            table.appendChild(tbody);
+
+                            let rowsProcessed = 0;
+                            for (const cluster of relevantCentroidsToDisplay) {
+                                const clusterCentroidVector = cluster.vector;
+                                const clusterId = cluster.clusterId;
+                                let contextualInfoString = "N/A";
+                                if (clusterContextData && clusterContextData[clusterId]) {
+                                    const context = clusterContextData[clusterId];
+                                    const parts = [];
+                                    if (context.countyName) parts.push(`County: ${context.countyName}`);
+                                    if (context.keywords) parts.push(`Keywords: ${context.keywords}`);
+                                    contextualInfoString = parts.join('; ') || "N/A";
+                                }
+                                const avgQueryEmbedding = averageEmbeddings(originalUserQueryEmbedding, ruleBasedQueryEmbedding);
+                                
+                                const sim_original_to_centroid = calculateMetric(originalUserQueryEmbedding, clusterCentroidVector, selectedMetric);
+                                const sim_rule_to_centroid = calculateMetric(ruleBasedQueryEmbedding, clusterCentroidVector, selectedMetric);
+                                const sim_average_to_centroid = calculateMetric(avgQueryEmbedding, clusterCentroidVector, selectedMetric);
+                                const row = tbody.insertRow();
+                                row.insertCell().textContent = clusterId;
+                                row.insertCell().textContent = contextualInfoString;
+                                row.insertCell().textContent = sim_original_to_centroid.toFixed(4);
+                                row.insertCell().textContent = sim_rule_to_centroid.toFixed(4);
+                                row.insertCell().textContent = sim_average_to_centroid.toFixed(4);
+                                rowsProcessed++;
+                                updateProgressBar(65 + Math.round((rowsProcessed / Math.max(1, relevantCentroidsToDisplay.length)) * 30));
+                            }
+                            
+                            const mainSectionTitleText = ragSimilarityTableContainer.dataset.initialTitle || 'RAG Query-Cluster Similarity Analysis:';
+                            const titleElement = document.createElement('h4');
+                            titleElement.textContent = mainSectionTitleText;
+                            ragSimilarityTableContainer.insertBefore(titleElement, originalQueryDisplay);
+
+                            if (relevantCentroidsToDisplay.length === 0) {
+                                const noDataTableMessage = document.createElement('p');
+                                noDataTableMessage.textContent = 'No cluster data available to display.';
+                                ragSimilarityTableContainer.appendChild(noDataTableMessage);
+                            }
+
+                            ragSimilarityTableContainer.appendChild(table);
+                            ragSimilarityTableContainer.style.display = 'block';
+                            makeTableSortable(table); // Make the newly created table sortable
+                            
+                            // Apply initial visibility filter
+                            const initialFilterValue = document.getElementById('ragTableRowFilterSelect')?.value || 'all';
+                            applyRowVisibilityFilter(table.querySelector('tbody'), initialFilterValue);
+
+                            if(responseArea) responseArea.textContent = `(Mock LLM Response for RAG Table query: "${escapeHTML(originalUserQueryString)}")\n\nThe table above shows similarity scores. The main RAG pipeline response would appear here if triggered by its own controls.`;
+                            
+                            updateStatus('RAG Similarity Table processing complete.', false);
+                            updateProgressBar(100);
+                            console.log("RAG Table: Successfully generated and displayed.");
+
+                        } catch (error) {
+                            console.error('Error during RAG Table generation process:', error);
+                            if(responseArea) responseArea.textContent = 'Error generating RAG Table: ' + error.message;
+                            updateStatus('Error with RAG Table. Check console.', false);
+                        }
+                    });
+                } else {
+                    console.warn("RAG Table: Query form, main query input, table container, or generate button not found. Init failed.");
+                    if(statusLabel) statusLabel.textContent = "Warning: Page elements missing for RAG table feature.";
+                }
+                
+                if (clearTableButton && ragSimilarityTableContainer) {
+                    clearTableButton.addEventListener('click', () => {
+                        ragSimilarityTableContainer.innerHTML = ''; 
+                        const initialTitleText = ragSimilarityTableContainer.dataset.initialTitle || 'RAG Query-Cluster Similarity Analysis:';
+                        const title = document.createElement('h4');
+                        title.textContent = initialTitleText;
+                        ragSimilarityTableContainer.appendChild(title);
+                        ragSimilarityTableContainer.style.display = 'none';
+                        
+                        if(statusLabel) statusLabel.textContent = 'Ready. Enter a query for RAG Table or main pipeline.';
+                        updateProgressBar(0);
+                        if(generateTableButton) generateTableButton.disabled = false;
+                    });
+                }
+
+                if (statusLabel) {
+                    if (clusterCentroidsData && clusterCentroidsData.length > 0) {
+                        updateStatus('Ready. Enter a query for RAG Table or use main pipeline controls.');
+                    } else {
+                        updateStatus('Warning: Cluster centroids data not loaded for RAG Table. Feature may be limited.', false);
+                        console.warn("RAG Table: Cluster centroids data empty/not loaded. Feature may not function correctly.");
+                    }
+                }
+                if (ragSimilarityTableContainer) {
+                    const initialTitleElement = ragSimilarityTableContainer.querySelector('h4');
+                    if (initialTitleElement) {
+                        ragSimilarityTableContainer.dataset.initialTitle = initialTitleElement.textContent;
+                    }
+                }
+
+                // Add event listener for the new row filter select
+                const rowFilterSelect = document.getElementById('ragTableRowFilterSelect');
+                if (rowFilterSelect && ragSimilarityTableContainer) {
+                    rowFilterSelect.addEventListener('change', (event) => {
+                        const table = ragSimilarityTableContainer.querySelector('table');
+                        if (table && table.querySelector('tbody')) {
+                            applyRowVisibilityFilter(table.querySelector('tbody'), event.target.value);
+                        }
+                    });
+                }
+            });
+
+            // --- NEW: Function to make table sortable ---
+            function makeTableSortable(table) {
+                const headers = table.querySelectorAll('th');
+                const tbody = table.querySelector('tbody');
+                let sortDirections = Array(headers.length).fill(null); // null, 'asc', or 'desc'
+
+                // Determine if the current metric is a distance metric (lower is better)
+                // This needs to be known at the time of sorting. We can pass it or re-check.
+                // For simplicity, we'll check the header text for "Dist"
+                
+                headers.forEach((header, index) => {
+                    header.style.cursor = 'pointer';
+                    header.addEventListener('click', () => {
+                        const rows = Array.from(tbody.querySelectorAll('tr'));
+                        const currentDirection = sortDirections[index];
+                        
+                        // For distance metrics, the "natural" ascending sort means smaller values are first.
+                        // For similarity metrics, "natural" ascending sort means smaller values are first (less similar).
+                        // The visual toggle should be consistent: ▲ for ascending, ▼ for descending by value.
+                        let newDirection = currentDirection === 'asc' ? 'desc' : 'asc';
+                        
+                        const headerText = header.textContent || "";
+                        const isDistanceColumn = headerText.includes("Dist");
+
+                        headers.forEach((h, i) => {
+                            if (i !== index) {
+                                h.textContent = h.textContent.replace(/ [▲▼]$/, ''); 
+                                sortDirections[i] = null;
+                            }
+                        });
+
+                        sortDirections[index] = newDirection;
+                        // Update indicator based on newDirection value (asc/desc)
+                        header.textContent = header.textContent.replace(/ [▲▼]$/, '') + (newDirection === 'asc' ? ' ▲' : ' ▼');
+
+                        const isNumericColumn = (index === 0 || index >= 2); // Cluster ID and metric columns
+
+                        rows.sort((rowA, rowB) => {
+                            const cellA_text = rowA.cells[index].textContent.trim();
+                            const cellB_text = rowB.cells[index].textContent.trim();
+
+                            if (isNumericColumn) {
+                                const numA = parseFloat(cellA_text);
+                                const numB = parseFloat(cellB_text);
+
+                                let comparison = 0;
+                                if (numA < numB) comparison = -1;
+                                if (numA > numB) comparison = 1;
+
+                                // If it's a distance column, ascending sort (smallest first) is "better"
+                                // If it's a similarity column, ascending sort (smallest first) is "worse"
+                                // The 'asc'/'desc' in newDirection refers to value order.
+                                // So, if newDirection is 'asc', we want smaller values first.
+                                // If newDirection is 'desc', we want larger values first.
+                                // This logic is fine as is.
+                                return newDirection === 'asc' ? comparison : -comparison;
+
+                            } else { // Text column (Context)
+                                return newDirection === 'asc' 
+                                    ? cellA_text.localeCompare(cellB_text, undefined, { sensitivity: 'base' }) 
+                                    : cellB_text.localeCompare(cellA_text, undefined, { sensitivity: 'base' });
+                            }
+                        });
+
+                        tbody.innerHTML = ''; 
+                        rows.forEach(row => tbody.appendChild(row));
+                    });
+                });
+            }
+            // --- END: Function to make table sortable ---
+
+            // --- NEW: Function to apply row visibility filter ---
+            function applyRowVisibilityFilter(tableBody, filterValue) {
+                if (!tableBody) return;
+                const rows = Array.from(tableBody.querySelectorAll('tr'));
+                let limit = rows.length;
+                if (filterValue === '5') {
+                    limit = 5;
+                } else if (filterValue === '10') {
+                    limit = 10;
+                }
+
+                rows.forEach((row, index) => {
+                    if (index < limit) {
+                        row.style.display = ''; // Show row
+                    } else {
+                        row.style.display = 'none'; // Hide row
+                    }
+                });
+            }
+            // --- END: Function to apply row visibility filter ---
+        </script>
     </body>
 </html>
