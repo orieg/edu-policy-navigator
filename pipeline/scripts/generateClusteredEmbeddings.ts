@@ -7,6 +7,8 @@ import { pipeline, env, AutoTokenizer, AutoModel, Tensor } from "@huggingface/tr
 import { kmeans } from "ml-kmeans"; // Changed: Use named import
 import { promises as fs } from 'fs';
 import path from 'path';
+import fetch from 'node-fetch'; // Added for API calls
+import cliProgress from 'cli-progress'; // Added for progress bar
 
 // Allow local models
 env.allowLocalModels = true;
@@ -22,6 +24,34 @@ const EMBEDDING_MODEL_ID = 'Snowflake/snowflake-arctic-embed-xs';
 const EMBEDDING_DIMENSIONS = 384; // For Snowflake/snowflake-arctic-embed-xs
 const MAX_CHUNK_LENGTH = 512; // Max tokens for the embedding model
 let NUM_CLUSTERS_K = 64; // Default K, will be adjusted if less documents than K
+const API_BATCH_SIZE = 16; // Number of documents to process in parallel for API calls
+
+// --- NEW: Embedding Mode Configuration ---
+type EmbeddingMode = 'local' | 'api';
+let EMBEDDING_MODE: EmbeddingMode = 'local'; // Default to local
+const API_ENDPOINT = "http://localhost:8000/v1/embeddings";
+
+const modeArg = process.argv.find(arg => arg.startsWith('--mode='));
+if (modeArg) {
+    const modeValue = modeArg.split('=')[1];
+    if (modeValue === 'api') {
+        EMBEDDING_MODE = 'api';
+    } else if (modeValue === 'local') {
+        EMBEDDING_MODE = 'local';
+    } else {
+        console.warn(`Invalid --mode value: ${modeValue}. Defaulting to 'local'. Supported: 'local', 'api'.`);
+    }
+}
+console.log(`INFO: Running in embedding mode: ${EMBEDDING_MODE}`);
+// --- END NEW ---
+
+// --- NEW: Clean Cache Configuration ---
+let CLEAN_CACHE = false;
+if (process.argv.includes('--clean-cache')) {
+    CLEAN_CACHE = true;
+    console.log('INFO: --clean-cache flag detected. Embedding cache will be cleared.');
+}
+// --- END NEW ---
 
 interface DocumentChunk {
     id: string; // Unique ID for the document chunk (typically CDSCode for schools/districts)
@@ -311,49 +341,46 @@ function normalizeL2(embeddings: Float32Array | number[]): Float32Array {
     return normalized;
 }
 
-// Modified getEmbedding to use the pipeline
-async function getEmbedding(text: string, extractor: any): Promise<number[]> {
-    // 1. Input Text Validation
-    if (!text || text.trim().length === 0) {
-        console.warn(`\nWarning: Attempted to generate embedding for empty or whitespace-only text. Skipping.`);
-        return []; // Return empty array to signify failure
-    }
-
-    try {
-        // Use the pipeline directly for embedding, pooling, and normalization
-        const output = await extractor(text, { pooling: 'mean', normalize: true });
-
-        if (!(output instanceof Tensor)) {
-            console.error(`\nError: Pipeline output is not a Tensor for text (start): "${text.substring(0, 100)}...". Type: ${typeof output}, Value:`, output);
-            return [];
-        }
-
-        if (output.dims.length === 0 || output.dims[0] === 0 || output.dims[1] !== EMBEDDING_DIMENSIONS) {
-            console.error(`\nError: Pipeline output tensor has unexpected dimensions ${output.dims} for text (start): "${text.substring(0, 100)}...". Expected [1, ${EMBEDDING_DIMENSIONS}]. Skipping.`);
-            return [];
-        }
-
-        const embeddingData = await output.data as Float32Array;
-
-        // Validate final pipeline output
-        for (let i = 0; i < embeddingData.length; ++i) {
-            if (isNaN(embeddingData[i]) || !isFinite(embeddingData[i])) {
-                console.error(`\nError: NaN or Infinity detected in final pipeline output data at index ${i} for text (start): "${text.substring(0, 100)}...". Skipping.`);
-                return [];
+// Updated function to handle both local and API embedding generation
+async function getEmbedding(text: string, extractor: any, mode: EmbeddingMode = EMBEDDING_MODE): Promise<number[]> {
+    if (mode === 'api') {
+        // console.log(`Fetching embedding via API for text starting with: "${text.substring(0, 50)}..."`); // Removed for cleaner progress bar
+        try {
+            const response = await fetch(API_ENDPOINT, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ input: text }),
+            });
+            if (!response.ok) {
+                const errorBody = await response.text();
+                console.error(`API Error ${response.status}: ${errorBody}`);
+                throw new Error(`API request failed with status ${response.status}: ${errorBody}`);
             }
+            const responseJson = await response.json() as any; // Type assertion for simplicity
+            if (responseJson.data && responseJson.data[0] && responseJson.data[0].embedding) {
+                // Assuming the API returns L2 normalized embeddings similar to the Snowflake model
+                return responseJson.data[0].embedding;
+            } else {
+                console.error("API Error: Unexpected response format", responseJson);
+                throw new Error("API returned an unexpected format.");
+            }
+        } catch (error) {
+            console.error(`Error fetching embedding from API: ${error}`);
+            // Fallback or rethrow: For now, rethrow to stop processing if API is crucial and fails.
+            // Could implement a fallback to local if desired, or retry logic.
+            throw error;
         }
-
-        // Check final length just in case
-        if (embeddingData.length !== EMBEDDING_DIMENSIONS) {
-            console.error(`\nError: Final pipeline embedding has unexpected length ${embeddingData.length} (expected ${EMBEDDING_DIMENSIONS}) for text: "${text.substring(0, 100)}...". Skipping.`);
-            return [];
+    } else {
+        // Local mode using Hugging Face Transformers.js
+        if (!extractor) {
+            console.error("Extractor (Transformers.js pipeline) not provided for local embedding mode.");
+            throw new Error("Extractor not provided for local mode.");
         }
-
-        return Array.from(embeddingData); // Return the first (and only) embedding in the batch
-
-    } catch (error: any) {
-        console.error(`\nError during pipeline execution for text (start): "${text.substring(0, 100)}...": ${error.message}`);
-        return [];
+        // console.log(`Generating embedding locally for text starting with: "${text.substring(0,50)}..."`);
+        const embeddingOutput = await extractor(text, { pooling: 'mean', normalize: true });
+        return Array.from(embeddingOutput.data as Float32Array);
     }
 }
 
@@ -487,21 +514,21 @@ async function saveJSON(filePath: string, data: any) {
 
 async function main() {
     console.log("Starting embedding generation and clustering process...");
-    await fs.mkdir(OUTPUT_DIR, { recursive: true });
-    await fs.mkdir(RAW_EMBEDDINGS_CACHE_DIR, { recursive: true });
 
-    // Initialize the feature extraction pipeline
-    console.log(`Initializing feature extraction pipeline with model: ${EMBEDDING_MODEL_ID}`);
-    const extractor = await pipeline('feature-extraction', EMBEDDING_MODEL_ID, {
-        progress_callback: (progress: any) => {
-            if (progress.status === 'progress') {
-                // console.log(`  Model loading progress: ${progress.file} ${Math.round(progress.loaded / progress.total * 100)}%`);
-            } else if (progress.status === 'ready') {
-                console.log('  Feature extraction pipeline ready.');
-            }
+    if (CLEAN_CACHE) {
+        console.log(`INFO: Clearing embedding cache directory: ${RAW_EMBEDDINGS_CACHE_DIR}`);
+        try {
+            await fs.rm(RAW_EMBEDDINGS_CACHE_DIR, { recursive: true, force: true });
+            console.log('INFO: Embedding cache directory cleared.');
+        } catch (error) {
+            console.error(`ERROR: Could not clear embedding cache directory: ${error}`);
+            // Decide if this should be a fatal error or just a warning
+            // For now, let's continue, as cache clearing is an auxiliary function.
         }
-    });
-    console.log("Feature extraction pipeline initialized.");
+    }
+
+    await fs.mkdir(OUTPUT_DIR, { recursive: true });
+    await fs.mkdir(RAW_EMBEDDINGS_CACHE_DIR, { recursive: true }); // Ensure it exists after potential cleaning
 
     const documents = await loadAndPrepareData();
     if (documents.length === 0) {
@@ -513,51 +540,152 @@ async function main() {
     const allEmbeddings: Float32Array[] = [];
     const allDocumentChunks: DocumentChunk[] = [];
 
-    for (let i = 0; i < documents.length; i++) {
-        const doc = documents[i];
-        const cacheFileName = `${doc.id.replace(/\//g, '_')}.emb.bin`; // Sanitize ID for filename
-        const cacheFilePath = path.join(RAW_EMBEDDINGS_CACHE_DIR, cacheFileName);
-
-        let embedding = await loadEmbeddingFromCache(cacheFilePath, EMBEDDING_DIMENSIONS);
-
-        if (!embedding) {
-            const generatedEmbedding = await getEmbedding(doc.text, extractor);
-            if (generatedEmbedding && generatedEmbedding.length > 0) {
-                embedding = generatedEmbedding;
-                await saveEmbeddingToCache(cacheFilePath, embedding);
-            } else {
-                console.warn(`Failed to generate embedding for document ${doc.id}. Skipping.`);
-                continue; // Skip this document if embedding fails
-            }
-        }
-
-        if (embedding) {
-            if (embedding.length !== EMBEDDING_DIMENSIONS) {
-                console.warn(`Embedding for ${doc.id} has incorrect dimensions (${embedding.length}). Expected ${EMBEDDING_DIMENSIONS}. Skipping.`);
-                continue;
-            }
-            // Check for NaN/Infinity in the final embedding before adding
-            const float32Embedding = embedding instanceof Float32Array ? embedding : new Float32Array(embedding);
-            if (Array.from(float32Embedding).some(val => isNaN(val) || !isFinite(val))) {
-                console.error(`Embedding for document ID ${doc.id} contains NaN or Infinity values. Text: ${doc.text.substring(0, 100)}... Skipping.`);
-                continue;
-            }
-
-            allEmbeddings.push(float32Embedding);
-            allDocumentChunks.push({
-                id: doc.id,
-                text: doc.text,
-                metadata: {
-                    type: doc.type,
-                    cdsCode: doc.cdsCode,
-                    name: doc.originalData.District || doc.originalData.School || 'N/A',
-                    city: doc.originalData['Street City'] || 'N/A',
-                    ...doc.originalData // Spread original data for any other useful fields
+    // Local mode extractor (initialized once if needed)
+    let localExtractor: any = null;
+    if (EMBEDDING_MODE === 'local') {
+        console.log(`Initializing feature extraction pipeline for local mode with model: ${EMBEDDING_MODEL_ID}`);
+        localExtractor = await pipeline('feature-extraction', EMBEDDING_MODEL_ID, {
+            progress_callback: (progress: any) => {
+                if (progress.status === 'ready') {
+                    console.log('  Local feature extraction pipeline ready.');
                 }
+            }
+        });
+        console.log("Local feature extraction pipeline initialized.");
+    }
+
+    if (EMBEDDING_MODE === 'api') {
+        console.log(`Processing documents in API mode with batch size ${API_BATCH_SIZE}`);
+
+        const progressBar = new cliProgress.SingleBar({
+            format: 'API Embeddings | {bar} | {percentage}% || {value}/{total} Chunks',
+            barCompleteChar: '\u2588',
+            barIncompleteChar: '\u2591',
+            hideCursor: true
+        });
+        progressBar.start(documents.length, 0);
+        let processedCount = 0;
+
+        for (let i = 0; i < documents.length; i += API_BATCH_SIZE) {
+            const batchDocuments = documents.slice(i, i + API_BATCH_SIZE);
+            // console.log(`Processing batch ${Math.floor(i / API_BATCH_SIZE) + 1}: documents ${i + 1} to ${Math.min(i + API_BATCH_SIZE, documents.length)} of ${documents.length}`); // Replaced by progress bar
+
+            const batchPromises = batchDocuments.map(async (doc) => {
+                const cacheFileName = `${doc.id.replace(/\//g, '_')}.emb.bin`;
+                const cacheFilePath = path.join(RAW_EMBEDDINGS_CACHE_DIR, cacheFileName);
+                let embedding = await loadEmbeddingFromCache(cacheFilePath, EMBEDDING_DIMENSIONS);
+
+                if (!embedding) {
+                    try {
+                        // Pass null for extractor as it's not used in API mode by getEmbedding
+                        const generatedEmbedding = await getEmbedding(doc.text, null, 'api');
+                        if (generatedEmbedding && generatedEmbedding.length > 0) {
+                            embedding = generatedEmbedding;
+                            await saveEmbeddingToCache(cacheFilePath, embedding);
+                        } else {
+                            console.warn(`API returned empty or invalid embedding for document ${doc.id}. Skipping.`);
+                            return { doc, embedding: null, error: 'API returned invalid embedding' };
+                        }
+                    } catch (error) {
+                        console.error(`Error generating embedding via API for document ${doc.id}: ${error}`);
+                        return { doc, embedding: null, error: (error as Error).message };
+                    }
+                }
+                return { doc, embedding };
             });
+
+            const batchResults = await Promise.allSettled(batchPromises);
+
+            processedCount += batchDocuments.length;
+            progressBar.update(Math.min(processedCount, documents.length)); // Ensure not to exceed total
+
+            for (const result of batchResults) {
+                if (result.status === 'fulfilled' && result.value.embedding) {
+                    const { doc, embedding } = result.value;
+                    if (embedding.length !== EMBEDDING_DIMENSIONS) {
+                        console.warn(`Embedding for ${doc.id} (API mode) has incorrect dimensions (${embedding.length}). Expected ${EMBEDDING_DIMENSIONS}. Skipping.`);
+                        continue;
+                    }
+                    const float32Embedding = embedding instanceof Float32Array ? embedding : new Float32Array(embedding);
+                    if (Array.from(float32Embedding).some(val => isNaN(val) || !isFinite(val))) {
+                        console.error(`Embedding for document ID ${doc.id} (API mode) contains NaN or Infinity. Skipping.`);
+                        continue;
+                    }
+                    allEmbeddings.push(float32Embedding);
+                    allDocumentChunks.push({
+                        id: doc.id,
+                        text: doc.text,
+                        metadata: {
+                            type: doc.type,
+                            cdsCode: doc.cdsCode,
+                            name: doc.originalData.District || doc.originalData.School || 'N/A',
+                            city: doc.originalData['Street City'] || 'N/A',
+                            ...doc.originalData
+                        }
+                    });
+                } else if (result.status === 'rejected') {
+                    console.error(`Promise rejected for a document in batch: ${result.reason}`);
+                } else if (result.status === 'fulfilled' && !result.value.embedding && result.value.error) {
+                    // Handled cases where getEmbedding or caching might fail gracefully within the promise
+                    console.warn(`Skipping document ${result.value.doc.id} due to processing error: ${result.value.error}`);
+                }
+            }
+            // console.log(`Batch ${Math.floor(i / API_BATCH_SIZE) + 1} processed.`); // Replaced by progress bar
         }
-        if ((i + 1) % 100 === 0) {
-            console.log(`Processed ${i + 1}/${documents.length} documents...`);
+        progressBar.stop();
+        console.log('API embedding processing complete.');
+    } else { // local mode
+        for (let i = 0; i < documents.length; i++) {
+            const doc = documents[i];
+            const cacheFileName = `${doc.id.replace(/\//g, '_')}.emb.bin`; // Sanitize ID for filename
+            const cacheFilePath = path.join(RAW_EMBEDDINGS_CACHE_DIR, cacheFileName);
+
+            let embedding = await loadEmbeddingFromCache(cacheFilePath, EMBEDDING_DIMENSIONS);
+
+            if (!embedding) {
+                try {
+                    const generatedEmbedding = await getEmbedding(doc.text, localExtractor, 'local'); // Pass localExtractor
+                    if (generatedEmbedding && generatedEmbedding.length > 0) {
+                        embedding = generatedEmbedding;
+                        await saveEmbeddingToCache(cacheFilePath, embedding);
+                    } else {
+                        console.warn(`Failed to generate embedding locally for document ${doc.id}. Skipping.`);
+                        continue; // Skip this document if embedding fails
+                    }
+                } catch (error) {
+                    console.error(`Error generating embedding locally for document ${doc.id}: ${error}`);
+                    continue; // Skip this document if embedding fails
+                }
+            }
+
+            if (embedding) {
+                if (embedding.length !== EMBEDDING_DIMENSIONS) {
+                    console.warn(`Embedding for ${doc.id} has incorrect dimensions (${embedding.length}). Expected ${EMBEDDING_DIMENSIONS}. Skipping.`);
+                    continue;
+                }
+                // Check for NaN/Infinity in the final embedding before adding
+                const float32Embedding = embedding instanceof Float32Array ? embedding : new Float32Array(embedding);
+                if (Array.from(float32Embedding).some(val => isNaN(val) || !isFinite(val))) {
+                    console.error(`Embedding for document ID ${doc.id} contains NaN or Infinity values. Text: ${doc.text.substring(0, 100)}... Skipping.`);
+                    continue;
+                }
+
+                allEmbeddings.push(float32Embedding);
+                allDocumentChunks.push({
+                    id: doc.id,
+                    text: doc.text,
+                    metadata: {
+                        type: doc.type,
+                        cdsCode: doc.cdsCode,
+                        name: doc.originalData.District || doc.originalData.School || 'N/A',
+                        city: doc.originalData['Street City'] || 'N/A',
+                        ...doc.originalData // Spread original data for any other useful fields
+                    }
+                });
+            }
+            if ((i + 1) % 100 === 0) {
+                console.log(`Processed ${i + 1}/${documents.length} documents...`);
+            }
         }
     }
 
@@ -613,7 +741,8 @@ async function main() {
         embeddingModelId: EMBEDDING_MODEL_ID,
         embeddingDimensions: EMBEDDING_DIMENSIONS,
         clusterAlgorithm: "ml-kmeans+county",
-        kValue: NUM_CLUSTERS_K, // only the k-means part
+        kmeansKValue: NUM_CLUSTERS_K, // Renamed from kValue, represents only the k-means part
+        totalClusters: 0, // Will be updated after all clusters are processed
         centroidsFile: "centroids.json",
         clusters: [] as any[]
     };
@@ -670,6 +799,7 @@ async function main() {
     }
 
     const TOTAL_CLUSTERS = nextClusterId;
+    manifestData.totalClusters = TOTAL_CLUSTERS; // Update totalClusters in manifest
     console.log(`Total clusters (k-means + counties): ${TOTAL_CLUSTERS}`);
 
     // Now process k-means clusters for manifest and files

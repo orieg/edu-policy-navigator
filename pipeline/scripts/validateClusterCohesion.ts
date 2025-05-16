@@ -19,6 +19,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { pipeline, env, Tensor } from '@huggingface/transformers';
+import fetch from 'node-fetch';
 
 const OUTPUT_DIR = path.resolve(process.cwd(), 'public', 'embeddings', 'school_districts');
 const MANIFEST_PATH = path.join(OUTPUT_DIR, 'manifest.json');
@@ -42,9 +43,34 @@ async function readJSON<T>(filePath: string): Promise<T> {
 }
 
 function usage() {
-    console.log('Usage: validateClusterCohesion <keyword>');
+    console.log('Usage: validateClusterCohesion <keyword> [--mode=(local|api)]');
     process.exit(1);
 }
+
+// --- NEW: Embedding Mode Configuration ---
+type EmbeddingMode = 'local' | 'api';
+let EMBEDDING_MODE: EmbeddingMode = 'local'; // Default to local
+const API_ENDPOINT = "http://localhost:8000/v1/embeddings"; // Define your API endpoint
+
+const args = process.argv.slice(2); // All args after script name
+const keywordArgFromCLI = args.find(arg => !arg.startsWith('--')); // Renamed for clarity
+const modeArg = args.find(arg => arg.startsWith('--mode='));
+
+if (modeArg) {
+    const modeValue = modeArg.split('=')[1];
+    if (modeValue === 'api') {
+        EMBEDDING_MODE = 'api';
+    } else if (modeValue === 'local') {
+        EMBEDDING_MODE = 'local';
+    } else {
+        console.warn(`Invalid --mode value: ${modeValue}. Defaulting to 'local'. Supported: 'local', 'api'.`);
+    }
+}
+console.log(`INFO: Running in embedding mode for keyword: ${EMBEDDING_MODE}`);
+// --- END NEW ---
+
+// Define EMB_MODEL_ID at a higher scope if getEmbeddingForKeyword needs it globally
+const EMB_MODEL_ID = 'Snowflake/snowflake-arctic-embed-xs';
 
 function cosineSimilarity(a: number[], b: number[]): number {
     let dot = 0, normA = 0, normB = 0;
@@ -66,10 +92,59 @@ function l2Distance(a: number[], b: number[]): number {
     return Math.sqrt(sum);
 }
 
+// Pass EMB_MODEL_ID explicitly to make dependency clear and avoid potential scope issues.
+async function getEmbeddingForKeyword(text: string, currentMode: EmbeddingMode, modelId: string, extractorInstance?: any): Promise<number[] | null> {
+    if (currentMode === 'api') {
+        console.log(`Fetching keyword embedding via API for: "${text}" using model ${modelId}`);
+        try {
+            const response = await fetch(API_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ input: text, model: modelId }),
+            });
+            if (!response.ok) {
+                const errorBody = await response.text();
+                console.error(`API Error ${response.status} for keyword "${text}": ${errorBody}`);
+                throw new Error(`API request failed for keyword with status ${response.status}`);
+            }
+            const responseJson = await response.json() as any;
+            if (responseJson.data && responseJson.data[0] && responseJson.data[0].embedding) {
+                return responseJson.data[0].embedding;
+            } else {
+                console.error("API Error: Unexpected response format for keyword", responseJson);
+                throw new Error("API returned an unexpected format for keyword.");
+            }
+        } catch (error) {
+            console.error(`Error fetching keyword embedding from API: ${error}`);
+            return null;
+        }
+    } else { // local mode
+        if (!extractorInstance) {
+            console.error("Extractor (Transformers.js pipeline) not provided for local keyword embedding mode.");
+            return null;
+        }
+        try {
+            const output = await extractorInstance(text, { pooling: 'mean', normalize: true });
+            if (output instanceof Tensor) {
+                return Array.from((await output.data) as Float32Array);
+            }
+            return null;
+        } catch (err) {
+            console.warn('Failed to compute keyword embedding via local model:', (err as Error).message);
+            return null;
+        }
+    }
+}
+
 (async () => {
-    const keywordArg = process.argv[2];
-    if (!keywordArg) usage();
-    const keyword = keywordArg.toLowerCase();
+    // const keywordArg = process.argv[2]; // Old parsing
+    if (!keywordArgFromCLI) { // Check the renamed variable
+        console.error('Error: Keyword argument is missing.');
+        usage(); // Exits, but add return for TS satisfaction
+        return;
+    }
+    // Now TypeScript should infer keywordArgFromCLI is a string here.
+    const keyword = keywordArgFromCLI.toLowerCase();
 
     const manifest = await readJSON<Manifest>(MANIFEST_PATH);
 
@@ -114,17 +189,19 @@ function l2Distance(a: number[], b: number[]): number {
     }
 
     // Initialize embedding extractor for keyword embedding
-    const EMB_MODEL_ID = 'Snowflake/snowflake-arctic-embed-xs';
     env.allowLocalModels = true;
     let extractor: any = null;
-    try {
-        console.log(`Loading embedding model ${EMB_MODEL_ID} for keyword similarity...`);
-        extractor = await pipeline('feature-extraction', EMB_MODEL_ID, {
-            progress_callback: () => { }
-        });
-        console.log('Embedding model loaded.');
-    } catch (err) {
-        console.warn('Could not load embedding model; KeywordSim column will be N/A', (err as Error).message);
+
+    if (EMBEDDING_MODE === 'local') {
+        try {
+            console.log(`Loading embedding model ${EMB_MODEL_ID} for local keyword similarity...`);
+            extractor = await pipeline('feature-extraction', EMB_MODEL_ID, {
+                progress_callback: () => { }
+            });
+            console.log('Local embedding model loaded.');
+        } catch (err) {
+            console.warn('Could not load local embedding model; KeywordSim column will be N/A for local mode.', (err as Error).message);
+        }
     }
 
     // Build keyword embedding by averaging vectors of all matching docs (Doc-based embedding)
@@ -158,21 +235,17 @@ function l2Distance(a: number[], b: number[]): number {
 
     // Build embedding directly from keyword using model (Keyword vector)
     let keywordVectorFromModel: number[] | null = null;
-    if (extractor) {
-        try {
-            const output = await extractor(keywordArg, { pooling: 'mean', normalize: true });
-            if (output instanceof Tensor) {
-                keywordVectorFromModel = Array.from((await output.data) as Float32Array);
-            }
-        } catch (err) {
-            console.warn('Failed to compute keyword embedding via model:', (err as Error).message);
-        }
+    // Pass keywordArgFromCLI which is now confirmed to be a string
+    keywordVectorFromModel = await getEmbeddingForKeyword(keywordArgFromCLI, EMBEDDING_MODE, EMB_MODEL_ID, extractor);
+
+    if (!keywordVectorFromModel) {
+        console.warn('Could not obtain keyword vector from model. KeySim/KeyL2 columns might be N/A.');
     }
 
     // Sort clusters by hit count desc
     const sorted = Object.entries(clusterHits).sort((a, b) => b[1] - a[1]);
 
-    console.log(`Keyword "${keywordArg}" distribution across clusters:`);
+    console.log(`Keyword "${keywordArgFromCLI}" distribution across clusters:`);
 
     const totalHits = Object.values(clusterHits).reduce((sum, v) => sum + v, 0);
     if (totalHits === 0) {

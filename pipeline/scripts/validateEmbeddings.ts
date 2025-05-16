@@ -4,6 +4,7 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import { pipeline, env } from '@huggingface/transformers';
+import fetch from 'node-fetch'; // Ensure node-fetch is imported
 
 // --- Configuration (Should match generateClusteredEmbeddings.ts) ---
 const OUTPUT_DIR = path.resolve(process.cwd(), 'public', 'embeddings', 'school_districts');
@@ -12,6 +13,25 @@ const EXPECTED_EMBEDDING_MODEL_ID = 'Snowflake/snowflake-arctic-embed-xs';
 const EXPECTED_EMBEDDING_DIMENSIONS = 384;
 const NORMALIZATION_TOLERANCE = 1e-5; // Tolerance for checking L2 norm
 const SIMILARITY_SAMPLES_OUTPUT_PATH = path.join(OUTPUT_DIR, '..', 'similarity_validation_samples.json'); // Save one level up from school_districts
+
+// --- NEW: Embedding Mode Configuration ---
+type EmbeddingMode = 'local' | 'api';
+let EMBEDDING_MODE: EmbeddingMode = 'local'; // Default to local
+const API_ENDPOINT = "http://localhost:8000/v1/embeddings"; // Define your API endpoint
+
+const modeArg = process.argv.find(arg => arg.startsWith('--mode='));
+if (modeArg) {
+    const modeValue = modeArg.split('=')[1];
+    if (modeValue === 'api') {
+        EMBEDDING_MODE = 'api';
+    } else if (modeValue === 'local') {
+        EMBEDDING_MODE = 'local';
+    } else {
+        console.warn(`Invalid --mode value: ${modeValue}. Defaulting to 'local'. Supported: 'local', 'api'.`);
+    }
+}
+// Log mode later, once main function starts or within validateSimilarityAndGenerateSamples
+// --- END NEW ---
 
 // --- Interfaces (Should match generateClusteredEmbeddings.ts output) ---
 interface DocumentChunkMetadata {
@@ -39,7 +59,8 @@ interface Manifest {
     embeddingModelId: string;
     embeddingDimensions: number;
     clusterAlgorithm: string;
-    k: number;
+    kmeansKValue: number;
+    totalClusters: number;
     centroidsFile: string;
     clusters: ClusterInfo[];
 }
@@ -47,6 +68,16 @@ interface Manifest {
 interface CentroidEntry {
     clusterId: number;
     centroid: number[];
+}
+
+interface SimilaritySample {
+    id: string;
+    text1: string;
+    text2: string;
+    embedding1?: number[]; // Optional, for debugging or direct use
+    embedding2?: number[]; // Optional
+    similarity: number | null; // Renamed from transformersJsSimilarity
+    modeUsed: EmbeddingMode;
 }
 
 // --- Helper Functions ---
@@ -92,6 +123,48 @@ function cosineSimilarity(vecA: number[], vecB: number[]): number {
     return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
+// --- NEW: Helper function for getting embeddings for text samples ---
+async function getEmbeddingForTextSample(text: string, currentMode: EmbeddingMode, extractorInstance?: any): Promise<number[] | null> {
+    if (currentMode === 'api') {
+        // console.log(`Fetching sample embedding via API for: "${text.substring(0,30)}..."`); // Keep console clean
+        try {
+            const response = await fetch(API_ENDPOINT, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                // Assuming API uses the EXPECTED_EMBEDDING_MODEL_ID or it's configured server-side
+                body: JSON.stringify({ input: text, model: EXPECTED_EMBEDDING_MODEL_ID }),
+            });
+            if (!response.ok) {
+                const errorBody = await response.text();
+                console.error(`API Error ${response.status} for text sample: ${errorBody}`);
+                return null;
+            }
+            const responseJson = await response.json() as any;
+            if (responseJson.data && responseJson.data[0] && responseJson.data[0].embedding) {
+                return responseJson.data[0].embedding;
+            }
+            console.error("API Error: Unexpected response format for text sample.");
+            return null;
+        } catch (error) {
+            console.error(`Error fetching sample embedding from API: ${error}`);
+            return null;
+        }
+    } else { // local mode
+        if (!extractorInstance) {
+            console.error("Extractor (TF.js pipeline) not provided for local sample embedding mode.");
+            return null;
+        }
+        try {
+            const output = await extractorInstance(text, { pooling: 'mean', normalize: true });
+            return Array.from(output.data as Float32Array);
+        } catch (err) {
+            console.warn('Failed to compute sample embedding via local model:', (err as Error).message);
+            return null;
+        }
+    }
+}
+// --- END NEW ---
+
 // --- Main Validation Logic ---
 async function validateEmbeddings(): Promise<boolean> {
     console.log(`Starting validation of embeddings in: ${OUTPUT_DIR}`);
@@ -122,18 +195,24 @@ async function validateEmbeddings(): Promise<boolean> {
     } else {
         console.log(`  ✅ Dimensions match expected (${EXPECTED_EMBEDDING_DIMENSIONS}).`);
     }
-    if (typeof manifest.k !== 'number' || manifest.k <= 0) {
-        console.error(`❌ Manifest Error: Invalid K value: ${manifest.k}`);
+    if (typeof manifest.kmeansKValue !== 'number' || manifest.kmeansKValue <= 0) {
+        console.error(`❌ Manifest Error: Invalid kmeansKValue: ${manifest.kmeansKValue}`);
         overallSuccess = false;
     } else {
-        console.log(`  ✅ K value is valid (${manifest.k}).`);
+        console.log(`  ✅ kmeansKValue is valid (${manifest.kmeansKValue}).`);
+    }
+    if (typeof manifest.totalClusters !== 'number' || manifest.totalClusters <= 0 || manifest.totalClusters < manifest.kmeansKValue) {
+        console.error(`❌ Manifest Error: Invalid totalClusters value: ${manifest.totalClusters} (kmeansKValue: ${manifest.kmeansKValue})`);
+        overallSuccess = false;
+    } else {
+        console.log(`  ✅ totalClusters value is valid (${manifest.totalClusters}).`);
     }
     if (!manifest.centroidsFile || typeof manifest.centroidsFile !== 'string') {
         console.error(`❌ Manifest Error: Invalid or missing centroidsFile.`);
         overallSuccess = false;
     }
-    if (!Array.isArray(manifest.clusters) || manifest.clusters.length !== manifest.k) {
-        console.error(`❌ Manifest Error: Clusters array is invalid or length (${manifest.clusters?.length}) does not match K (${manifest.k}).`);
+    if (!Array.isArray(manifest.clusters) || manifest.clusters.length !== manifest.totalClusters) {
+        console.error(`❌ Manifest Error: Clusters array is invalid or length (${manifest.clusters?.length}) does not match totalClusters (${manifest.totalClusters}).`);
         overallSuccess = false;
     } else {
         console.log(`  ✅ Clusters array structure seems valid (length ${manifest.clusters.length}).`);
@@ -149,8 +228,8 @@ async function validateEmbeddings(): Promise<boolean> {
         if (!Array.isArray(centroidsData)) throw new Error('Centroids data is not an array');
         console.log('  ✅ Centroids file read and parsed successfully.');
 
-        if (centroidsData.length !== manifest.k) {
-            console.error(`❌ Centroids Error: Number of centroids (${centroidsData.length}) does not match manifest K (${manifest.k}).`);
+        if (centroidsData.length !== manifest.totalClusters) {
+            console.error(`❌ Centroids Error: Number of centroids (${centroidsData.length}) does not match manifest totalClusters (${manifest.totalClusters}).`);
             overallSuccess = false;
         } else {
             console.log(`  ✅ Correct number of centroids found (${centroidsData.length}).`);
@@ -310,20 +389,25 @@ async function validateEmbeddings(): Promise<boolean> {
 }
 
 // --- New Section: Similarity Validation and Sample Generation ---
-interface SimilaritySample {
-    id: string;
-    text1: string;
-    text2: string;
-    embedding1?: number[]; // Optional, for debugging or direct use
-    embedding2?: number[]; // Optional
-    transformersJsSimilarity: number | null;
-}
-
 async function validateSimilarityAndGenerateSamples(): Promise<boolean> {
-    console.log(`\n--- Validating Similarity & Generating Samples (${path.basename(SIMILARITY_SAMPLES_OUTPUT_PATH)}) ---`);
+    console.log(`\n--- Validating Similarity & Generating Samples (Mode: ${EMBEDDING_MODE}) ---`);
     let success = true;
+    env.allowLocalModels = true;
+    let extractor: any = null;
 
-    const sampleTexts: Omit<SimilaritySample, 'transformersJsSimilarity'>[] = [
+    if (EMBEDDING_MODE === 'local') {
+        try {
+            console.log(`  Initializing local embedding model (${EXPECTED_EMBEDDING_MODEL_ID}) for similarity checks...`);
+            extractor = await pipeline('feature-extraction', EXPECTED_EMBEDDING_MODEL_ID);
+            console.log('  Local embedding model initialized.');
+        } catch (error: any) {
+            console.error(`❌ Error initializing local Hugging Face Transformers model: ${error.message}`);
+            console.warn('  Skipping similarity validation due to model initialization failure.');
+            return false; // Cannot proceed with similarity validation if model fails
+        }
+    }
+
+    const sampleTexts: Omit<SimilaritySample, 'similarity' | 'modeUsed'>[] = [
         {
             id: 'sample1_similar',
             text1: 'The weather is sunny and warm today.',
@@ -359,54 +443,40 @@ async function validateSimilarityAndGenerateSamples(): Promise<boolean> {
     const outputSamples: SimilaritySample[] = [];
 
     try {
-        // Configure transformers.js for Node.js environment
-        env.allowLocalModels = true; // Assuming model might be cached locally by previous runs
-        env.allowRemoteModels = true;
-        env.useBrowserCache = false; // Not in browser
-        env.localModelPath = path.resolve(process.cwd(), 'models'); // If you have a dedicated local model path
-        env.cacheDir = path.resolve(process.cwd(), '.cache', 'transformers-cache'); // Cache for node
-
-        console.log(`  Initializing feature-extraction pipeline with model: ${EXPECTED_EMBEDDING_MODEL_ID}`);
-        const extractor = await pipeline('feature-extraction', EXPECTED_EMBEDDING_MODEL_ID, {
-            // quantized: false, // Ensure we get float32 for best comparison initially
-            progress_callback: (progress: any) => {
-                if (progress.status === 'progress') {
-                    // console.log(`    Model loading progress: ${progress.file} ${Math.round(progress.loaded / progress.total * 100)}%`);
-                } else if (progress.status === 'ready') {
-                    console.log('    Feature extraction pipeline ready.');
-                }
-            }
-        });
-        console.log('  ✅ Feature extraction pipeline initialized.');
-
         for (const sample of sampleTexts) {
-            console.log(`    Processing sample: ${sample.id}`);
-            let emb1: number[] | undefined;
-            let emb2: number[] | undefined;
-            let similarity: number | null = null;
+            console.log(`    Processing sample "${sample.id}"...`);
+            const text1 = sample.text1;
+            const text2 = sample.text2;
+            let sim: number | null = null;
 
             try {
-                const output1 = await extractor(sample.text1, { pooling: 'cls', normalize: true });
-                emb1 = Array.from(output1.data as Float32Array);
+                const emb1 = await getEmbeddingForTextSample(text1, EMBEDDING_MODE, extractor);
+                const emb2 = await getEmbeddingForTextSample(text2, EMBEDDING_MODE, extractor);
 
-                const output2 = await extractor(sample.text2, { pooling: 'cls', normalize: true });
-                emb2 = Array.from(output2.data as Float32Array);
-
-                if (emb1.length !== EXPECTED_EMBEDDING_DIMENSIONS || emb2.length !== EXPECTED_EMBEDDING_DIMENSIONS) {
-                    console.error(`    ❌ Sample ${sample.id} Error: Embedding dimension mismatch. Got ${emb1.length}, ${emb2.length}. Expected ${EXPECTED_EMBEDDING_DIMENSIONS}`);
-                    success = false;
-                    // Continue to next sample but mark this one as failed.
+                if (emb1 && emb2) {
+                    if (!checkL2Normalization(emb1, NORMALIZATION_TOLERANCE) || !checkArrayForNaNInf(emb1, `sample ${sample.id} emb1`)) {
+                        console.warn(`    ⚠️ Embedding 1 for sample "${sample.id}" is invalid (NaN/Inf or not L2 normalized).`);
+                        success = false;
+                    }
+                    if (!checkL2Normalization(emb2, NORMALIZATION_TOLERANCE) || !checkArrayForNaNInf(emb2, `sample ${sample.id} emb2`)) {
+                        console.warn(`    ⚠️ Embedding 2 for sample "${sample.id}" is invalid (NaN/Inf or not L2 normalized).`);
+                        success = false;
+                    }
+                    sim = cosineSimilarity(emb1, emb2);
+                    console.log(`      Similarity for "${sample.id}": ${sim.toFixed(4)} (Mode: ${EMBEDDING_MODE})`);
+                    // Optionally store embeddings if needed for inspection, but can make JSON large
+                    // sample.embedding1 = emb1;
+                    // sample.embedding2 = emb2;
                 } else {
-                    similarity = cosineSimilarity(emb1, emb2);
-                    console.log(`      Text 1: "${sample.text1.substring(0, 30)}..."`);
-                    console.log(`      Text 2: "${sample.text2.substring(0, 30)}..."`);
-                    console.log(`      Similarity (transformers.js): ${similarity?.toFixed(6)}`);
+                    console.warn(`    ⚠️ Could not generate one or both embeddings for sample "${sample.id}". Skipping similarity.`);
+                    success = false; // Mark as not fully successful if embeddings fail
                 }
-            } catch (e: any) {
-                console.error(`    ❌ Sample ${sample.id} Error generating embeddings or similarity: ${e.message}`);
+            } catch (error: any) {
+                console.error(`    ❌ Error processing sample "${sample.id}": ${error.message}`);
+                sim = null;
                 success = false;
             }
-            outputSamples.push({ ...sample, embedding1: emb1, embedding2: emb2, transformersJsSimilarity: similarity });
+            outputSamples.push({ ...sample, similarity: sim, modeUsed: EMBEDDING_MODE });
         }
 
         // Save the samples to JSON
@@ -423,18 +493,11 @@ async function validateSimilarityAndGenerateSamples(): Promise<boolean> {
 
 // --- Main Execution ---
 async function main() {
-    const validationSuccess = await validateEmbeddings();
-    if (!validationSuccess) {
-        console.error('\nCore embedding validation failed. Some tests were unsuccessful.');
-        // process.exit(1); // Decide if core failure should halt everything
-    }
+    console.log(`INFO: Running validateEmbeddings in mode: ${EMBEDDING_MODE}`);
+    const embeddingsValid = await validateEmbeddings();
+    const similarityValid = await validateSimilarityAndGenerateSamples();
 
-    const similarityTestSuccess = await validateSimilarityAndGenerateSamples();
-    if (!similarityTestSuccess) {
-        console.error('\nSimilarity validation and sample generation encountered errors.');
-    }
-
-    if (validationSuccess && similarityTestSuccess) {
+    if (embeddingsValid && similarityValid) {
         console.log('\nAll validation checks and sample generation completed successfully!');
     } else {
         console.warn('\nSome validation checks or sample generation steps failed. Please review logs.');
