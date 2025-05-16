@@ -273,46 +273,60 @@ try {
 
             <details class="accordion-section">
                 <summary>Chat Engine Configuration</summary>
-                <fieldset>
-                    <div>
-                        <input type="radio" id="chatEngineWebLLM" name="chatEngine" value="webllm" checked>
-                        <label for="chatEngineWebLLM">WebLLM (Current MLC Setup)</label>
-                        <!-- New MLC Model Select Div -->
-                        <div id="mlcModelSelectDiv" style="margin-left: 20px; margin-top: 5px; display: none;">
-                            <label for="mlcModelSelect">Select MLC Model:</label>
-                            <select id="mlcModelSelect" name="mlcModelSelect">
-                                <option value="SmolLM2-135M-Instruct-q0f16-MLC">SmolLM2-135M-Instruct-q0f16 (Default)</option>
-                                <option value="SmolLM2-360M-Instruct-q4f16_1-MLC">SmolLM2-360M-Instruct-q4f16_1</option>
-                                <option value="SmolLM2-360M-Instruct-q4f32_1-MLC">SmolLM2-360M-Instruct-q4f32_1</option>
-                                <option value="SmolLM2-1.7B-Instruct-q4f16_1-MLC">SmolLM2-1.7B-Instruct-q4f16_1</option>
-                                <option value="SmolLM2-1.7B-Instruct-q4f32_1-MLC">SmolLM2-1.7B-Instruct-q4f32_1</option>
-                                <option value="Llama-3.2-1B-Instruct-q4f32_1-MLC">Llama-3.2-1B-Instruct-q4f32_1</option>
-                                <option value="Phi-3-mini-4k-instruct-q4f32_1-MLC">Phi-3-mini-4k-instruct-q4f32_1</option>
-                                <option value="gemma-2-2b-it-q4f32_1-MLC">gemma-2-2b-it-q4f32_1</option>
-                                <option value="TinyLlama-1.1B-Chat-v1.0-q4f32_1-MLC">TinyLlama-1.1B-Chat-v1.0-q4f32_1</option>
-                                <!-- Add more models here if desired -->
-                            </select>
-                        </div>
-                    </div>
-                    <div>
-                        <input type="radio" id="chatEngineTransformersJSDefault" name="chatEngine" value="transformers">
-                        <label for="chatEngineTransformersJSDefault">Transformers.js (Default: Qwen3 / Custom)</label>
-                    </div>
-                    <div>
-                        <input type="radio" id="chatEnginePleiasRAG" name="chatEngine" value="transformers_pleias" />
-                        <label for="chatEnginePleiasRAG">Transformers.js (Pleias RAG 350M ONNX)</label>
-                    </div>
-                    <div>
-                        <input type="radio" id="chatEnginePleiasRAG1B" name="chatEngine" value="transformers_pleias_1b" />
-                        <label for="chatEnginePleiasRAG1B">Transformers.js (Pleias RAG 1B ONNX)</label>
-                    </div>
-                    <div id="transformersModelInputDiv">
-                        <label for="transformersModelInput">Transformers.js Model ID or URL:</label>
-                        <input type="text" id="transformersModelInput" placeholder="e.g. HuggingFaceTB/SmolLM2-135M-Instruct" style="width: 100%;" value="onnx-community/Qwen3-0.6B-ONNX">
+                <fieldset style="display: flex; flex-wrap: wrap; gap: 20px;">
+                    <div class="chat-engine-options" style="flex: 1; min-width: 300px;"> <!-- Left column for chat engine selection -->
                         <div>
-                            <label for="transformersOnnxFileInput">ONNX Model File Path or URL (optional):</label>
-                            <input type="text" id="transformersOnnxFileInput" placeholder="e.g. onnx/model_quantized.onnx or full URL" style="width: 100%;" value="onnx/model_q4.onnx">
+                            <input type="radio" id="chatEngineWebLLM" name="chatEngine" value="webllm" checked>
+                            <label for="chatEngineWebLLM">WebLLM (Current MLC Setup)</label>
+                            <div id="mlcModelSelectDiv" style="margin-left: 20px; margin-top: 5px;">
+                                <label for="mlcModelSelect">Select MLC Model:</label>
+                                <select id="mlcModelSelect" name="mlcModelSelect">
+                                    <option value="SmolLM2-135M-Instruct-q0f16-MLC">SmolLM2-135M-Instruct-q0f16 (Default)</option>
+                                    <option value="SmolLM2-360M-Instruct-q4f16_1-MLC">SmolLM2-360M-Instruct-q4f16_1</option>
+                                    <option value="SmolLM2-360M-Instruct-q4f32_1-MLC">SmolLM2-360M-Instruct-q4f32_1</option>
+                                    <option value="SmolLM2-1.7B-Instruct-q4f16_1-MLC">SmolLM2-1.7B-Instruct-q4f16_1</option>
+                                    <option value="SmolLM2-1.7B-Instruct-q4f32_1-MLC">SmolLM2-1.7B-Instruct-q4f32_1</option>
+                                    <option value="Llama-3.2-1B-Instruct-q4f32_1-MLC">Llama-3.2-1B-Instruct-q4f32_1</option>
+                                    <option value="Phi-3-mini-4k-instruct-q4f32_1-MLC">Phi-3-mini-4k-instruct-q4f32_1</option>
+                                    <option value="gemma-2-2b-it-q4f32_1-MLC">gemma-2-2b-it-q4f32_1</option>
+                                    <option value="TinyLlama-1.1B-Chat-v1.0-q4f32_1-MLC">TinyLlama-1.1B-Chat-v1.0-q4f32_1</option>
+                                    <!-- Add more models here if desired -->
+                                </select>
+                            </div>
                         </div>
+                        <div>
+                            <input type="radio" id="chatEngineTransformersJSDefault" name="chatEngine" value="transformers">
+                            <label for="chatEngineTransformersJSDefault">Transformers.js (Default: Qwen3 / Custom)</label>
+                        </div>
+                        <div>
+                            <input type="radio" id="chatEnginePleiasRAG" name="chatEngine" value="transformers_pleias" />
+                            <label for="chatEnginePleiasRAG">Transformers.js (Pleias RAG 350M ONNX)</label>
+                        </div>
+                        <div>
+                            <input type="radio" id="chatEnginePleiasRAG1B" name="chatEngine" value="transformers_pleias_1b" />
+                            <label for="chatEnginePleiasRAG1B">Transformers.js (Pleias RAG 1B ONNX)</label>
+                        </div>
+                        <div id="transformersModelInputDiv" style="margin-top: 10px;">
+                            <label for="transformersModelInput">Transformers.js Model ID or URL:</label>
+                            <input type="text" id="transformersModelInput" placeholder="e.g. HuggingFaceTB/SmolLM2-135M-Instruct" style="width: 100%;" value="onnx-community/Qwen3-0.6B-ONNX">
+                            <div>
+                                <label for="transformersOnnxFileInput">ONNX Model File Path or URL (optional):</label>
+                                <input type="text" id="transformersOnnxFileInput" placeholder="e.g. onnx/model_quantized.onnx or full URL" style="width: 100%;" value="onnx/model_q4.onnx">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="rag-embedding-details" style="flex: 1; min-width: 280px; padding: 10px; border: 1px solid #e0e0e0; border-radius: 4px; background-color: #f9f9f9;"> <!-- Right column for RAG embedding info -->
+                        <h4 style="margin-top: 0; margin-bottom: 8px; font-size: 1.0em;">RAG Context Query Embeddings:</h4>
+                        <p style="margin: 2px 0; font-size: 0.9em; color: #333;">
+                            <strong>Engine:</strong> WebLLM (via WebLLMService)
+                        </p>
+                        <p style="margin: 2px 0; font-size: 0.9em; color: #333;">
+                            <strong>Embedding Model:</strong> <span id="ragEmbeddingModelName" style="font-weight: bold;"></span> <!-- Initial text removed, JS will populate -->
+                        </p>
+                        <p style="font-size: 0.85em; color: #555; margin-top: 10px;">
+                            <em>Note: Query embeddings for RAG context retrieval are always generated by the WebLLM engine using the model displayed above (from site configuration). The chat engine selection only affects the final answer generation model.</em>
+                        </p>
                     </div>
                 </fieldset>
             </details>
@@ -470,11 +484,11 @@ try {
                 </div>
 
                 <!-- Restoring these elements -->
-                <div class="setting">
+                <!-- <div class="setting">
                     <label for="minContextScoreSlider" title="Minimum similarity score for a document to be included in the retrieved context for RAG. Filters out less relevant documents.">Min Context Score:</label>
                     <input type="range" id="minContextScoreSlider" min="0" max="1" step="0.01" value="0.3" title="Minimum similarity score for a document to be included in the retrieved context for RAG. Filters out less relevant documents.">
                     <span id="minContextScoreValue">0.3</span>
-                </div>
+                </div> -->
                 <div class="setting" style="margin-top: 10px;">
                     <input type="checkbox" id="searchAllDocumentsCheckbox" name="searchAllDocumentsCheckbox">
                     <label for="searchAllDocumentsCheckbox">Search all documents (slower, for testing impact of clustering)</label>

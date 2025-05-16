@@ -11,6 +11,9 @@ import { pipeline, env as CjsEnv } from '@huggingface/transformers';
 import type { SearchResult } from '../types/vectorStore';
 // import type { QueryPayload, RephraseQueryPayload } from '../types/chatTypes'; // Commented out due to missing file
 
+// Import the specific embedding model ID from siteConfig
+import { WEBLLM_EMBEDDING_MODEL_ID } from '../siteConfig'; // Corrected path
+
 interface SimilaritySampleData {
     id: string;
     text1: string;
@@ -115,10 +118,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const generateFinalAnswerBtn = document.getElementById('generateFinalAnswerBtn') as HTMLButtonElement;
     const retrieveContextOriginalBtn = document.getElementById('retrieveContextOriginalBtn') as HTMLButtonElement;
 
-    // New context score slider UI
-    const minContextScoreSlider = document.getElementById('minContextScoreSlider') as HTMLInputElement;
-    const minContextScoreValue = document.getElementById('minContextScoreValue') as HTMLSpanElement;
-
     // New Search All Documents Checkbox
     const searchAllDocumentsCheckbox = document.getElementById('searchAllDocumentsCheckbox') as HTMLInputElement;
 
@@ -178,6 +177,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     const llmRephraseSettingsDivForModel = document.getElementById('llmRephraseSettingsDivForModel') as HTMLDivElement;
     // --- END: Elements for Rephrase Strategy Selection ---
 
+    // --- Add references to the new embedding info divs ---
+    // const webllmEmbeddingInfo = document.getElementById('webllmEmbeddingInfo') as HTMLDivElement; // REMOVE
+    // const transformersDefaultEmbeddingInfo = document.getElementById('transformersDefaultEmbeddingInfo') as HTMLDivElement; // REMOVE
+    // const pleias350mEmbeddingInfo = document.getElementById('pleias350mEmbeddingInfo') as HTMLDivElement; // REMOVE
+    // const pleias1bEmbeddingInfo = document.getElementById('pleias1bEmbeddingInfo') as HTMLDivElement; // REMOVE
+    // const webllmEmbeddingModelNameSpan = document.getElementById('webllmEmbeddingModelName') as HTMLSpanElement; // REMOVE, replaced by ragEmbeddingModelNameSpan
+    const ragEmbeddingModelNameSpan = document.getElementById('ragEmbeddingModelName') as HTMLSpanElement; // ADDED for the new centralized display
+    // --- END Add references --- 
+
     // --- Element Existence Check ---
     const requiredElements: { [key: string]: HTMLElement | null } = {
         queryInput,
@@ -215,8 +223,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         answerTopKInput,
         answerMaxNewTokensInput,
         transformersOnnxFileInput,
-        minContextScoreSlider,
-        minContextScoreValue,
         retrieveContextOriginalBtn,
         mlcModelSelectDiv,
         mlcModelSelect,
@@ -237,8 +243,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         // --- NEW: Add rephrase strategy elements to required list ---
         rephraseStrategySelect,
         llmRephraseSettingsDivForPrompt,
-        llmRephraseSettingsDivForModel
+        llmRephraseSettingsDivForModel,
         // --- END: Add rephrase strategy elements to required list ---
+        // --- Add new embedding info divs to required list (optional, can be handled if not found) ---
+        // webllmEmbeddingInfo, // REMOVE
+        // transformersDefaultEmbeddingInfo, // REMOVE
+        // pleias350mEmbeddingInfo, // REMOVE
+        // pleias1bEmbeddingInfo, // REMOVE
+        // webllmEmbeddingModelNameSpan // REMOVE
+        ragEmbeddingModelNameSpan // ADDED
+        // --- END Add new embedding info divs ---
     };
     systemPromptContainer = document.getElementById('systemPromptContainerDiv') as HTMLDivElement; // Assign inside listener
     const validationSimilarityMetricSelect = document.getElementById('validationSimilarityMetricSelect') as HTMLSelectElement;
@@ -409,14 +423,6 @@ Based on the context, answer the following question:
         answerTopPValue.textContent = answerTopPSlider.value;
     }
 
-    // Listener for the new context score slider
-    if (minContextScoreSlider && minContextScoreValue) {
-        minContextScoreSlider.addEventListener('input', () => {
-            minContextScoreValue.textContent = minContextScoreSlider.value;
-        });
-        minContextScoreValue.textContent = minContextScoreSlider.value; // Set initial display
-    }
-
     // --- Helper to get parent container and header for settings sections ---+
     function getSettingsSectionElements(element: HTMLElement | null): { container: Element | null | undefined, header: HTMLHeadingElement | null | undefined } {
         const container = element?.closest('div[style*="flex: 1"]'); // Find the parent div
@@ -567,6 +573,18 @@ Based on the context, answer the following question:
         const pleias1BModelId = 'onnx-community/Pleias-RAG-1B-ONNX'; // New 1B model ID
         const pleias1BOnnxPath = 'onnx/model_quantized.onnx'; // Assuming same quantized path for 1B
 
+        // Update the RAG embedding model name display - REMOVED, set once on load
+        // if (ragEmbeddingModelNameSpan) { 
+        //     if (chatEngineWebLLMRadio?.checked && mlcModelSelect.selectedOptions.length > 0) {
+        //         ragEmbeddingModelNameSpan.textContent = mlcModelSelect.selectedOptions[0].text;
+        //     } else if (chatEngineWebLLMRadio?.checked) { // WebLLM checked but no option selected (e.g. if list was empty)
+        //          ragEmbeddingModelNameSpan.textContent = WEBLLM_EMBEDDING_MODEL_ID; // Fallback to siteConfig default if WebLLM chosen but no specific model selected
+        //     } else {
+        //         // For Transformers.js engines, WebLLMService uses the siteConfig default for embeddings.
+        //         ragEmbeddingModelNameSpan.textContent = WEBLLM_EMBEDDING_MODEL_ID;
+        //     }
+        // }
+
         if (chatEngineWebLLMRadio?.checked) {
             transformersModelInputDiv.style.display = 'none';
             transformersModelInput.disabled = true;
@@ -596,6 +614,7 @@ Based on the context, answer the following question:
             updatePromptTemplates(true); // Set Pleias prompts
             updateGenerationSettingsUI(true); // Set Pleias generation settings
             if (rephraseQueryBtn) rephraseQueryBtn.disabled = submitQueryBtn.disabled; // Re-enable rephrase button for Pleias
+            // if (pleias1bEmbeddingInfo) pleias1bEmbeddingInfo.style.display = 'block'; // REMOVE
         } else if (chatEnginePleiasRAGRadio?.checked) {
             transformersModelInputDiv.style.display = 'block';
             transformersModelInput.value = pleiasModelId;
@@ -607,6 +626,7 @@ Based on the context, answer the following question:
             updatePromptTemplates(true); // Set Pleias prompts
             updateGenerationSettingsUI(true); // Set Pleias generation settings
             if (rephraseQueryBtn) rephraseQueryBtn.disabled = submitQueryBtn.disabled; // Re-enable rephrase button for Pleias
+            // if (pleias350mEmbeddingInfo) pleias350mEmbeddingInfo.style.display = 'block'; // REMOVE
         } else if (chatEngineTransformersJSDefaultRadio?.checked) {
             transformersModelInputDiv.style.display = 'block';
             // Set back to default Qwen3, but allow editing
@@ -623,6 +643,7 @@ Based on the context, answer the following question:
             mlcModelSelectDiv.style.display = 'none'; // Hide MLC select
             mlcModelSelect.disabled = true;
             if (rephraseQueryBtn) rephraseQueryBtn.disabled = submitQueryBtn.disabled; // Enable based on overall readiness
+            // if (transformersDefaultEmbeddingInfo) transformersDefaultEmbeddingInfo.style.display = 'block'; // REMOVE
         } else {
             // Default case or error, hide the div
             transformersModelInputDiv.style.display = 'none';
@@ -631,6 +652,22 @@ Based on the context, answer the following question:
             updatePromptTemplates(false); // Restore default prompts (safety)
             updateGenerationSettingsUI(false); // Restore default generation settings (safety)
             if (rephraseQueryBtn) rephraseQueryBtn.disabled = true; // Disable rephrase button (safety)
+            // This logic is now centralized at the top of handleChatEngineChange
+            // if (webllmEmbeddingModelNameSpan && mlcModelSelect.selectedOptions.length > 0) { 
+            //     webllmEmbeddingModelNameSpan.textContent = mlcModelSelect.selectedOptions[0].text;
+            // } else if (webllmEmbeddingModelNameSpan) {
+            //     webllmEmbeddingModelNameSpan.textContent = "Default MLC Model"; // Fallback or if no option selected
+            // }
+            if (!submitQueryBtn.disabled) { // Only re-init worker if system is ready
+                console.log("RAG Test Main: MLC Model selection changed. Re-initializing worker for WebLLM.");
+                updateStatus(`Initializing new WebLLM model: ${mlcModelSelect.value}...`, false, false);
+                if (progressBar && progressBarContainer) {
+                    progressBar.style.width = `0%`;
+                    progressBar.textContent = `0%`;
+                    progressBarContainer.style.display = 'block';
+                }
+                initializeWorker();
+            }
         }
 
         if (chatEngineWebLLMRadio) chatEngineWebLLMRadio.disabled = !submitQueryBtn.disabled;
@@ -643,6 +680,10 @@ Based on the context, answer the following question:
             const shouldBeDisabled = systemIsBusy || !webLlmEngineSelected;
             console.log(`RAG Test Main (handleChatEngineChange): Setting mlcModelSelect.disabled = ${shouldBeDisabled} (systemIsBusy: ${systemIsBusy}, webLlmEngineSelected: ${webLlmEngineSelected})`);
             mlcModelSelect.disabled = shouldBeDisabled;
+            // Ensure mlcModelSelectDiv visibility is also correctly handled here
+            if (mlcModelSelectDiv) {
+                mlcModelSelectDiv.style.display = webLlmEngineSelected ? 'block' : 'none';
+            }
         }
         if (transformersModelInput) {
             transformersModelInput.disabled = !submitQueryBtn.disabled || !chatEngineTransformersJSDefaultRadio.checked;
@@ -667,6 +708,11 @@ Based on the context, answer the following question:
             if (chatEngineWebLLMRadio.checked) { // Check if WebLLM is active
                 // Update prompts first, before potentially slow worker re-initialization
                 updatePromptTemplates(false, mlcModelSelect.value);
+
+                // Update the RAG embedding model name display when MLC model changes AND WebLLM engine is active -- REMOVED
+                // if (ragEmbeddingModelNameSpan && mlcModelSelect.selectedOptions.length > 0) {
+                //     ragEmbeddingModelNameSpan.textContent = mlcModelSelect.selectedOptions[0].text;
+                // }
 
                 // --- SMOLlm2 max_new_tokens override START ---
                 const selectedMlcModelIdOnChange = mlcModelSelect.value;
@@ -756,6 +802,16 @@ Based on the context, answer the following question:
         });
     }
     // --- END NEW ---
+
+    // Setup for minContextScoreSlider, its value display, and metric select interaction
+    // if (minContextScoreSlider && minContextScoreValue && similarityMetricSelect) { // REMOVE BLOCK
+    //     minContextScoreSlider.addEventListener('input', updateMinScoreContextAndDisplay);
+    //     similarityMetricSelect.addEventListener('change', updateMinScoreContextAndDisplay);
+    //     // Initial setup call after all elements are known and event listeners attached
+    //     updateMinScoreContextAndDisplay();
+    // } else {
+    //     console.warn("RAG Test Main: MinContextScore UI elements (slider, value, or metricSelect) not found. Score threshold UI may not function correctly.");
+    // }
 
     // Store initial default generation settings from the UI (after they are set by HTML and slider listeners)
     defaultAnswerSettings = {
@@ -1062,30 +1118,23 @@ Based on the context, answer the following question:
                             updateStatus('Context retrieval complete (no documents found). Ready for final answer generation (without context).', false, true);
                             if (generateFinalAnswerBtn) generateFinalAnswerBtn.disabled = false; // Allow generation without context
                         } else {
-                            const minScore = parseFloat(minContextScoreSlider.value);
-                            const filteredResults = searchResults.filter((result: { score: number }) => result.score >= minScore);
+                            // Directly use searchResults, as filtering is removed.
+                            contextHtml = searchResults.map((result: { text: string; score: number }) => {
+                                return `<div style="margin-bottom: 5px; border-bottom: 1px dashed #ccc; padding-bottom: 5px;">
+                                            <strong style="color: #007bff;">(Score: ${result.score.toFixed(4)})</strong><br>
+                                            ${escapeHtml(result.text)}
+                                        </div>`;
+                            }).join('');
 
-                            if (filteredResults.length === 0) {
-                                contextHtml = `No documents met the minimum score threshold of ${minScore}. (Found ${searchResults.length} documents before filtering).`;
-                                updateStatus(`Context retrieved, but no documents met score threshold (${minScore}). Ready for final answer generation (without context).`, false, true);
-                                if (generateFinalAnswerBtn) generateFinalAnswerBtn.disabled = false; // Allow generation without context
-                            } else {
-                                contextHtml = filteredResults.map((result: { text: string; score: number }) => {
-                                    return `<div style="margin-bottom: 5px; border-bottom: 1px dashed #ccc; padding-bottom: 5px;">
-                                                <strong style="color: #007bff;">(Score: ${result.score.toFixed(4)})</strong><br>
-                                                ${escapeHtml(result.text)}
-                                            </div>`;
-                                }).join('');
+                            // Store the TEXT content of ALL results for the final answer step
+                            currentRetrievedContext = searchResults.map((r: { text: string }) => r.text).join('\n\n---\n\n');
+                            // Store ALL SearchResult objects
+                            currentRetrievedSearchResults = searchResults;
 
-                                // Store the TEXT content of the FILTERED results for the final answer step
-                                currentRetrievedContext = filteredResults.map((r: { text: string }) => r.text).join('\n\n---\n\n');
-                                // Store the actual FILTERED SearchResult objects
-                                currentRetrievedSearchResults = filteredResults;
-
-                                updateStatus(`Context retrieved (${filteredResults.length}/${searchResults.length} documents passed score threshold ${minScore}). Ready for final answer generation.`, false, true);
-                                if (generateFinalAnswerBtn) generateFinalAnswerBtn.disabled = false; // Enable final answer generation
-                            }
+                            updateStatus(`Context retrieved (${searchResults.length} documents). Ready for final answer generation.`, false, true);
+                            if (generateFinalAnswerBtn) generateFinalAnswerBtn.disabled = false; // Enable final answer generation
                         }
+                        // Removed old "if (filteredResults.length === 0)" block as all results are now used or it's handled by the initial searchResults check.
 
                         if (contextMetrics) {
                             contextHtml += `<br><small style="color:grey;">(Duration: ${(contextMetrics.duration / 1000).toFixed(2)}s)</small>`;
@@ -1832,5 +1881,61 @@ Based on the context, answer the following question:
 
     // Ensure CJS environment is properly set up before attempting to load models that might need it.
     CjsEnv.allowLocalModels = true; // Allow loading local models/quantized models
+
+    // Helper function to update min context score slider attributes and label
+    // function updateMinScoreContextAndDisplay() { // REMOVE FUNCTION
+    //     if (!minContextScoreValue || !minContextScoreSlider || !similarityMetricSelect) {
+    //         // This console warning can be noisy if elements are not always present (e.g. in different test UIs)
+    //         // console.warn("Min score UI elements not fully available for updateMinScoreContextAndDisplay.");
+    //         return;
+    //     }
+    //
+    //     const metric = similarityMetricSelect.value;
+    //     // let currentSliderValueStr = minContextScoreSlider.value; // Read current value
+    //     let labelPrefix = "";
+    //
+    //     if (metric === 'euclidean') {
+    //         labelPrefix = "Max Distance: ";
+    //         minContextScoreSlider.min = "0";
+    //         minContextScoreSlider.max = "2.0"; // Max Euclidean for L2-normed vectors is 2
+    //         minContextScoreSlider.step = "0.01";
+    //     } else if (metric === 'manhattan') {
+    //         labelPrefix = "Max Distance: ";
+    //         minContextScoreSlider.min = "0";
+    //         // Max for Manhattan is less standard, depends on dimensionality and normalization.
+    //         // Using a practical range for typical normalized embeddings.
+    //         minContextScoreSlider.max = "10.0";
+    //         minContextScoreSlider.step = "0.1";
+    //     } else { // Default for cosine, dotproduct, etc.
+    //         labelPrefix = "Min Score: ";
+    //         minContextScoreSlider.min = "0"; // Assuming effective scores are [0,1] for similarity
+    //         minContextScoreSlider.max = "1.0";
+    //         minContextScoreSlider.step = "0.01";
+    //     }
+    //
+    //     // Ensure the current value is within the new min/max bounds.
+    //     // The browser should clamp .value if it's set outside min/max,
+    //     // but parseFloat and re-assigning ensures our logic reflects this.
+    //     let numericValue = parseFloat(minContextScoreSlider.value);
+    //     const newMin = parseFloat(minContextScoreSlider.min);
+    //     const newMax = parseFloat(minContextScoreSlider.max);
+    //
+    //     if (numericValue < newMin) {
+    //         minContextScoreSlider.value = String(newMin);
+    //     } else if (numericValue > newMax) {
+    //         minContextScoreSlider.value = String(newMax);
+    //     }
+    //     // If it was within bounds, minContextScoreSlider.value is already correct.
+    //     // We ensure it's formatted according to step precision for display.
+    //     const stepPrecision = minContextScoreSlider.step.includes('.') ? minContextScoreSlider.step.split('.')[1].length : 0;
+    //     const displayValue = parseFloat(minContextScoreSlider.value).toFixed(stepPrecision);
+    //
+    //     minContextScoreValue.textContent = labelPrefix + displayValue;
+    // }
+
+    // Set the RAG embedding model name display ONCE on load
+    if (ragEmbeddingModelNameSpan) {
+        ragEmbeddingModelNameSpan.textContent = WEBLLM_EMBEDDING_MODEL_ID;
+    }
 
 }); 
