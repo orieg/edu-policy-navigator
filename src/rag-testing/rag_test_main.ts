@@ -270,6 +270,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     let defaultRephraseTemplate = '';
     let defaultFinalRagTemplate = '';
 
+    // --- NEW: Store current user-set prompt templates ---
+    let currentUserRephraseTemplate = '';
+    let currentUserFinalRagTemplate = '';
+    // --- END NEW ---
+
     // --- Define MLC Model Specific Prompt Configurations ---
     interface PromptConfig {
         rephrase: string;
@@ -357,6 +362,11 @@ Based on the context, answer the following question:
         top_k: "20",        // From initial Qwen3 HTML setup (mirrored)
         max_new_tokens: "32768" // From initial Qwen3 HTML setup (mirrored)
     };
+
+    // --- NEW: Store current user-set generation settings ---
+    let currentUserAnswerSettings = { ...defaultAnswerSettings };
+    let currentUserRephraseSettings = { ...defaultRephraseSettings };
+    // --- END NEW ---
 
     // Fetch similarity validation samples
     try {
@@ -476,73 +486,76 @@ Based on the context, answer the following question:
             if (answerHeader) answerHeader.textContent = 'Chat Answer Model Settings';
             if (rephraseHeader) rephraseHeader.textContent = 'Rephrase Model Settings';
 
-            // Restore Answer settings
-            answerTemperatureSlider.value = defaultAnswerSettings.temperature;
-            answerTemperatureValue.textContent = defaultAnswerSettings.temperature;
+            // Restore Answer settings FROM currentUserAnswerSettings
+            answerTemperatureSlider.value = currentUserAnswerSettings.temperature;
+            answerTemperatureValue.textContent = currentUserAnswerSettings.temperature;
             answerTemperatureSlider.disabled = submitQueryBtn.disabled;
 
-            answerTopPSlider.value = defaultAnswerSettings.top_p;
-            answerTopPValue.textContent = defaultAnswerSettings.top_p;
+            answerTopPSlider.value = currentUserAnswerSettings.top_p;
+            answerTopPValue.textContent = currentUserAnswerSettings.top_p;
             answerTopPSlider.disabled = submitQueryBtn.disabled;
 
-            answerTopKInput.value = defaultAnswerSettings.top_k;
+            answerTopKInput.value = currentUserAnswerSettings.top_k;
             answerTopKInput.disabled = submitQueryBtn.disabled;
 
-            answerMaxNewTokensInput.value = defaultAnswerSettings.max_new_tokens;
+            answerMaxNewTokensInput.value = currentUserAnswerSettings.max_new_tokens;
             answerMaxNewTokensInput.max = "32768"; // Restore original higher max
             answerMaxNewTokensInput.disabled = submitQueryBtn.disabled;
 
-            // Restore Rephrase settings
+            // Restore Rephrase settings FROM currentUserRephraseSettings
             if (rephraseSettingsContainer) (rephraseSettingsContainer as HTMLElement).style.display = 'block'; // or original display
             rephraseTemperatureSlider.disabled = submitQueryBtn.disabled;
-            rephraseTemperatureSlider.value = defaultRephraseSettings.temperature;
-            rephraseTemperatureValue.textContent = defaultRephraseSettings.temperature;
+            rephraseTemperatureSlider.value = currentUserRephraseSettings.temperature;
+            rephraseTemperatureValue.textContent = currentUserRephraseSettings.temperature;
 
             rephraseTopPSlider.disabled = submitQueryBtn.disabled;
-            rephraseTopPSlider.value = defaultRephraseSettings.top_p;
-            rephraseTopPValue.textContent = defaultRephraseSettings.top_p;
+            rephraseTopPSlider.value = currentUserRephraseSettings.top_p;
+            rephraseTopPValue.textContent = currentUserRephraseSettings.top_p;
 
             rephraseTopKInput.disabled = submitQueryBtn.disabled;
-            rephraseTopKInput.value = defaultRephraseSettings.top_k;
+            rephraseTopKInput.value = currentUserRephraseSettings.top_k;
 
             rephraseMaxNewTokensInput.disabled = submitQueryBtn.disabled;
-            rephraseMaxNewTokensInput.value = defaultRephraseSettings.max_new_tokens;
+            rephraseMaxNewTokensInput.value = currentUserRephraseSettings.max_new_tokens;
             rephraseMaxNewTokensInput.max = "32768"; // Restore original higher max
         }
     }
 
     // Helper function to update prompt templates
     function updatePromptTemplates(isPleias: boolean, mlcModelId?: string) {
-        let currentConfig: PromptConfig | undefined = undefined;
-        let showSystemPrompt = true;
+        let specificConfigApplied = false;
 
-        if (chatEngineWebLLMRadio?.checked && mlcModelId) {
-            currentConfig = mlcModelPromptConfigs[mlcModelId] || mlcModelPromptConfigs['DEFAULT_WEBLLM'];
-        } else if (isPleias) {
-            currentConfig = {
-                rephrase: `<|query_start|>{query}<|query_end|>\n<|source_analysis_start|>`,
-                finalRag: `<|query_start|>{query}<|query_end|>\n{context}\n<|source_analysis_start|>`,
-                showSystemPromptInput: false,
-            };
+        if (isPleias) {
+            // Apply Pleias specific templates
+            rephrasePromptTemplateInput.value = `<|query_start|>{query}<|query_end|>\n<|source_analysis_start|>`;
+            finalRagPromptTemplateInput.value = `<|query_start|>{query}<|query_end|>\n{context}\n<|source_analysis_start|>`;
+            if (systemPromptContainer) systemPromptContainer.style.display = 'none';
+            specificConfigApplied = true;
+        } else if (chatEngineWebLLMRadio?.checked && mlcModelId) {
+            // Check if there's a specific (non-default) config for this MLC model
+            const modelSpecificConfig = mlcModelPromptConfigs[mlcModelId];
+            // Ensure DEFAULT_WEBLLM is not treated as a specific user-overridable config here.
+            // It's a fallback for initialization, but currentUser... should take precedence during updates for generic WebLLM.
+            if (modelSpecificConfig && mlcModelPromptConfigs[mlcModelId] !== mlcModelPromptConfigs['DEFAULT_WEBLLM']) {
+                rephrasePromptTemplateInput.value = modelSpecificConfig.rephrase;
+                finalRagPromptTemplateInput.value = modelSpecificConfig.finalRag;
+                if (systemPromptContainer) systemPromptContainer.style.display = modelSpecificConfig.showSystemPromptInput ? '' : 'none';
+                specificConfigApplied = true;
+            }
         }
 
-        if (currentConfig) {
-            rephrasePromptTemplateInput.value = currentConfig.rephrase;
-            finalRagPromptTemplateInput.value = currentConfig.finalRag;
-            showSystemPrompt = currentConfig.showSystemPromptInput;
-        } else {
-            // Fallback to general defaults if no other config matched
-            rephrasePromptTemplateInput.value = defaultRephraseTemplate;
-            finalRagPromptTemplateInput.value = defaultFinalRagTemplate;
-            showSystemPrompt = true; // Show system prompt by default for non-Pleias, non-specific MLC
+        if (!specificConfigApplied) {
+            // This case covers:
+            // 1. Custom Transformers.js (not Pleias, not WebLLM)
+            // 2. WebLLM with a model that doesn't have a specific template override in mlcModelPromptConfigs
+            rephrasePromptTemplateInput.value = currentUserRephraseTemplate;
+            finalRagPromptTemplateInput.value = currentUserFinalRagTemplate;
+            if (systemPromptContainer) systemPromptContainer.style.display = ''; // Default to show system prompt input
         }
 
-        rephrasePromptTemplateInput.disabled = false; // Ensure editable
-        finalRagPromptTemplateInput.disabled = false; // Ensure editable
-
-        if (systemPromptContainer) {
-            systemPromptContainer.style.display = showSystemPrompt ? '' : 'none';
-        }
+        // Ensure inputs are enabled/disabled based on overall system readiness
+        rephrasePromptTemplateInput.disabled = submitQueryBtn.disabled;
+        finalRagPromptTemplateInput.disabled = submitQueryBtn.disabled;
     }
 
     // --- Event listeners for chat engine selection ---+
@@ -562,6 +575,15 @@ Based on the context, answer the following question:
             mlcModelSelect.disabled = submitQueryBtn.disabled; // Enable/disable based on system readiness
             updatePromptTemplates(false, mlcModelSelect.value); // Pass selected MLC model
             updateGenerationSettingsUI(false); // Restore default generation settings
+
+            // --- SMOLlm2 max_new_tokens override START ---
+            const selectedMlcModelId = mlcModelSelect.value;
+            if (selectedMlcModelId.toLowerCase().includes('smollm2')) {
+                if (answerMaxNewTokensInput) answerMaxNewTokensInput.value = "8192";
+                if (rephraseMaxNewTokensInput) rephraseMaxNewTokensInput.value = "8192";
+            }
+            // --- SMOLlm2 max_new_tokens override END ---
+
             if (rephraseQueryBtn) rephraseQueryBtn.disabled = submitQueryBtn.disabled; // Enable based on overall readiness
         } else if (chatEnginePleiasRAG1BRadio?.checked) { // Add handling for 1B model
             transformersModelInputDiv.style.display = 'block';
@@ -646,6 +668,18 @@ Based on the context, answer the following question:
                 // Update prompts first, before potentially slow worker re-initialization
                 updatePromptTemplates(false, mlcModelSelect.value);
 
+                // --- SMOLlm2 max_new_tokens override START ---
+                const selectedMlcModelIdOnChange = mlcModelSelect.value;
+                if (selectedMlcModelIdOnChange.toLowerCase().includes('smollm2')) {
+                    if (answerMaxNewTokensInput) answerMaxNewTokensInput.value = "8192";
+                    if (rephraseMaxNewTokensInput) rephraseMaxNewTokensInput.value = "8192";
+                } else {
+                    // Revert to defaults if not a smollm2 model but still WebLLM
+                    if (answerMaxNewTokensInput) answerMaxNewTokensInput.value = defaultAnswerSettings.max_new_tokens;
+                    if (rephraseMaxNewTokensInput) rephraseMaxNewTokensInput.value = defaultRephraseSettings.max_new_tokens;
+                }
+                // --- SMOLlm2 max_new_tokens override END ---
+
                 if (!submitQueryBtn.disabled) { // Only re-init worker if system is ready
                     console.log("RAG Test Main: MLC Model selection changed. Re-initializing worker for WebLLM.");
                     updateStatus(`Initializing new WebLLM model: ${mlcModelSelect.value}...`, false, false);
@@ -700,6 +734,29 @@ Based on the context, answer the following question:
         showSystemPromptInput: true,
     };
 
+    // --- NEW: Initialize currentUser...Templates after defaults are properly set from DOM ---
+    currentUserRephraseTemplate = defaultRephraseTemplate;
+    currentUserFinalRagTemplate = defaultFinalRagTemplate;
+
+    // --- NEW: Add event listeners to prompt template inputs ---
+    if (rephrasePromptTemplateInput) {
+        rephrasePromptTemplateInput.addEventListener('input', () => {
+            // Update currentUser template only if not in Pleias mode
+            if (!chatEnginePleiasRAGRadio.checked && !chatEnginePleiasRAG1BRadio.checked) {
+                currentUserRephraseTemplate = rephrasePromptTemplateInput.value;
+            }
+        });
+    }
+    if (finalRagPromptTemplateInput) {
+        finalRagPromptTemplateInput.addEventListener('input', () => {
+            // Update currentUser template only if not in Pleias mode
+            if (!chatEnginePleiasRAGRadio.checked && !chatEnginePleiasRAG1BRadio.checked) {
+                currentUserFinalRagTemplate = finalRagPromptTemplateInput.value;
+            }
+        });
+    }
+    // --- END NEW ---
+
     // Store initial default generation settings from the UI (after they are set by HTML and slider listeners)
     defaultAnswerSettings = {
         temperature: answerTemperatureSlider.value,
@@ -714,6 +771,37 @@ Based on the context, answer the following question:
         max_new_tokens: rephraseMaxNewTokensInput.value
     };
 
+    // --- NEW: Initialize currentUser...Settings after defaults are properly set from DOM ---
+    currentUserAnswerSettings = { ...defaultAnswerSettings };
+    currentUserRephraseSettings = { ...defaultRephraseSettings };
+
+    // --- NEW: Add event listeners to generation settings UI to update currentUser...Settings ---
+    const generationSettingInputs = [
+        { el: answerTemperatureSlider, settingsObj: currentUserAnswerSettings, key: 'temperature', isSlider: true, valueEl: answerTemperatureValue },
+        { el: answerTopPSlider, settingsObj: currentUserAnswerSettings, key: 'top_p', isSlider: true, valueEl: answerTopPValue },
+        { el: answerTopKInput, settingsObj: currentUserAnswerSettings, key: 'top_k', isSlider: false },
+        { el: answerMaxNewTokensInput, settingsObj: currentUserAnswerSettings, key: 'max_new_tokens', isSlider: false },
+        { el: rephraseTemperatureSlider, settingsObj: currentUserRephraseSettings, key: 'temperature', isSlider: true, valueEl: rephraseTemperatureValue },
+        { el: rephraseTopPSlider, settingsObj: currentUserRephraseSettings, key: 'top_p', isSlider: true, valueEl: rephraseTopPValue },
+        { el: rephraseTopKInput, settingsObj: currentUserRephraseSettings, key: 'top_k', isSlider: false },
+        { el: rephraseMaxNewTokensInput, settingsObj: currentUserRephraseSettings, key: 'max_new_tokens', isSlider: false }
+    ];
+
+    generationSettingInputs.forEach(inputConfig => {
+        if (inputConfig.el) {
+            inputConfig.el.addEventListener('input', () => {
+                if (inputConfig.isSlider && inputConfig.valueEl) {
+                    inputConfig.valueEl.textContent = inputConfig.el.value;
+                }
+                // Update currentUser settings only if not in Pleias mode
+                if (!chatEnginePleiasRAGRadio.checked && !chatEnginePleiasRAG1BRadio.checked) {
+                    (inputConfig.settingsObj as any)[inputConfig.key] = inputConfig.el.value;
+                }
+            });
+        }
+    });
+    // --- END NEW ---
+
     function updateStatus(message: string, isError: boolean = false, isReady?: boolean) {
         statusLabel.textContent = message;
         statusLabel.style.color = isError ? 'red' : '#555';
@@ -726,22 +814,22 @@ Based on the context, answer the following question:
             if (finalRagPromptTemplateInput) finalRagPromptTemplateInput.disabled = !isReady;
             // Also manage step buttons
             if (rephraseQueryBtn) rephraseQueryBtn.disabled = !isReady;
-            if (retrieveContextBtn) retrieveContextBtn.disabled = true;
-            if (generateFinalAnswerBtn) generateFinalAnswerBtn.disabled = true;
+            if (retrieveContextBtn) retrieveContextBtn.disabled = true; // This is managed by specific steps
+            if (generateFinalAnswerBtn) generateFinalAnswerBtn.disabled = true; // This is managed by specific steps
             if (retrieveContextOriginalBtn) retrieveContextOriginalBtn.disabled = !isReady || !queryInput.value.trim();
             if (testBm25OnlyBtn) testBm25OnlyBtn.disabled = !isReady; // Added
 
-            // New chat engine UI elements
-            if (chatEngineWebLLMRadio) chatEngineWebLLMRadio.disabled = !isReady;
-            if (chatEnginePleiasRAGRadio) chatEnginePleiasRAGRadio.disabled = !isReady;
-            if (chatEngineTransformersJSDefaultRadio) chatEngineTransformersJSDefaultRadio.disabled = !isReady;
-            if (chatEnginePleiasRAG1BRadio) chatEnginePleiasRAG1BRadio.disabled = !isReady;
-            if (mlcModelSelect) mlcModelSelect.disabled = !isReady || !chatEngineWebLLMRadio.checked;
-            if (transformersModelInput) {
-                transformersModelInput.disabled = !isReady || !chatEngineTransformersJSDefaultRadio.checked;
-            }
-            if (transformersOnnxFileInput) {
-                transformersOnnxFileInput.disabled = !isReady || !chatEngineTransformersJSDefaultRadio.checked;
+            // Remove direct disabling/enabling of chat engine UI elements here,
+            // as handleChatEngineChange will manage them more comprehensively.
+            // Example:
+            // // if (chatEngineWebLLMRadio) chatEngineWebLLMRadio.disabled = !isReady;
+            // // if (mlcModelSelect) mlcModelSelect.disabled = !isReady || !chatEngineWebLLMRadio.checked;
+
+            // Call handleChatEngineChange to refresh the entire chat engine UI section
+            // based on the new readiness state and current selections.
+            // This will also call updateGenerationSettingsUI internally.
+            if (typeof handleChatEngineChange === 'function') {
+                handleChatEngineChange();
             }
 
             if (isReady) progressBarContainer.style.display = 'none';
@@ -1596,10 +1684,15 @@ Based on the context, answer the following question:
         results.forEach(result => {
             const textSnippet = result.text ? escapeHtml(result.text.substring(0, 200) + (result.text.length > 200 ? '...' : '')) : 'N/A';
             const docTitle = result.metadata?.name || result.id; // Assuming title is in metadata.name
+
+            let titleHtml = '';
+            if (docTitle !== result.id) {
+                titleHtml = `<strong>Title:</strong> ${escapeHtml(docTitle)}<br/>`;
+            }
+
             html += `<li>
                 <strong>ID:</strong> ${escapeHtml(result.id)}<br/>
-                <strong>Title:</strong> ${escapeHtml(docTitle)}<br/>
-                <strong>Score:</strong> ${result.score.toFixed(4)}<br/>
+                ${titleHtml}                <strong>Score:</strong> ${result.score.toFixed(4)}<br/>
                 <strong>Text:</strong> ${textSnippet}
             </li>`;
         });
