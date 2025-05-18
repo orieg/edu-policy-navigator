@@ -50,7 +50,7 @@ const STOP_WORDS_EN = new Set([
     "me", "him", "her", "us", "them", "my", "your", "his", "its", "our", "their",
     "mine", "yours", "hers", "ours", "theirs", "myself", "yourself", "himself",
     "herself", "itself", "ourselves", "themselves", "and", "but", "or", "nor", "for",
-    "so", "yet", "in", "on", "at", "by", "from", "to", "with", "about", "above",
+    "so", "yet", "in", "on", "at", "by", "from", "to", "of", "with", "about", "above",
     "after", "again", "against", "all", "any", "both", "each", "few", "more",
     "most", "other", "some", "such", "no", "not", "only", "own", "same", "than",
     "too", "very", "s", "t", "just", "don", "now", "what", "which", "who", "whom",
@@ -58,6 +58,104 @@ const STOP_WORDS_EN = new Set([
     // Domain-specific or query-specific additions might be useful here
     "what is", "tell me about", "explain", "describe", "can you", "could you",
     "regarding", "concerning", "details", "information", "provide", "give me"
+]);
+
+// --- NEW: Common Verbs to Remove (for keyword focus) ---
+const COMMON_VERBS_EN = new Set([
+    "is", "are", "was", "were", "be", "been", "being", // to be
+    "have", "has", "had", "having", // to have
+    "do", "does", "did", "doing", // to do
+    "say", "says", "said", "saying",
+    "go", "goes", "went", "gone", "going",
+    "get", "gets", "got", "gotten", "getting",
+    "make", "makes", "made", "making",
+    "know", "knows", "knew", "known", "knowing",
+    "think", "thinks", "thought", "thinking",
+    "take", "takes", "took", "taken", "taking",
+    "see", "sees", "saw", "seen", "seeing",
+    "come", "comes", "came", "coming",
+    "want", "wants", "wanted", "wanting",
+    "look", "looks", "looked", "looking",
+    "use", "uses", "used", "using",
+    "find", "finds", "found", "finding",
+    "give", "gives", "gave", "given", "giving",
+    "tell", "tells", "told", "telling",
+    "work", "works", "worked", "working",
+    "call", "calls", "called", "calling",
+    "try", "tries", "tried", "trying",
+    "ask", "asks", "asked", "asking",
+    "need", "needs", "needed", "needing",
+    "feel", "feels", "felt", "feeling",
+    "become", "becomes", "became", "becoming",
+    "leave", "leaves", "left", "leaving",
+    "put", "puts", "putting",
+    "mean", "means", "meant", "meaning",
+    "keep", "keeps", "kept", "keeping",
+    "let", "lets", "letting",
+    "begin", "begins", "began", "begun", "beginning",
+    "seem", "seems", "seemed", "seeming",
+    "help", "helps", "helped", "helping",
+    "talk", "talks", "talked", "talking",
+    "turn", "turns", "turned", "turning",
+    "start", "starts", "started", "starting",
+    "show", "shows", "showed", "shown", "showing",
+    "hear", "hears", "heard", "hearing",
+    "play", "plays", "played", "playing",
+    "run", "runs", "ran", "running",
+    "move", "moves", "moved", "moving",
+    "like", "likes", "liked", "liking", // 'like' can also be a preposition/conjunction, but often a verb
+    "live", "lives", "lived", "living",
+    "believe", "believes", "believed", "believing",
+    "hold", "holds", "held", "holding",
+    "bring", "brings", "brought", "bringing",
+    "happen", "happens", "happened", "happening",
+    "write", "writes", "wrote", "written", "writing",
+    "provide", "provides", "provided", "providing", // Already in stop words, but good to have here for verb context
+    "sit", "sits", "sat", "sitting",
+    "stand", "stands", "stood", "standing",
+    "lose", "loses", "lost", "losing",
+    "pay", "pays", "paid", "paying",
+    "meet", "meets", "met", "meeting",
+    "include", "includes", "included", "including",
+    "continue", "continues", "continued", "continuing",
+    "set", "sets", "setting",
+    "learn", "learns", "learned", "learning",
+    "change", "changes", "changed", "changing",
+    "lead", "leads", "led", "leading",
+    "understand", "understands", "understood", "understanding",
+    "watch", "watches", "watched", "watching",
+    "follow", "follows", "followed", "following",
+    "stop", "stops", "stopped", "stopping",
+    "create", "creates", "created", "creating",
+    "speak", "speaks", "spoke", "spoken", "speaking",
+    "read", "reads", "reading", // "read" (past tense) is same as present
+    "allow", "allows", "allowed", "allowing",
+    "add", "adds", "added", "adding",
+    "spend", "spends", "spent", "spending",
+    "grow", "grows", "grew", "grown", "growing",
+    "open", "opens", "opened", "opening",
+    "walk", "walks", "walked", "walking",
+    "win", "wins", "won", "winning",
+    "offer", "offers", "offered", "offering",
+    "remember", "remembers", "remembered", "remembering",
+    "love", "loves", "loved", "loving",
+    "consider", "considers", "considered", "considering",
+    "appear", "appears", "appeared", "appearing",
+    "buy", "buys", "bought", "buying",
+    "wait", "waits", "waited", "waiting",
+    "serve", "serves", "served", "serving",
+    "die", "dies", "died", "dying",
+    "send", "sends", "sent", "sending",
+    "expect", "expects", "expected", "expecting",
+    "build", "builds", "built", "building",
+    "stay", "stays", "stayed", "staying",
+    "fall", "falls", "fell", "fallen", "falling",
+    "cut", "cuts", "cutting",
+    "reach", "reaches", "reached", "reaching",
+    "kill", "kills", "killed", "killing",
+    "remain", "remains", "remained", "remaining"
+    // This list is not exhaustive and can be expanded.
+    // It focuses on common verbs, especially those that might not be critical keywords.
 ]);
 
 const PHRASE_REPLACEMENTS: Record<string, string> = {
@@ -113,9 +211,9 @@ function performRuleBasedRephrase(query: string): string {
     const words = rephrased.split(/\s+/);
     const filteredWords = words.filter(word => {
         // No need to remove punctuation here again as it's done in step 2
-        return word.length > 0 && !STOP_WORDS_EN.has(word);
+        return word.length > 0 && !STOP_WORDS_EN.has(word) && !COMMON_VERBS_EN.has(word);
     });
-    console.log("After stop word removal (filteredWords):", filteredWords);
+    console.log("After stop word and verb removal (filteredWords):", filteredWords);
 
     rephrased = filteredWords.join(" ");
     console.log("Final rule-based rephrased query:", rephrased);

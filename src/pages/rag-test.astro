@@ -282,6 +282,7 @@ try {
                                 <label for="mlcModelSelect">Select MLC Model:</label>
                                 <select id="mlcModelSelect" name="mlcModelSelect">
                                     <option value="SmolLM2-135M-Instruct-q0f16-MLC">SmolLM2-135M-Instruct-q0f16 (Default)</option>
+                                    <option value="SmolLM2-360M-Instruct-q0f16-MLC">SmolLM2-360M-Instruct-q0f16</option>
                                     <option value="SmolLM2-360M-Instruct-q4f16_1-MLC">SmolLM2-360M-Instruct-q4f16_1</option>
                                     <option value="SmolLM2-360M-Instruct-q4f32_1-MLC">SmolLM2-360M-Instruct-q4f32_1</option>
                                     <option value="SmolLM2-1.7B-Instruct-q4f16_1-MLC">SmolLM2-1.7B-Instruct-q4f16_1</option>
@@ -789,7 +790,7 @@ try {
                         updateStatus('Processing for RAG Similarity Table...', true);
                         updateProgressBar(0);
                         
-                        if(responseAreaContainer) responseAreaContainer.style.display = 'block';
+                        // if(responseAreaContainer) responseAreaContainer.style.display = 'block'; // Prevent "Raw LLM Response" block from showing for this action
                         if(responseArea) responseArea.textContent = ''; // Clear main response area for this action's mock message
                         
                         ragSimilarityTableContainer.innerHTML = '';
