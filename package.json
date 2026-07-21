@@ -44,7 +44,7 @@
   "dependencies": {
     "@astrojs/sitemap": "^3.3.1",
     "@types/proj4": "^2.5.6",
-    "astro": "^5.18.1",
+    "astro": "^7.1.0",
     "csv-parse": "^5.6.0",
     "leaflet": "^1.9.4",
     "leaflet-geosearch": "^4.2.0",
